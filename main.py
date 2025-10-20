@@ -166,7 +166,7 @@ word_lists = {
             "lip": {"beginning": "l", "final": "p", "short_vowels": "i", "consonant_digraphs": "-", "consonant_blends": "-", "long_vowel_patterns": "-", "other_vowel_patterns": "-", "inflected_endings": "-", "sentence": "She put balm on her lip."},
             
         },
-       
+       "nonsense_words": {},
         "sight_words": {
             "to": {"sentence": "The dog is big."},
             "me": {"sentence": "I like cats and dogs."},
@@ -266,6 +266,104 @@ word_lists = {
     }
 }
 
+# ------------------------------------------------------------------
+# Helper: pick exactly 10 regular Kindergarten words
+# ------------------------------------------------------------------
+def _select_kindergarten_regular_words() -> List[Dict]:
+    # All regular words grouped by short-vowel
+    by_vowel = {
+        "a": [], "e": [], "i": [], "o": [], "u": []
+    }
+    for w, data in word_lists["Kindergarten"]["regular_words"].items():
+        short_v = data.get("short_vowels", "-")
+        if short_v in by_vowel:
+            by_vowel[short_v].append((w, data))
+
+    selected = []
+
+    # 1 word for each short vowel (pick the first one)
+    for vowel in "aeiou":
+        if by_vowel[vowel]:
+            word, data = by_vowel[vowel][0]
+            selected.append({
+                "word": word,
+                "sentence": data["sentence"],
+                "type": "regular"
+            })
+            # remove the used word so we don’t pick it again later
+            by_vowel[vowel].pop(0)
+
+    # 2 extra “beginning” words (any vowel, not already taken)
+    beginning_words = [
+        (w, d) for v in by_vowel.values()
+        for w, d in v
+        if d.get("beginning") != "-"
+    ]
+    for w, d in beginning_words[:2]:
+        selected.append({
+            "word": w,
+            "sentence": d["sentence"],
+            "type": "regular"
+        })
+
+    # 2 extra “ending” words (any vowel, not already taken)
+    ending_words = [
+        (w, d) for v in by_vowel.values()
+        for w, d in v
+        if d.get("final") != "-"
+    ]
+    for w, d in ending_words[:2]:
+        selected.append({
+            "word": w,
+            "sentence": d["sentence"],
+            "type": "regular"
+        })
+
+    # If we somehow have less than 10, fill with any remaining
+    remaining = [
+        (w, d) for v in by_vowel.values()
+        for w, d in v
+    ]
+    for w, d in remaining[:10 - len(selected)]:
+        selected.append({
+            "word": w,
+            "sentence": d["sentence"],
+            "type": "regular"
+        })
+
+    return selected[:10]   # guarantee exactly 10
+# ------------------------------------------------------------------
+# Audio Selector: Get All Words with Sentences (Skips Empty Nonsense)
+# ------------------------------------------------------------------
+def _audio_words_for_grade(grade: str) -> List[Dict]:
+    """
+    Returns the list of words that will be turned into audio.
+    * Kindergarten → 10 regular (same as test) + all sight words
+    * All other grades → every regular, nonsense, and sight word
+    """
+    words = []
+
+    # ----- Regular words -------------------------------------------------
+    if grade == "Kindergarten":
+        # Use the **exact 10** that the test uses
+        for item in _select_kindergarten_regular_words():
+            words.append({"word": item["word"], "type": "regular", "sentence": item["sentence"]})
+    else:
+        for w, data in word_lists[grade].get("regular_words", {}).items():
+            if "sentence" in data:
+                words.append({"word": w, "type": "regular", "sentence": data["sentence"]})
+
+    # ----- Sight words ---------------------------------------------------
+    for w, data in word_lists[grade].get("sight_words", {}).items():
+        if "sentence" in data:
+            words.append({"word": w, "type": "sight", "sentence": data["sentence"]})
+
+    # ----- Nonsense words (only if they exist) ---------------------------
+    for w, data in word_lists[grade].get("nonsense_words", {}).items():
+        if "sentence" in data:
+            words.append({"word": w, "type": "nonsense", "sentence": data["sentence"]})
+
+    return words
 # Scoring and evaluation functions
 def score_response(word: str, user_input: str, grade: str, word_type: str) -> Dict:
     user_input = user_input.strip().encode('ascii', 'ignore').decode('ascii').lower()
@@ -293,6 +391,10 @@ def score_response(word: str, user_input: str, grade: str, word_type: str) -> Di
             "blend", "long_vowel", "other_vowel", "inflected"
         ],
         "Second": [
+            "beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", 
+            "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"
+        ],
+        "Third": [
             "beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", 
             "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"
         ]
@@ -358,17 +460,16 @@ def score_response(word: str, user_input: str, grade: str, word_type: str) -> Di
 def evaluate_test(results: List[Dict], grade: str) -> Dict:
     total_points = sum(result["points"] for result in results)
     max_points = sum(result["max_points"] for result in results)
-    mistakes = sum(1 for result in results if result["points"] == 0)
-    if mistakes >= 7:
-        return {"status": "stopped", "score": total_points, "max_score": max_points}
     word_count = len(results)
     correct_count = sum(1 for result in results if result["points"] == result["max_points"])
-    if grade == "Kindergarten" and word_count == 25:
-        status = "At" if 18 <= correct_count <= 25 else ("Below" if correct_count < 18 else "Above")
-    elif grade == "First" and word_count == 30:
-        status = "At" if 22 <= correct_count <= 30 else ("Below" if correct_count < 22 else "Above")
-    elif grade == "Second" and word_count == 26:
-        status = "At" if 20 <= correct_count <= 26 else ("Below" if correct_count < 20 else "Above")
+    if grade == "Kindergarten" and word_count == 20:  # Adjusted for 10 regular + 10 sight
+        status = "At" if 14 <= correct_count <= 20 else ("Below" if correct_count < 14 else "Above")
+    elif grade == "First" and word_count == 20:  # 10 regular + 5 nonsense + 5 sight
+        status = "At" if 14 <= correct_count <= 20 else ("Below" if correct_count < 14 else "Above")
+    elif grade == "Second" and word_count == 20:
+        status = "At" if 14 <= correct_count <= 20 else ("Below" if correct_count < 14 else "Above")
+    elif grade == "Third" and word_count == 20:
+        status = "At" if 14 <= correct_count <= 20 else ("Below" if correct_count < 14 else "Above")
     else:
         status = "Below"
     return {
@@ -390,6 +491,10 @@ def analyze_errors(results: List[Dict], grade: str) -> Dict:
             "blend", "long_vowel", "other_vowel", "inflected"
         ],
         "Second": [
+            "beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", 
+            "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"
+        ],
+        "Third": [
             "beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", 
             "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"
         ]
@@ -473,22 +578,34 @@ async def get_firebase_user(token: HTTPAuthorizationCredentials = Depends(securi
 @app.post("/grade/")
 async def submit_test(grade_input: GradeInput):
     grade = grade_input.grade
-    if grade not in ["Kindergarten", "First", "Second"]:
+    if grade not in ["Kindergarten", "First", "Second", "Third"]:
         raise HTTPException(status_code=400, detail="Invalid grade")
     
     words_to_test = []
-    regular = [
-        {"word": word, "sentence": data["sentence"], "type": "regular"}
-        for word, data in word_lists[grade]["regular_words"].items()
-    ]
+
+    # ---------- REGULAR WORDS ----------
+    if grade == "Kindergarten":
+        regular = _select_kindergarten_regular_words()  # Use helper → only 10 words
+    else:
+        regular = [
+            {"word": word, "sentence": data["sentence"], "type": "regular"}
+            for word, data in word_lists[grade]["regular_words"].items()
+        ]
+
+    # ---------- NONSENSE WORDS (Safe access) ----------
+    nonsense_dict = word_lists[grade].get("nonsense_words", {})
     nonsense = [
         {"word": word, "sentence": data["sentence"], "type": "nonsense"}
-        for word, data in word_lists[grade]["nonsense_words"].items()
+        for word, data in nonsense_dict.items()
     ]
+
+    # ---------- SIGHT WORDS (Safe access) ----------
+    sight_dict = word_lists[grade].get("sight_words", {})
     sight = [
         {"word": word, "sentence": data["sentence"], "type": "sight"}
-        for word, data in word_lists[grade]["sight_words"].items()
+        for word, data in sight_dict.items()
     ]
+
     words_to_test = regular + nonsense + sight
     return {"words": words_to_test}
 
@@ -582,7 +699,7 @@ async def add_child(child: ChildCreate):
         decoded_token = auth.verify_id_token(child.idToken)
         user_id = decoded_token["uid"]
         child_id = str(uuid.uuid4())
-        if not child.name or child.age < 0 or child.grade not in ["Kindergarten", "First", "Second"]:
+        if not child.name or child.age < 0 or child.grade not in ["Kindergarten", "First", "Second", "Third"]:
             raise HTTPException(status_code=400, detail="Invalid child data: name, age, or grade")
         child_data = {
             "name": child.name,
@@ -684,7 +801,7 @@ async def submit_words(request: SubmitWordsRequest):
     if not child_data:
         raise HTTPException(status_code=404, detail="Child not found or does not belong to user")
     grade = request.grade
-    if grade not in ["Kindergarten", "First", "Second"]:
+    if grade not in ["Kindergarten", "First", "Second", "Third"]:
         raise HTTPException(status_code=400, detail="Invalid grade provided")
     results = []
     analysis = []
@@ -792,11 +909,16 @@ async def generate_word_audio(request: AudioRequest):
         raise HTTPException(status_code=500, detail=f"Failed to generate audio: {str(e)}")
 
 @app.post("/generate_all_grade_audio/")
-async def generate_all_kindergarten_audio(request: GradeInput):
+async def generate_all_grade_audio(request: GradeInput):
     grade = request.grade
-    
+    if grade not in word_lists:
+        raise HTTPException(status_code=400, detail="Invalid grade")
+    words = _audio_words_for_grade(grade)
+    if not words:
+        raise HTTPException(status_code=404, detail="No words with sentences found")
+    audio_files = []
     try:
-        audio_files = []
+      
         # Iterate through all word types: regular, nonsense, sight
         for word_type in ["regular_words", "nonsense_words", "sight_words"]:
             words_dict = word_lists[grade][word_type]
@@ -857,8 +979,8 @@ async def complete_result(request: CompleteResultRequest):
     if not child_data:
         raise HTTPException(status_code=404, detail="Child not found or does not belong to user")
     
-    grade = child_data.get("grade", "Second") if not request.grade else request.grade
-    if grade not in ["Kindergarten", "First", "Second"]:
+    grade = child_data.get("grade", "Third") if not request.grade else request.grade
+    if grade not in ["Kindergarten", "First", "Second", "Third"]:
         raise HTTPException(status_code=400, detail="Invalid grade")
 
     # Fetch all scores for the child
@@ -916,13 +1038,13 @@ async def complete_result(request: CompleteResultRequest):
     recommendation = get_recommendation(error_counts, evaluation["status"], all_results, grade)
 
     # Determine grade band, placement, and next step dynamically
-    grade_band = "K-2nd" if grade in ["Kindergarten", "First", "Second"] else f"{grade}"
+    grade_band = "K-3rd" if grade in ["Kindergarten", "First", "Second", "Third"] else f"{grade}"
     placement = {
         "Above": "At/Above Grade Level",
         "At": "At Grade Level",
         "Below": "Below Grade Level"
     }.get(evaluation["status"], "At Grade Level")
-    next_step = "Unlock Grade 3 assessment" if evaluation["status"] == "Above" and grade == "Second" else "Continue current grade"
+    next_step = "Unlock next assessment" if evaluation["status"] == "Above" and grade == "Third" else "Continue current grade"
 
     # Prepare table data dynamically from all_results
     table_data = [
