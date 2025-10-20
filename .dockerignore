@@ -1,0 +1,17 @@
+# Ignore Python virtual environments
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore git files
+.git
+.gitignore
+
+# Ignore environment files
+.env
+
+# Ignore Docker files (optional)
+Dockerfile
+.dockerignore
