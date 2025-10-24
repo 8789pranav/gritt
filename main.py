@@ -197,11 +197,6 @@ word_lists = {
             "with": {"beginning": "w", "final": "th", "short_vowels": "i", "consonant_digraphs": "th", "consonant_blends": "-", "long_vowel_patterns": "-", "other_vowel_patterns": "-", "inflected_endings": "-", "sentence": "Come with me to the store."}
         },
         "nonsense_words": {
-            "som": {"sentence": "The wizard found a magical som in the forest."},
-            "jat": {"sentence": "She wore a shiny jat on her head."},
-            "ket": {"sentence": "The ket buzzed around the colorful flowers."},
-            "zix": {"sentence": "He discovered a tiny zix in his pocket."},
-            "vut": {"sentence": "The vut glowed brightly in the dark cave."}
         },
         "sight_words": {
             "is": {"sentence": "The cat is sleeping on the mat."},
@@ -225,11 +220,7 @@ word_lists = {
             "phone": {"beginning": "ph", "final": "n", "short_vowel": "-", "digraph": "ph", "blend": "-", "long_vowel": "o-e", "other_vowel": "-", "inflected": "-", "sentence": "She answered the phone."},
         },
         "nonsense_words": {
-            "sprill": {"sentence": "The sprill sparkled in the moonlight."},
-            "slaff": {"sentence": "He tripped over the slaff on the floor."},
-            "plont": {"sentence": "She planted a plont in the garden."},
-            "gress": {"sentence": "The gress grew tall in the meadow."},
-            "flunt": {"sentence": "The flunt floated high above the trees."}
+       
         },
         "sight_words": {
             "from": {"sentence": "I got a letter from my friend."},
@@ -253,11 +244,7 @@ word_lists = {
             "puzzle": {"beginning_consonant": "p", "final_consonant": "z, l, e", "short_vowels": "u", "consonant_digraphs": "zz", "consonant_blends": "", "long_vowel_patterns": "", "other_vowel_patterns": "le", "inflected_endings": "", "sentence": "The puzzle took hours to solve."},
         },
         "nonsense_words": {
-            "plet": {"sentence": "The plet rolled down the hill."},
-            "mast": {"sentence": "She found a shiny mast in the cave."},
-            "flemp": {"sentence": "The flemp glowed in the dark."},
-            "stum": {"sentence": "He tripped over a stum in the forest."},
-            "spon": {"sentence": "The spon floated on the lake."}
+     
         },
         "sight_words": {
             "there": {"sentence": "There is a bird in the tree."},
@@ -958,7 +945,7 @@ async def generate_all_grade_audio(request: GradeInput):
     try:
       
         # Iterate through all word types: regular, nonsense, sight
-        for word_type in ["regular_words", "nonsense_words", "sight_words"]:
+        for word_type in ["regular_words",  "sight_words"]:
             words_dict = word_lists[grade][word_type]
             for word, data in words_dict.items():
                 # Generate audio for the word
