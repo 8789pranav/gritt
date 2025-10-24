@@ -105,6 +105,9 @@ class ChildDetails(BaseModel):
     name: str
     age: int
     grade: str
+class DeleteChildRequest(BaseModel):
+    idToken: str
+    child_id: str
 
 class ChildDetailsWithScores(BaseModel):
     child_id: str
@@ -267,74 +270,106 @@ word_lists = {
 }
 
 # ------------------------------------------------------------------
-# Helper: pick exactly 10 regular Kindergarten words
+# Helper: pick exactly 10 UNIQUE Kindergarten regular words
 # ------------------------------------------------------------------
 def _select_kindergarten_regular_words() -> List[Dict]:
-    # All regular words grouped by short-vowel
-    by_vowel = {
-        "a": [], "e": [], "i": [], "o": [], "u": []
-    }
+    """
+    Returns **exactly 10 unique** regular words for Kindergarten:
+        • 1 word for each short vowel (a,e,i,o,u) – first occurrence
+        • 2 extra “beginning” words (any vowel, not already taken)
+        • 2 extra “ending”   words (any vowel, not already taken)
+        • Fill any remaining slots with random unique words
+    """
+    # ------------------------------------------------------------------
+    # 1. Gather ALL regular words (no duplicates)
+    # ------------------------------------------------------------------
+    all_words = []
     for w, data in word_lists["Kindergarten"]["regular_words"].items():
+        all_words.append((w, data))
+
+    # ------------------------------------------------------------------
+    # 2. Group by short-vowel (still keep the raw tuple)
+    # ------------------------------------------------------------------
+    by_vowel = {v: [] for v in "aeiou"}
+    for w, data in all_words:
         short_v = data.get("short_vowels", "-")
         if short_v in by_vowel:
             by_vowel[short_v].append((w, data))
 
-    selected = []
+    selected_words: List[Dict] = []
+    used_words = set()                     # <-- prevents duplicates
 
-    # 1 word for each short vowel (pick the first one)
+    # ------------------------------------------------------------------
+    # 3. ONE word per short vowel (first available)
+    # ------------------------------------------------------------------
     for vowel in "aeiou":
-        if by_vowel[vowel]:
-            word, data = by_vowel[vowel][0]
-            selected.append({
-                "word": word,
-                "sentence": data["sentence"],
-                "type": "regular"
-            })
-            # remove the used word so we don’t pick it again later
-            by_vowel[vowel].pop(0)
+        for w, data in by_vowel[vowel]:
+            if w not in used_words:
+                selected_words.append({
+                    "word": w,
+                    "sentence": data["sentence"],
+                    "type": "regular"
+                })
+                used_words.add(w)
+                break
 
-    # 2 extra “beginning” words (any vowel, not already taken)
-    beginning_words = [
-        (w, d) for v in by_vowel.values()
-        for w, d in v
-        if d.get("beginning") != "-"
+    # ------------------------------------------------------------------
+    # 4. TWO extra “beginning” words (any vowel, not used)
+    # ------------------------------------------------------------------
+    beginning_candidates = [
+        (w, d) for w, d in all_words
+        if w not in used_words and d.get("beginning") != "-"
     ]
-    for w, d in beginning_words[:2]:
-        selected.append({
+    for w, d in beginning_candidates[:2]:
+        selected_words.append({
             "word": w,
             "sentence": d["sentence"],
             "type": "regular"
         })
+        used_words.add(w)
 
-    # 2 extra “ending” words (any vowel, not already taken)
-    ending_words = [
-        (w, d) for v in by_vowel.values()
-        for w, d in v
-        if d.get("final") != "-"
+    # ------------------------------------------------------------------
+    # 5. TWO extra “ending” words (any vowel, not used)
+    # ------------------------------------------------------------------
+    ending_candidates = [
+        (w, d) for w, d in all_words
+        if w not in used_words and d.get("final") != "-"
     ]
-    for w, d in ending_words[:2]:
-        selected.append({
+    for w, d in ending_candidates[:2]:
+        selected_words.append({
             "word": w,
             "sentence": d["sentence"],
             "type": "regular"
         })
+        used_words.add(w)
 
-    # If we somehow have less than 10, fill with any remaining
+    # ------------------------------------------------------------------
+    # 6. Fill up to exactly 10 with any remaining unique words
+    # ------------------------------------------------------------------
     remaining = [
-        (w, d) for v in by_vowel.values()
-        for w, d in v
+        (w, d) for w, d in all_words if w not in used_words
     ]
-    for w, d in remaining[:10 - len(selected)]:
-        selected.append({
+    import random
+    random.shuffle(remaining)                     # optional randomness
+    needed = 10 - len(selected_words)
+    for w, d in remaining[:needed]:
+        selected_words.append({
             "word": w,
             "sentence": d["sentence"],
             "type": "regular"
         })
+        used_words.add(w)
 
-    return selected[:10]   # guarantee exactly 10
+    # ------------------------------------------------------------------
+    # 7. Final guarantee – exactly 10 unique words
+    # ------------------------------------------------------------------
+    assert len(selected_words) == 10
+    assert len(used_words) == 10
+    return selected_words
 # ------------------------------------------------------------------
 # Audio Selector: Get All Words with Sentences (Skips Empty Nonsense)
 # ------------------------------------------------------------------
+
 def _audio_words_for_grade(grade: str) -> List[Dict]:
     """
     Returns the list of words that will be turned into audio.
@@ -913,9 +948,12 @@ async def generate_all_grade_audio(request: GradeInput):
     grade = request.grade
     if grade not in word_lists:
         raise HTTPException(status_code=400, detail="Invalid grade")
+
+    # Use the helper that already omits sight-word sentences
     words = _audio_words_for_grade(grade)
     if not words:
         raise HTTPException(status_code=404, detail="No words with sentences found")
+
     audio_files = []
     try:
       
@@ -962,7 +1000,50 @@ async def generate_all_grade_audio(request: GradeInput):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate audio: {str(e)}")
+@app.delete("/delete_child/")
+async def delete_child(request: DeleteChildRequest):
+    """
+    Permanently deletes a child and all associated test scores.
+    Only the authenticated parent can delete their own child.
+    """
+    # ---- 1. Verify Firebase token (owner of the data) ----
+    try:
+        decoded_token = auth.verify_id_token(request.idToken)
+        user_id = decoded_token["uid"]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid authentication credentials: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
+    # ---- 2. Check that the child belongs to this user ----
+    child_ref = db_ref.child(f"users/{user_id}/children/{request.child_id}")
+    child_snapshot = child_ref.get()
+
+    if not child_snapshot:
+        raise HTTPException(
+            status_code=404,
+            detail="Child not found or does not belong to the authenticated user."
+        )
+
+    # ---- 3. Delete the child node (this cascades to scores because they are under the same path) ----
+    try:
+        # Firebase Realtime DB does **not** auto-cascade, so we delete the scores first
+        scores_ref = db_ref.child(f"users/{user_id}/children/{request.child_id}/scores")
+        scores_ref.delete()                     # removes all scores
+        child_ref.delete()                      # removes the child record
+
+        return {
+            "message": "Child and all associated data deleted successfully.",
+            "deleted_child_id": request.child_id
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete child: {str(e)}"
+        )
 @app.post("/complete_result/")
 async def complete_result(request: CompleteResultRequest):
     try:
