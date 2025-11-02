@@ -1047,7 +1047,7 @@ async def complete_result(request: CompleteResultRequest):
     if not child_data:
         raise HTTPException(status_code=404, detail="Child not found or does not belong to user")
     
-    grade = child_data.get("grade", "Third") if not request.grade else request.grade
+    grade = child_data.get("grade") if not request.grade else request.grade
     if grade not in ["Kindergarten", "First", "Second", "Third"]:
         raise HTTPException(status_code=400, detail="Invalid grade")
 
