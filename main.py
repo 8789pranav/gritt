@@ -14,12 +14,13 @@ import json
 from datetime import datetime
 import boto3
 from fastapi.responses import Response
+import random
 
 # Initialize FastAPI app
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,8 +69,8 @@ class WordInput(BaseModel):
     word: str
     user_input: str
     type: str
-    time: float = 0.0  # Default to 0 if not provided
-    hints_used: int = 0  # Default to 0 if not provided
+    time: float = 0.0
+    hints_used: int = 0
 
 class SubmitWordsRequest(BaseModel):
     idToken: str
@@ -81,8 +82,7 @@ class UserCreate(BaseModel):
     idToken: str
     email: str
     name: str
-    password: str  # Added for registration
-    age: int
+    password: str | None = None  # ← Optional (can be null or omitted)
 
 class UserLogin(BaseModel):
     email: str
@@ -105,6 +105,7 @@ class ChildDetails(BaseModel):
     name: str
     age: int
     grade: str
+
 class DeleteChildRequest(BaseModel):
     idToken: str
     child_id: str
@@ -122,7 +123,6 @@ class AudioRequest(BaseModel):
 
 class GetDetailsRequest(BaseModel):
     idToken: str
-  
 
 class CompleteResultRequest(BaseModel):
     idToken: str
@@ -142,8 +142,6 @@ word_lists = {
             "bat": {"beginning": "b", "final": "t", "short_vowels": "a", "consonant_digraphs": "-", "consonant_blends": "-", "long_vowel_patterns": "-", "other_vowel_patterns": "-", "inflected_endings": "-", "sentence": "He hit the ball with a bat."},
             "fan": {"beginning": "f", "final": "n", "short_vowels": "a", "consonant_digraphs": "-", "consonant_blends": "-", "long_vowel_patterns": "-", "other_vowel_patterns": "-", "inflected_endings": "-", "sentence": "The fan keeps me cool."},
             "top": {"beginning": "t", "final": "p", "short_vowels": "o", "consonant_digraphs": "-", "consonant_blends": "-", "long_vowel_patterns": "-", "other_vowel_patterns": "-", "inflected_endings": "-", "sentence": "The top spins fast."},
-
-            # Short e
             "pen": {"beginning": "p", "final": "n", "short_vowels": "e", "consonant_digraphs": "-", "consonant_blends": "-", "long_vowel_patterns": "-", "other_vowel_patterns": "-", "inflected_endings": "-", "sentence": "Write with a pen."},
             "bed": {"beginning": "b", "final": "d", "short_vowels": "e", "consonant_digraphs": "-", "consonant_blends": "-", "long_vowel_patterns": "-", "other_vowel_patterns": "-", "inflected_endings": "-", "sentence": "I sleep in my bed."},
             "net": {"beginning": "n", "final": "t", "short_vowels": "e", "consonant_digraphs": "-", "consonant_blends": "-", "long_vowel_patterns": "-", "other_vowel_patterns": "-", "inflected_endings": "-", "sentence": "Catch fish in a net."},
@@ -171,17 +169,17 @@ word_lists = {
         },
        "nonsense_words": {},
         "sight_words": {
-            "to": {"sentence": "The dog is big."},
-            "me": {"sentence": "I like cats and dogs."},
-            "he": {"sentence": "It is sunny today."},
-            "see": {"sentence": "Do you like to play?"},
-            "go": {"sentence": "That is my toy."},
-            "no": {"sentence": "He was at the park."},
-            "a": {"sentence": "This is for you."},
-            "it": {"sentence": "We are friends."},
-            "in": {"sentence": "Play with me."},
-            "on": {"sentence": "This is his ball."}
-        }
+            "to":   {"sentence": "I go to school."},
+            "me":   {"sentence": "Give the ball to me."},
+            "he":   {"sentence": "He runs very fast."},
+            "see":  {"sentence": "I see a big dog."},
+            "go":   {"sentence": "Let’s go to the park."},
+            "no":   {"sentence": "No, I don’t want that."},
+            "a":    {"sentence": "I have a red apple."},
+            "it":   {"sentence": "Look at it!"},
+            "in":   {"sentence": "The cat is in the box."},
+            "on":   {"sentence": "The book is on the table."}
+}
     },
     "First": {
         "regular_words": {
@@ -196,8 +194,7 @@ word_lists = {
             "cup": {"beginning": "c", "final": "p", "short_vowels": "u", "consonant_digraphs": "-", "consonant_blends": "-", "long_vowel_patterns": "-", "other_vowel_patterns": "-", "inflected_endings": "-", "sentence": "I drink from a red cup."},
             "with": {"beginning": "w", "final": "th", "short_vowels": "i", "consonant_digraphs": "th", "consonant_blends": "-", "long_vowel_patterns": "-", "other_vowel_patterns": "-", "inflected_endings": "-", "sentence": "Come with me to the store."}
         },
-        "nonsense_words": {
-        },
+        "nonsense_words": {},
         "sight_words": {
             "is": {"sentence": "The cat is sleeping on the mat."},
             "the": {"sentence": "The dog chased the ball."},
@@ -219,9 +216,7 @@ word_lists = {
             "hunted": {"beginning": "h", "final": "d", "short_vowel": "u, e", "digraph": "-", "blend": "nt", "long_vowel": "-", "other_vowel": "-", "inflected": "ed", "sentence": "They hunted for treasure."},
             "phone": {"beginning": "ph", "final": "n", "short_vowel": "-", "digraph": "ph", "blend": "-", "long_vowel": "o-e", "other_vowel": "-", "inflected": "-", "sentence": "She answered the phone."},
         },
-        "nonsense_words": {
-       
-        },
+        "nonsense_words": {},
         "sight_words": {
             "from": {"sentence": "I got a letter from my friend."},
             "does": {"sentence": "What does the sign say?"},
@@ -243,9 +238,7 @@ word_lists = {
             "entertain": {"beginning_consonant": "e (vowel start)", "final_consonant": "n", "short_vowels": "e, a", "consonant_digraphs": "", "consonant_blends": "nt, rt", "long_vowel_patterns": "ai", "other_vowel_patterns": "", "inflected_endings": "", "sentence": "The clown will entertain the children."},
             "puzzle": {"beginning_consonant": "p", "final_consonant": "z, l, e", "short_vowels": "u", "consonant_digraphs": "zz", "consonant_blends": "", "long_vowel_patterns": "", "other_vowel_patterns": "le", "inflected_endings": "", "sentence": "The puzzle took hours to solve."},
         },
-        "nonsense_words": {
-     
-        },
+        "nonsense_words": {},
         "sight_words": {
             "there": {"sentence": "There is a bird in the tree."},
             "which": {"sentence": "Which book do you like best?"},
@@ -256,244 +249,142 @@ word_lists = {
     }
 }
 
-# ------------------------------------------------------------------
 # Helper: pick exactly 10 UNIQUE Kindergarten regular words
-# ------------------------------------------------------------------
 def _select_kindergarten_regular_words() -> List[Dict]:
-    """
-    Returns **exactly 10 unique** regular words for Kindergarten:
-        • 1 word for each short vowel (a,e,i,o,u) – first occurrence
-        • 2 extra “beginning” words (any vowel, not already taken)
-        • 2 extra “ending”   words (any vowel, not already taken)
-        • Fill any remaining slots with random unique words
-    """
-    # ------------------------------------------------------------------
-    # 1. Gather ALL regular words (no duplicates)
-    # ------------------------------------------------------------------
-    all_words = []
-    for w, data in word_lists["Kindergarten"]["regular_words"].items():
-        all_words.append((w, data))
-
-    # ------------------------------------------------------------------
-    # 2. Group by short-vowel (still keep the raw tuple)
-    # ------------------------------------------------------------------
+    all_words = [(w, data) for w, data in word_lists["Kindergarten"]["regular_words"].items()]
     by_vowel = {v: [] for v in "aeiou"}
     for w, data in all_words:
         short_v = data.get("short_vowels", "-")
         if short_v in by_vowel:
             by_vowel[short_v].append((w, data))
 
-    selected_words: List[Dict] = []
-    used_words = set()                     # <-- prevents duplicates
+    selected_words = []
+    used_words = set()
 
-    # ------------------------------------------------------------------
-    # 3. ONE word per short vowel (first available)
-    # ------------------------------------------------------------------
+    # One per vowel
     for vowel in "aeiou":
         for w, data in by_vowel[vowel]:
             if w not in used_words:
-                selected_words.append({
-                    "word": w,
-                    "sentence": data["sentence"],
-                    "type": "regular"
-                })
+                selected_words.append({"word": w, "sentence": data["sentence"], "type": "regular"})
                 used_words.add(w)
                 break
 
-    # ------------------------------------------------------------------
-    # 4. TWO extra “beginning” words (any vowel, not used)
-    # ------------------------------------------------------------------
-    beginning_candidates = [
-        (w, d) for w, d in all_words
-        if w not in used_words and d.get("beginning") != "-"
-    ]
-    for w, d in beginning_candidates[:2]:
-        selected_words.append({
-            "word": w,
-            "sentence": d["sentence"],
-            "type": "regular"
-        })
-        used_words.add(w)
+    # Two beginning, two ending
+    for _ in range(2):
+        for w, d in all_words:
+            if w not in used_words and d.get("beginning") != "-":
+                selected_words.append({"word": w, "sentence": d["sentence"], "type": "regular"})
+                used_words.add(w)
+                break
+    for _ in range(2):
+        for w, d in all_words:
+            if w not in used_words and d.get("final") != "-":
+                selected_words.append({"word": w, "sentence": d["sentence"], "type": "regular"})
+                used_words.add(w)
+                break
 
-    # ------------------------------------------------------------------
-    # 5. TWO extra “ending” words (any vowel, not used)
-    # ------------------------------------------------------------------
-    ending_candidates = [
-        (w, d) for w, d in all_words
-        if w not in used_words and d.get("final") != "-"
-    ]
-    for w, d in ending_candidates[:2]:
-        selected_words.append({
-            "word": w,
-            "sentence": d["sentence"],
-            "type": "regular"
-        })
-        used_words.add(w)
-
-    # ------------------------------------------------------------------
-    # 6. Fill up to exactly 10 with any remaining unique words
-    # ------------------------------------------------------------------
-    remaining = [
-        (w, d) for w, d in all_words if w not in used_words
-    ]
-    import random
-    random.shuffle(remaining)                     # optional randomness
+    # Fill to 10
+    remaining = [(w, d) for w, d in all_words if w not in used_words]
+    random.shuffle(remaining)
     needed = 10 - len(selected_words)
     for w, d in remaining[:needed]:
-        selected_words.append({
-            "word": w,
-            "sentence": d["sentence"],
-            "type": "regular"
-        })
+        selected_words.append({"word": w, "sentence": d["sentence"], "type": "regular"})
         used_words.add(w)
 
-    # ------------------------------------------------------------------
-    # 7. Final guarantee – exactly 10 unique words
-    # ------------------------------------------------------------------
     assert len(selected_words) == 10
-    assert len(used_words) == 10
     return selected_words
-# ------------------------------------------------------------------
-# Audio Selector: Get All Words with Sentences (Skips Empty Nonsense)
-# ------------------------------------------------------------------
 
 def _audio_words_for_grade(grade: str) -> List[Dict]:
-    """
-    Returns the list of words that will be turned into audio.
-    * Kindergarten → 10 regular (same as test) + all sight words
-    * All other grades → every regular, nonsense, and sight word
-    """
     words = []
-
-    # ----- Regular words -------------------------------------------------
     if grade == "Kindergarten":
-        # Use the **exact 10** that the test uses
         for item in _select_kindergarten_regular_words():
             words.append({"word": item["word"], "type": "regular", "sentence": item["sentence"]})
     else:
         for w, data in word_lists[grade].get("regular_words", {}).items():
             if "sentence" in data:
                 words.append({"word": w, "type": "regular", "sentence": data["sentence"]})
-
-    # ----- Sight words ---------------------------------------------------
     for w, data in word_lists[grade].get("sight_words", {}).items():
         if "sentence" in data:
             words.append({"word": w, "type": "sight", "sentence": data["sentence"]})
-
-    # ----- Nonsense words (only if they exist) ---------------------------
-    for w, data in word_lists[grade].get("nonsense_words", {}).items():
-        if "sentence" in data:
-            words.append({"word": w, "type": "nonsense", "sentence": data["sentence"]})
-
     return words
-# Scoring and evaluation functions
+
+# Scoring per word (unchanged)
 def score_response(word: str, user_input: str, grade: str, word_type: str) -> Dict:
-    user_input = user_input.strip().encode('ascii', 'ignore').decode('ascii').lower()
-    
-    if word_type == "sight" or word_type == "nonsense":
-        if word.lower() == user_input:
-            return {"points": 1, "max_points": 1, "mistakes": {}}
-        else:
-            return {"points": 0, "max_points": 1, "mistakes": {"spelling": f"Expected '{word}', got '{user_input}'"}}
-    
-    word_data = word_lists.get(grade, {}).get("regular_words", {}).get(word, {})
+    user_input = user_input.strip().lower()
+    word_lower = word.lower()
+
+    # EXACT SPELLING = FULL POINTS
+    if user_input == word_lower and word_type == "regular":
+        word_data = word_lists[grade]["regular_words"][word_lower]
+        max_points = sum(1 for k, v in word_data.items() 
+                        if k != "sentence" and str(v).strip() not in ["", "-", " "])
+        return {"points": max_points, "max_points": max_points, "mistakes": {}}
+
+    # SIGHT / NONSENSE: 1 point only
+    if word_type in ["sight", "nonsense"]:
+        return {
+            "points": 1 if user_input == word_lower else 0,
+            "max_points": 1,
+            "mistakes": {"spelling": f"Expected '{word}', got '{user_input}'"} if user_input != word_lower else {}
+        }
+
+    # REGULAR WORD: SCORE FEATURES
+    word_data = word_lists[grade]["regular_words"].get(word_lower, {})
     if not word_data:
         return {"points": 0, "max_points": 0, "mistakes": {"invalid": "Word not in list"}}
 
     points = 0
-    skill_mistakes = {}
-    
-    feature_mapping = {
-        "Kindergarten": [
-            "beginning", "final", "short_vowels", "consonant_digraphs", 
-            "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"
-        ],
-        "First": [
-            "beginning", "final", "short_vowel", "digraph", 
-            "blend", "long_vowel", "other_vowel", "inflected"
-        ],
-        "Second": [
-            "beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", 
-            "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"
-        ],
-        "Third": [
-            "beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", 
-            "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"
-        ]
-    }
-    
-    features = feature_mapping.get(grade, feature_mapping["Second"])
-    for feature in features:
-        expected_value = word_data.get(feature, "-")
-        if expected_value == "-" or expected_value == "":
-            continue
-        expected_value = expected_value.strip().encode('ascii', 'ignore').decode('ascii')
-        if feature in ["beginning", "beginning_consonant"]:
-            actual_consonant = expected_value.split()[0] if " " in expected_value else expected_value
-            if user_input.startswith(actual_consonant.lower()):
-                points += 1
-            else:
-                skill_mistakes[feature] = expected_value
-        elif feature in ["final", "final_consonant"]:
-            final_parts = [c.strip() for c in expected_value.split(",") if c.strip()]
-            expected_ending = "".join(final_parts)
-            long_v = word_data.get("long_vowel" if grade == "First" else "long_vowel_patterns", "-")
-            inflected = word_data.get("inflected" if grade == "First" else "inflected_endings", "-")
-            if "-" in long_v:
-                v, _, e = long_v.partition("-")
-                if e == "e" and inflected in ["-", ""] and "e" not in expected_ending.lower():
-                    expected_ending += "e"
-            if user_input.endswith(expected_ending):
-                points += 1
-            else:
-                skill_mistakes[feature] = expected_value
-        elif feature in ["long_vowel", "long_vowel_patterns"] and expected_value:
-            if "-" in expected_value:
-                vowel, _, end = expected_value.partition("-")
-                vowel_pos = user_input.find(vowel.lower())
-                end_pos = user_input.find(end.lower())
-                inflected = word_data.get("inflected" if grade == "First" else "inflected_endings", "-")
-                if end == "e" and inflected not in ["-", ""]:
-                    is_valid = vowel_pos != -1
-                else:
-                    is_valid = vowel_pos != -1 and end_pos != -1 and vowel_pos < end_pos
-                if is_valid:
-                    points += 1
-                else:
-                    skill_mistakes[feature] = expected_value
-            else:
-                if expected_value.lower() in user_input:
-                    points += 1
-                else:
-                    skill_mistakes[feature] = expected_value
-        elif feature in ["short_vowel", "short_vowels", "other_vowel", "other_vowel_patterns", 
-                         "digraph", "consonant_digraphs", "blend", "consonant_blends", 
-                         "inflected", "inflected_endings"]:
-            expected_values = [v.strip() for v in expected_value.split(",") if v.strip()]
-            if any(ev.lower() in user_input for ev in expected_values):
-                points += 1
-            else:
-                skill_mistakes[feature] = expected_value
-        else:
-            skill_mistakes[feature] = expected_value
-    max_points = len([f for f in features if word_data.get(f) not in ["-", ""]])
-    return {"points": points, "max_points": max_points, "mistakes": skill_mistakes}
+    mistakes = {}
+    feature_list = {
+        "Kindergarten": ["beginning", "final", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"],
+        "First": ["beginning", "final", "short_vowel", "digraph", "blend", "long_vowel", "other_vowel", "inflected"],
+        "Second": ["beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"],
+        "Third": ["beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"]
+    }.get(grade, [])
 
+    for feature in feature_list:
+        val = str(word_data.get(feature, "")).strip()
+        if not val or val in ["-", ""]: 
+            continue
+        clean_val = "".join(c for c in val.lower() if c.isalpha())
+
+        if feature in ["beginning", "beginning_consonant"]:
+            if user_input.startswith(clean_val):
+                points += 1
+            else:
+                mistakes[feature] = val
+        elif feature in ["final", "final_consonant"]:
+            if user_input.endswith(clean_val):
+                points += 1
+            else:
+                mistakes[feature] = val
+        elif feature in ["long_vowel", "long_vowel_patterns"] and "-" in val:
+            v, _, e = val.partition("-")
+            if v.lower() in user_input and e.lower() in user_input:
+                points += 1
+            else:
+                mistakes[feature] = val
+        elif any(p in user_input for p in [p.strip().lower() for p in val.split(",") if p.strip()]):
+            points += 1
+        else:
+            mistakes[feature] = val
+
+    max_points = sum(1 for f in feature_list if str(word_data.get(f, "")).strip() not in ["", "-", " "])
+    return {"points": points, "max_points": max_points, "mistakes": mistakes}
+
+# NEW: evaluate_test uses TOTAL POINTS (real score)
 def evaluate_test(results: List[Dict], grade: str) -> Dict:
-    total_points = sum(result["points"] for result in results)
-    max_points = sum(result["max_points"] for result in results)
-    word_count = len(results)
-    correct_count = sum(1 for result in results if result["points"] == result["max_points"])
-    if grade == "Kindergarten" and word_count == 20:  # Adjusted for 10 regular + 10 sight
-        status = "At" if 14 <= correct_count <= 20 else ("Below" if correct_count < 14 else "Above")
-    elif grade == "First" and word_count == 20:  # 10 regular + 5 nonsense + 5 sight
-        status = "At" if 14 <= correct_count <= 20 else ("Below" if correct_count < 14 else "Above")
-    elif grade == "Second" and word_count == 20:
-        status = "At" if 14 <= correct_count <= 20 else ("Below" if correct_count < 14 else "Above")
-    elif grade == "Third" and word_count == 20:
-        status = "At" if 14 <= correct_count <= 20 else ("Below" if correct_count < 14 else "Above")
-    else:
+    total_points   = sum(r["points"] for r in results)
+    max_points     = sum(r["max_points"] for r in results)
+    word_count     = len(results)
+    correct_count  = sum(1 for r in results if r["points"] == r["max_points"])
+
+    if max_points == 0:
         status = "Below"
+    else:
+        pct = total_points / max_points
+        status = "Above" if pct >= 0.90 else ("At" if pct >= 0.70 else "Below")
+
     return {
         "status": status,
         "score": total_points,
@@ -504,22 +395,10 @@ def evaluate_test(results: List[Dict], grade: str) -> Dict:
 
 def analyze_errors(results: List[Dict], grade: str) -> Dict:
     feature_mapping = {
-        "Kindergarten": [
-            "beginning", "final", "short_vowels", "consonant_digraphs", 
-            "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"
-        ],
-        "First": [
-            "beginning", "final", "short_vowel", "digraph", 
-            "blend", "long_vowel", "other_vowel", "inflected"
-        ],
-        "Second": [
-            "beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", 
-            "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"
-        ],
-        "Third": [
-            "beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", 
-            "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"
-        ]
+        "Kindergarten": ["beginning", "final", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"],
+        "First": ["beginning", "final", "short_vowel", "digraph", "blend", "long_vowel", "other_vowel", "inflected"],
+        "Second": ["beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"],
+        "Third": ["beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"]
     }
     
     error_counts = {
@@ -566,8 +445,7 @@ def get_recommendation(error_counts: Dict, status: str, results: List[Dict], gra
         return f"Advance to next level. Continue practicing all phonics patterns."
     areas = [k.replace(" error", "") for k, v in error_counts.items() if v > 0]
     if areas:
-        # Dynamically determine a starting letter based on beginning consonant errors
-        beginning_errors = [r for r in results if r.get("type") == "regular" and "beginning" in r.get("mistakes", {}) or "beginning_consonant" in r.get("mistakes", {})]
+        beginning_errors = [r for r in results if r.get("type") == "regular" and ("beginning" in r.get("mistakes", {}) or "beginning_consonant" in r.get("mistakes", {}))]
         if beginning_errors:
             first_mistake_word = beginning_errors[0]["word"]
             word_data = word_lists[grade]["regular_words"].get(first_mistake_word, {})
@@ -605,23 +483,20 @@ async def submit_test(grade_input: GradeInput):
     
     words_to_test = []
 
-    # ---------- REGULAR WORDS ----------
     if grade == "Kindergarten":
-        regular = _select_kindergarten_regular_words()  # Use helper → only 10 words
+        regular = _select_kindergarten_regular_words()
     else:
         regular = [
             {"word": word, "sentence": data["sentence"], "type": "regular"}
             for word, data in word_lists[grade]["regular_words"].items()
         ]
 
-    # ---------- NONSENSE WORDS (Safe access) ----------
     nonsense_dict = word_lists[grade].get("nonsense_words", {})
     nonsense = [
         {"word": word, "sentence": data["sentence"], "type": "nonsense"}
         for word, data in nonsense_dict.items()
     ]
 
-    # ---------- SIGHT WORDS (Safe access) ----------
     sight_dict = word_lists[grade].get("sight_words", {})
     sight = [
         {"word": word, "sentence": data["sentence"], "type": "sight"}
@@ -642,7 +517,6 @@ async def register_user(user: UserCreate):
         db_ref.child(f"users/{firebase_user.uid}").set({
             "name": user.name,
             "email": user.email,
-            "age": user.age
         })
         return {"message": "User created successfully", "user_id": firebase_user.uid}
     except auth.EmailAlreadyExistsError:
@@ -685,7 +559,6 @@ async def save_user_data(user_data: UserCreate):
         data_to_save = {
             "name": user_data.name,
             "email": user_data.email,
-            "age": user_data.age,
             "created_at": datetime.utcnow().isoformat()
         }
         db_ref.child(f"users/{user_id}").set(data_to_save)
@@ -814,25 +687,24 @@ async def submit_words(request: SubmitWordsRequest):
         decoded_token = auth.verify_id_token(request.idToken)
         user_id = decoded_token["uid"]
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid authentication credentials: {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
     child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
     if not child_data:
-        raise HTTPException(status_code=404, detail="Child not found or does not belong to user")
+        raise HTTPException(status_code=404, detail="Child not found")
+
     grade = request.grade
-    if grade not in ["Kindergarten", "First", "Second", "Third"]:
-        raise HTTPException(status_code=400, detail="Invalid grade provided")
+    if grade not in word_lists:
+        raise HTTPException(status_code=400, detail="Invalid grade")
+
     results = []
     analysis = []
     for word_data in request.words:
         word = word_data.word
         user_input = word_data.user_input
         word_type = word_data.type
-        time = word_data.time  # Capture time from client request
-        hints_used = word_data.hints_used  # Capture hints used from client request
+        time = word_data.time
+        hints_used = word_data.hints_used
         if word_type in ["sight", "nonsense"]:
             score = score_response(word, user_input, grade, word_type)
             results.append({"word": word, "user_input": user_input, "type": word_type, "time": time, "hints_used": hints_used, **score})
@@ -858,21 +730,26 @@ async def submit_words(request: SubmitWordsRequest):
         else:
             results.append({"word": word, "user_input": user_input, "points": 0, "max_points": 0, "mistakes": {"invalid": "Word not in list"}, "type": word_type, "time": time, "hints_used": hints_used})
             analysis.append({"word": word, "user_input": user_input, "invalid_explanation": f"'{word}' is not a valid word in the list."})
+
     evaluation = evaluate_test(results, grade)
     error_counts = analyze_errors([r for r in results if r["type"] == "regular"], grade)
     recommendation = get_recommendation(error_counts, evaluation["status"], results, grade)
+
+    phonics = [r for r in results if r["type"] == "regular"]
+    sight = [r for r in results if r["type"] == "sight"]
     assessment_summary = {
         "Phonics": {
-            "score": sum(r["points"] for r in results if r["type"] == "regular"),
-            "max_score": sum(r["max_points"] for r in results if r["type"] == "regular"),
-            "percentage": (sum(r["points"] for r in results if r["type"] == "regular") / sum(r["max_points"] for r in results if r["type"] == "regular") * 100) if sum(r["max_points"] for r in results if r["type"] == "regular") > 0 else 0
+            "score": sum(r["points"] for r in phonics),
+            "max_score": sum(r["max_points"] for r in phonics),
+            "percentage": round(sum(r["points"] for r in phonics) / sum(r["max_points"] for r in phonics) * 100, 1) if phonics else 0
         },
         "Sight Words": {
-            "score": sum(r["points"] for r in results if r["type"] == "sight"),
-            "max_score": sum(r["max_points"] for r in results if r["type"] == "sight"),
-            "percentage": (sum(r["points"] for r in results if r["type"] == "sight") / sum(r["max_points"] for r in results if r["type"] == "sight") * 100) if sum(r["max_points"] for r in results if r["type"] == "sight") > 0 else 0
+            "score": sum(r["points"] for r in sight),
+            "max_score": sum(r["max_points"] for r in sight),
+            "percentage": round(sum(r["points"] for r in sight) / sum(r["max_points"] for r in sight) * 100, 1) if sight else 0
         }
     }
+
     score_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/scores").push().key
     score_data = {
         "grade": grade,
@@ -885,6 +762,7 @@ async def submit_words(request: SubmitWordsRequest):
         "timestamp": datetime.utcnow().isoformat()
     }
     db_ref.child(f"users/{user_id}/children/{request.child_id}/scores/{score_id}").set(score_data)
+
     return {
         "user_id": user_id,
         "child_id": request.child_id,
@@ -898,35 +776,22 @@ async def submit_words(request: SubmitWordsRequest):
 
 @app.post("/generate_text_audio/")
 async def generate_word_audio(request: AudioRequest):
-    # Validate Firebase token_id (ID token from Firebase Auth)
     try:
         decoded_token = auth.verify_id_token(request.idToken)
-        user_id = decoded_token['uid']  # Extract user ID for tracking
-        print(f"Authenticated user: {user_id}")  # Log for debugging (remove in production)
+        user_id = decoded_token['uid']
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
     word = request.text
-    word_text = word
     try:
-        # Generate audio for the word
         word_response = polly_client.synthesize_speech(
-            Text=word_text,
+            Text=word,
             OutputFormat='mp3',
             VoiceId='Joanna'
         )
         word_audio = word_response['AudioStream'].read()
-        
-        
-        
-        # Encode audio as base64
         word_base64 = base64.b64encode(word_audio).decode('utf-8')
-        
-        return {
-            
-            "base64_audio": word_base64,
-          
-        }
+        return {"base64_audio": word_base64}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate audio: {str(e)}")
 
@@ -936,203 +801,164 @@ async def generate_all_grade_audio(request: GradeInput):
     if grade not in word_lists:
         raise HTTPException(status_code=400, detail="Invalid grade")
 
-    # Use the helper that already omits sight-word sentences
     words = _audio_words_for_grade(grade)
     if not words:
         raise HTTPException(status_code=404, detail="No words with sentences found")
 
     audio_files = []
     try:
-      
-        # Iterate through all word types: regular, nonsense, sight
-        for word_type in ["regular_words",  "sight_words"]:
-            words_dict = word_lists[grade][word_type]
-            for word, data in words_dict.items():
-                # Generate audio for the word
-                word_ssml = f'<speak><prosody rate="95%">{word}</prosody></speak>'
-                word_response = polly_client.synthesize_speech(
-                    Text=word_ssml,
-                    TextType='ssml',
-                    OutputFormat='mp3',
-                    VoiceId='Joanna'
-                )
-                word_audio = word_response['AudioStream'].read()
-                
-                # Generate audio for the sentence
-                sentence = data["sentence"]
-                sentence_ssml = f'<speak><prosody rate="95%">{sentence}</prosody></speak>'
-                sentence_response = polly_client.synthesize_speech(
-                    Text=sentence_ssml,
-                    TextType='ssml',
-                    OutputFormat='mp3',
-                    VoiceId='Joanna'
-                )
-                sentence_audio = sentence_response['AudioStream'].read()
-                
-                # Encode audio as base64
-                word_base64 = base64.b64encode(word_audio).decode('utf-8')
-                sentence_base64 = base64.b64encode(sentence_audio).decode('utf-8')
-                
-                # Add to response
-                audio_files.append({
-                    "word": word,
-                    "word_type": word_type.replace("_words", ""),
-                    "word_audio": word_base64,
-                    "sentence_audio": sentence_base64,
-                    "word_filename": f"{word_type}/{word}_word.mp3",
-                    "sentence_filename": f"{word_type}/{word}_sentence.mp3"
-                })
+        for item in words:
+            word = item["word"]
+            sentence = item["sentence"]
+            word_type = item["type"]
+
+            word_ssml = f'<speak><prosody rate="95%">{word}</prosody></speak>'
+            word_response = polly_client.synthesize_speech(
+                Text=word_ssml,
+                TextType='ssml',
+                OutputFormat='mp3',
+                VoiceId='Joanna'
+            )
+            word_audio = word_response['AudioStream'].read()
+
+            sentence_ssml = f'<speak><prosody rate="95%">{sentence}</prosody></speak>'
+            sentence_response = polly_client.synthesize_speech(
+                Text=sentence_ssml,
+                TextType='ssml',
+                OutputFormat='mp3',
+                VoiceId='Joanna'
+            )
+            sentence_audio = sentence_response['AudioStream'].read()
+
+            word_base64 = base64.b64encode(word_audio).decode('utf-8')
+            sentence_base64 = base64.b64encode(sentence_audio).decode('utf-8')
+
+            audio_files.append({
+                "word": word,
+                "word_type": word_type,
+                "word_audio": word_base64,
+                "sentence_audio": sentence_base64,
+                "word_filename": f"{word_type}/{word}_word.mp3",
+                "sentence_filename": f"{word_type}/{word}_sentence.mp3"
+            })
         
         return {"grade": grade, "audio_files": audio_files}
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate audio: {str(e)}")
+
 @app.delete("/delete_child/")
 async def delete_child(request: DeleteChildRequest):
-    """
-    Permanently deletes a child and all associated test scores.
-    Only the authenticated parent can delete their own child.
-    """
-    # ---- 1. Verify Firebase token (owner of the data) ----
     try:
         decoded_token = auth.verify_id_token(request.idToken)
         user_id = decoded_token["uid"]
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid authentication credentials: {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
 
-    # ---- 2. Check that the child belongs to this user ----
     child_ref = db_ref.child(f"users/{user_id}/children/{request.child_id}")
     child_snapshot = child_ref.get()
 
     if not child_snapshot:
-        raise HTTPException(
-            status_code=404,
-            detail="Child not found or does not belong to the authenticated user."
-        )
+        raise HTTPException(status_code=404, detail="Child not found")
 
-    # ---- 3. Delete the child node (this cascades to scores because they are under the same path) ----
     try:
-        # Firebase Realtime DB does **not** auto-cascade, so we delete the scores first
         scores_ref = db_ref.child(f"users/{user_id}/children/{request.child_id}/scores")
-        scores_ref.delete()                     # removes all scores
-        child_ref.delete()                      # removes the child record
-
-        return {
-            "message": "Child and all associated data deleted successfully.",
-            "deleted_child_id": request.child_id
-        }
-
+        scores_ref.delete()
+        child_ref.delete()
+        return {"message": "Child and all associated data deleted successfully.", "deleted_child_id": request.child_id}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete child: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to delete child: {str(e)}")
+
 @app.post("/complete_result/")
 async def complete_result(request: CompleteResultRequest):
     try:
         decoded_token = auth.verify_id_token(request.idToken)
         user_id = decoded_token["uid"]
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid authentication credentials: {str(e)}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
     child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
     if not child_data:
-        raise HTTPException(status_code=404, detail="Child not found or does not belong to user")
-    
-    grade = child_data.get("grade") if not request.grade else request.grade
-    if grade not in ["Kindergarten", "First", "Second", "Third"]:
-        raise HTTPException(status_code=400, detail="Invalid grade")
+        raise HTTPException(status_code=404, detail="Child not found")
 
-    # Fetch all scores for the child
+    requested_grade = request.grade  # Optional: "First", "Third", etc.
+    allowed_grades = ["Kindergarten", "First", "Second", "Third"]
+
+    # Fetch ALL scores
     scores_data = db_ref.child(f"users/{user_id}/children/{request.child_id}/scores").get() or {}
-    # Sort scores by timestamp descending to get the latest
-    sorted_scores = sorted(scores_data.items(), key=lambda x: x[1].get("timestamp", ""), reverse=True)
-    if not sorted_scores:
-        raise HTTPException(status_code=404, detail="No test results found for this child")
-    
-    # Get the latest score
-    latest_score_id, latest_score_data = sorted_scores[0]
-    if request.grade and latest_score_data.get("grade") != request.grade:
-        raise HTTPException(status_code=404, detail="No results found for the specified grade in the latest test")
+    if not scores_data:
+        raise HTTPException(status_code=404, detail="No test results found")
 
-    # Use only the latest results
-    all_results = latest_score_data.get("results", [])
+    # Filter by requested grade (if provided)
+    filtered_scores = []
+    for score_id, score_data in scores_data.items():
+        grade = score_data.get("grade")
+        if grade not in allowed_grades:
+            continue
+        if requested_grade and grade != requested_grade:
+            continue
+        filtered_scores.append((score_data.get("timestamp", ""), score_data, grade))
 
-    # Calculate overall metrics
+    if not filtered_scores:
+        raise HTTPException(status_code=404, detail=f"No results found for grade: {requested_grade or 'any'}")
+
+    # Sort by timestamp (newest first)
+    filtered_scores.sort(key=lambda x: x[0], reverse=True)
+    latest_timestamp, latest_data, result_grade = filtered_scores[0]
+    all_results = latest_data.get("results", [])
+
+    # === Build Summary for the SELECTED result ===
     total_words = len(all_results)
     correct_count = sum(1 for r in all_results if r["points"] == r["max_points"])
     overall_accuracy = (correct_count / total_words * 100) if total_words > 0 else 0
 
-    # Aggregate phonics and sight word scores
-    phonics_results = [r for r in all_results if r["type"] == "regular"]
-    sight_results = [r for r in all_results if r["type"] == "sight"]
-    phonics_score = (sum(r["points"] for r in phonics_results) / sum(r["max_points"] for r in phonics_results) * 100) if phonics_results and sum(r["max_points"] for r in phonics_results) > 0 else 0
-    sight_word_score = (sum(r["points"] for r in sight_results) / sum(r["max_points"] for r in sight_results) * 100) if sight_results and sum(r["max_points"] for r in sight_results) > 0 else 0
+    phonics = [r for r in all_results if r["type"] == "regular"]
+    sight = [r for r in all_results if r["type"] == "sight"]
+    phonics_score = (sum(r["points"] for r in phonics) / sum(r["max_points"] for r in phonics) * 100) if phonics and sum(r["max_points"] for r in phonics) > 0 else 0
+    sight_word_score = (sum(r["points"] for r in sight) / sum(r["max_points"] for r in sight) * 100) if sight and sum(r["max_points"] for r in sight) > 0 else 0
 
-    # Improved confidence calculation
-    score_variance = abs(phonics_score - sight_word_score) if phonics_results and sight_results else 0
-    average_score = (phonics_score + sight_word_score) / 2 if phonics_results and sight_results else overall_accuracy
-    if score_variance < 20:
-        if average_score > 70:
-            confidence = "High"
-        elif average_score > 40:
-            confidence = "Medium"
-        else:
-            confidence = "Low"
-    else:
-        confidence = "Low"
+    score_variance = abs(phonics_score - sight_word_score) if phonics and sight else 0
+    average_score = (phonics_score + sight_word_score) / 2 if phonics and sight else overall_accuracy
+    confidence = ("High" if score_variance < 20 and average_score > 70 else
+                  "Medium" if score_variance < 20 and average_score > 40 else "Low")
 
-    # Analyze errors
-    error_counts = analyze_errors(phonics_results, grade)
-    key_error_patterns = [
-        {"pattern": k.replace(" error", ""), "count": v}
-        for k, v in error_counts.items() if v > 0
-    ]
-
-    # Determine strengths and focus areas
+    evaluation = evaluate_test(all_results, result_grade)
+    error_counts = analyze_errors(phonics, result_grade)
+    key_error_patterns = [{"pattern": k.replace(" error", ""), "count": v} for k, v in error_counts.items() if v > 0]
     strengths = [k.replace(" error", "") for k, v in error_counts.items() if v == 0 or v < 2]
     focus_areas = [k.replace(" error", "") for k, v in error_counts.items() if v >= 2]
+    recommendation = get_recommendation(error_counts, evaluation["status"], all_results, result_grade)
 
-    # Get evaluation and recommendation
-    evaluation = evaluate_test(all_results, grade)
-    recommendation = get_recommendation(error_counts, evaluation["status"], all_results, grade)
+    # Placement & Next Step
+    if evaluation["status"] == "Above":
+        placement = "Above Grade Level"
+        next_step = "Unlock Next Test" if result_grade == "Third" else "Unlock Next Grade"
+    elif evaluation["status"] == "At":
+        placement = "At Grade Level"
+        next_step = "Continue current grade"
+    else:
+        placement = "Below Grade Level"
+        next_step = "Continue current grade"
 
-    # Determine grade band, placement, and next step dynamically
-    grade_band = "K-3rd" if grade in ["Kindergarten", "First", "Second", "Third"] else f"{grade}"
-    placement = {
-        "Above": "At/Above Grade Level",
-        "At": "At Grade Level",
-        "Below": "Below Grade Level"
-    }.get(evaluation["status"], "At Grade Level")
-    next_step = "Unlock next assessment" if evaluation["status"] == "Above" and grade == "Third" else "Continue current grade"
+    grade_band = "K-3rd" if result_grade in ["Kindergarten", "First", "Second", "Third"] else result_grade
 
-    # Prepare table data dynamically from all_results
     table_data = [
         {
             "word": r["word"],
             "attempt": r["user_input"],
             "correct": r["points"] == r["max_points"],
             "error_type": next((k for k, v in r.get("mistakes", {}).items() if k != "spelling"), None) or ("Sight word" if r["type"] == "sight" and not r["points"] else None),
-            "time": r.get("time", 0.0),  # Use time from results, default to 0.0
-            "hints_used": r.get("hints_used", 0),  # Use hints_used from results, default to 0
-            "icon": "✓" if r["points"] == r["max_points"] else "✗"
+            "time": r.get("time", 0.0),
+            "hints_used": r.get("hints_used", 0),
+            "icon": "Correct" if r["points"] == r["max_points"] else "Incorrect"
         }
         for r in all_results
     ]
 
-    # Construct response
-    response = {
+    return {
         "user_id": user_id,
         "child_id": request.child_id,
-        "grade": grade,
+        "grade": result_grade,
         "parent_summary": {
             "overall_accuracy": round(overall_accuracy),
             "phonics_score": round(phonics_score),
@@ -1155,10 +981,10 @@ async def complete_result(request: CompleteResultRequest):
             ]
         },
         "teacher_admin_detail": {
-            "test_level": grade,
+            "test_level": result_grade,
             "words": total_words,
             "correct": correct_count,
-            "instructional_level": grade,
+            "instructional_level": result_grade,
             "table_data": table_data,
             "actions": [
                 {"label": "Export CSV", "type": "button", "action": "export_csv"},
@@ -1167,7 +993,6 @@ async def complete_result(request: CompleteResultRequest):
             ]
         }
     }
-    return response
 
 if __name__ == "__main__":
     import uvicorn
