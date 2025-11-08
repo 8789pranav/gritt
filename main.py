@@ -11,6 +11,7 @@ import uuid
 import os
 import base64
 import json
+from typing import Optional
 from datetime import datetime
 import boto3
 from fastapi.responses import Response
@@ -77,6 +78,24 @@ class SubmitWordsRequest(BaseModel):
     child_id: str
     grade: str
     words: List[WordInput]
+
+class FeedbackRequest(BaseModel):
+    idToken: str
+    child_id: str
+
+    # Answers from frontend
+    q1_grade: str
+    q2_prior_assessments: str
+    q3_spelling_confidence: str
+    q4_assessment_length: str
+    q5_difficulty_level: str
+    q6_engagement_level: str
+    q7_technical_issues: str
+    q8_results_clarity: str
+    q9_recommendations_helpful: str
+    q10_information_amount: str
+    q11_overall_satisfaction: str
+    q12_comments: Optional[str] = ""
 
 class UserCreate(BaseModel):
     idToken: str
@@ -795,44 +814,70 @@ async def generate_word_audio(request: AudioRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate audio: {str(e)}")
 
+import random
+import base64
+from fastapi import HTTPException
+
+# ----------------------------------------------------------------------
+# HUMAN-LIKE VOICE SETTINGS
+# ----------------------------------------------------------------------
+NEURAL_VOICE_ID = "Emma"          # British, warm, child-friendly
+LANGUAGE_CODE   = "en-GB"
+
 @app.post("/generate_all_grade_audio/")
 async def generate_all_grade_audio(request: GradeInput):
     grade = request.grade
     if grade not in word_lists:
         raise HTTPException(status_code=400, detail="Invalid grade")
 
+    # === GET WORDS ===
     words = _audio_words_for_grade(grade)
     if not words:
         raise HTTPException(status_code=404, detail="No words with sentences found")
 
+    # === SHUFFLE EVERY TIME (NEW!) ===
+    shuffled_words = words.copy()
+    random.shuffle(shuffled_words)
+
     audio_files = []
+
     try:
-        for item in words:
+        for item in shuffled_words:
             word = item["word"]
             sentence = item["sentence"]
             word_type = item["type"]
 
+            # === SSML: Word (slow) + Sentence (normal) ===
             word_ssml = f'<speak><prosody rate="95%">{word}</prosody></speak>'
+            sentence_ssml = f'<speak><prosody rate="100%">{sentence}</prosody></speak>'
+
+            # === WORD AUDIO (Neural HD) ===
             word_response = polly_client.synthesize_speech(
                 Text=word_ssml,
                 TextType='ssml',
                 OutputFormat='mp3',
-                VoiceId='Joanna'
+                VoiceId=NEURAL_VOICE_ID,
+                Engine='neural',           # HD, human-like
+                LanguageCode=LANGUAGE_CODE
             )
             word_audio = word_response['AudioStream'].read()
 
-            sentence_ssml = f'<speak><prosody rate="95%">{sentence}</prosody></speak>'
+            # === SENTENCE AUDIO (Neural HD) ===
             sentence_response = polly_client.synthesize_speech(
                 Text=sentence_ssml,
                 TextType='ssml',
                 OutputFormat='mp3',
-                VoiceId='Joanna'
+                VoiceId=NEURAL_VOICE_ID,
+                Engine='neural',
+                LanguageCode=LANGUAGE_CODE
             )
             sentence_audio = sentence_response['AudioStream'].read()
 
+            # === BASE64 ENCODE (EXACT SAME AS BEFORE) ===
             word_base64 = base64.b64encode(word_audio).decode('utf-8')
             sentence_base64 = base64.b64encode(sentence_audio).decode('utf-8')
 
+            # === SAME JSON STRUCTURE (100% compatible) ===
             audio_files.append({
                 "word": word,
                 "word_type": word_type,
@@ -841,11 +886,17 @@ async def generate_all_grade_audio(request: GradeInput):
                 "word_filename": f"{word_type}/{word}_word.mp3",
                 "sentence_filename": f"{word_type}/{word}_sentence.mp3"
             })
-        
-        return {"grade": grade, "audio_files": audio_files}
-    
+
+        return {
+            "grade": grade,
+            "audio_files": audio_files  # SHUFFLED + HD AUDIO
+        }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate audio: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate audio: {str(e)}"
+        )
 
 @app.delete("/delete_child/")
 async def delete_child(request: DeleteChildRequest):
@@ -881,73 +932,153 @@ async def complete_result(request: CompleteResultRequest):
     if not child_data:
         raise HTTPException(status_code=404, detail="Child not found")
 
-    requested_grade = request.grade  # Optional: "First", "Third", etc.
+    requested_grade = request.grade
     allowed_grades = ["Kindergarten", "First", "Second", "Third"]
 
-    # Fetch ALL scores
+    # === Fetch & Filter Scores ===
     scores_data = db_ref.child(f"users/{user_id}/children/{request.child_id}/scores").get() or {}
     if not scores_data:
         raise HTTPException(status_code=404, detail="No test results found")
 
-    # Filter by requested grade (if provided)
-    filtered_scores = []
-    for score_id, score_data in scores_data.items():
-        grade = score_data.get("grade")
-        if grade not in allowed_grades:
+    filtered = []
+    for score_id, s in scores_data.items():
+        g = s.get("grade")
+        if g not in allowed_grades or (requested_grade and g != requested_grade):
             continue
-        if requested_grade and grade != requested_grade:
-            continue
-        filtered_scores.append((score_data.get("timestamp", ""), score_data, grade))
+        filtered.append((s.get("timestamp", ""), s, g))
 
-    if not filtered_scores:
-        raise HTTPException(status_code=404, detail=f"No results found for grade: {requested_grade or 'any'}")
+    if not filtered:
+        raise HTTPException(status_code=404, detail=f"No results for grade: {requested_grade or 'any'}")
 
-    # Sort by timestamp (newest first)
-    filtered_scores.sort(key=lambda x: x[0], reverse=True)
-    latest_timestamp, latest_data, result_grade = filtered_scores[0]
-    all_results = latest_data.get("results", [])
-
-    # === Build Summary for the SELECTED result ===
-    total_words = len(all_results)
-    correct_count = sum(1 for r in all_results if r["points"] == r["max_points"])
-    overall_accuracy = (correct_count / total_words * 100) if total_words > 0 else 0
+    filtered.sort(key=lambda x: x[0], reverse=True)
+    _, latest, result_grade = filtered[0]
+    all_results = latest.get("results", [])
 
     phonics = [r for r in all_results if r["type"] == "regular"]
-    sight = [r for r in all_results if r["type"] == "sight"]
-    phonics_score = (sum(r["points"] for r in phonics) / sum(r["max_points"] for r in phonics) * 100) if phonics and sum(r["max_points"] for r in phonics) > 0 else 0
-    sight_word_score = (sum(r["points"] for r in sight) / sum(r["max_points"] for r in sight) * 100) if sight and sum(r["max_points"] for r in sight) > 0 else 0
+    sight   = [r for r in all_results if r["type"] == "sight"]
 
-    score_variance = abs(phonics_score - sight_word_score) if phonics and sight else 0
-    average_score = (phonics_score + sight_word_score) / 2 if phonics and sight else overall_accuracy
-    confidence = ("High" if score_variance < 20 and average_score > 70 else
-                  "Medium" if score_variance < 20 and average_score > 40 else "Low")
+    # === No Phonics Attempted ===
+    if not phonics:
+        return {
+            "user_id": user_id,
+            "child_id": request.child_id,
+            "grade": result_grade,
+            "parent_summary": {
+                "overall_accuracy": 0,
+                "phonics_score": 0,
+                "sight_word_score": round((sum(r["points"] for r in sight) / sum(r["max_points"] for r in sight) * 100), 1) if sight else 0,
+                "confidence": "Low",
+                "key_error_patterns": [],
+                "strengths": [],
+                "focus_areas": [],
+                "recommendation": "No phonics words attempted. Start with basic letter sounds.",
+                "note": "Note: Placement is instructional and not a clinical diagnosis.",
+                "grade_band": {"band": result_grade, "placement": "Below Grade Level", "next_step": "Begin phonics practice"},
+                "actions": [
+                    {"label": "Start Practice Pack", "type": "button", "action": "start_pack"},
+                    {"label": "Review Missed Words", "type": "button", "action": "review_missed"},
+                    {"label": "Download Report (PDF)", "type": "button", "action": "download_pdf"}]
+            },
+            "teacher_admin_detail": {
+                "test_level": result_grade,
+                "words": len(all_results),
+                "correct": sum(1 for r in all_results if r["points"] == r["max_points"]),
+                "instructional_level": result_grade,
+                "table_data": [],
+                "actions": [
+                    {"label": "Export CSV", "type": "button", "action": "export_csv"},
+                    {"label": "Copy JSON", "type": "button", "action": "copy_json"},
+                    {"label": "Send to Tutor", "type": "button", "action": "send_tutor"}
+                ]
+            }
+        }
 
+    # === Overall Scores ===
+    total_words = len(all_results)
+    correct_count = sum(1 for r in all_results if r["points"] == r["max_points"])
+    overall_acc = (correct_count / total_words * 100) if total_words else 0
+
+    phonics_pct = (sum(r["points"] for r in phonics) / sum(r["max_points"] for r in phonics) * 100)
+    sight_pct   = (sum(r["points"] for r in sight) / sum(r["max_points"] for r in sight) * 100) if sight else 0
+
+    variance = abs(phonics_pct - sight_pct) if sight else 0
+    avg_score = (phonics_pct + sight_pct) / 2 if sight else phonics_pct
+    confidence = ("High" if variance < 20 and avg_score > 70 else
+                  "Medium" if variance < 20 and avg_score > 40 else "Low")
+
+    # === NEW: 75% Mastery = Strength ===
+    from collections import defaultdict
+
+    skill_stats = defaultdict(lambda: {"tested": 0, "correct": 0})
+
+    for r in phonics:
+        word = r["word"]
+        correct = r["points"] == r["max_points"]
+        word_data = word_lists[result_grade]["regular_words"].get(word, {})
+        for feature, value in word_data.items():
+            if feature == "sentence" or not value or value in ["-", ""]:
+                continue
+            display_name = {
+                "beginning": "Beginning consonant",
+                "final": "Ending consonant",
+                "short_vowels": "Short vowel",
+                "consonant_digraphs": "Consonant digraph",
+                "consonant_blends": "Consonant blend",
+                "long_vowel_patterns": "Long vowel pattern",
+                "other_vowel_patterns": "Other vowel pattern",
+                "inflected_endings": "Inflected ending",
+                "beginning_consonant": "Beginning consonant",
+                "final_consonant": "Ending consonant",
+                "short_vowel": "Short vowel",
+                "digraph": "Consonant digraph",
+                "blend": "Consonant blend",
+                "long_vowel": "Long vowel pattern",
+                "other_vowel": "Other vowel pattern",
+                "inflected": "Inflected ending"
+            }.get(feature, feature)
+            skill_stats[display_name]["tested"] += 1
+            if correct:
+                skill_stats[display_name]["correct"] += 1
+
+    # === Build strengths & focus_areas (75% rule) ===
+    strengths = []
+    focus_areas = []
+    key_error_patterns = []
+
+    for skill, stats in skill_stats.items():
+        tested = stats["tested"]
+        correct = stats["correct"]
+        pct = (correct / tested) * 100
+        errors = tested - correct
+
+        if pct >= 75:
+            strengths.append(skill)
+        if errors >= 2:
+            focus_areas.append(skill)
+        if errors > 0:
+            key_error_patterns.append({"pattern": skill, "count": errors})
+
+    # === Evaluation & Recommendation ===
     evaluation = evaluate_test(all_results, result_grade)
-    error_counts = analyze_errors(phonics, result_grade)
-    key_error_patterns = [{"pattern": k.replace(" error", ""), "count": v} for k, v in error_counts.items() if v > 0]
-    strengths = [k.replace(" error", "") for k, v in error_counts.items() if v == 0 or v < 2]
-    focus_areas = [k.replace(" error", "") for k, v in error_counts.items() if v >= 2]
-    recommendation = get_recommendation(error_counts, evaluation["status"], all_results, result_grade)
+    recommendation = get_recommendation(
+        {f"{k} error": (stats["tested"] - stats["correct"]) for k, stats in skill_stats.items()},
+        evaluation["status"], all_results, result_grade
+    )
 
-    # Placement & Next Step
-    if evaluation["status"] == "Above":
-        placement = "Above Grade Level"
-        next_step = "Unlock Next Test" if result_grade == "Third" else "Unlock Next Grade"
-    elif evaluation["status"] == "At":
-        placement = "At Grade Level"
-        next_step = "Continue current grade"
-    else:
-        placement = "Below Grade Level"
-        next_step = "Continue current grade"
-
+    # === Placement ===
+    placement = {"Above": "Above Grade Level", "At": "At Grade Level", "Below": "Below Grade Level"}[evaluation["status"]]
+    next_step = "Unlock Next Grade" if evaluation["status"] == "Above" and result_grade != "Third" else \
+                "Unlock Next Test" if evaluation["status"] == "Above" else "Continue current grade"
     grade_band = "K-3rd" if result_grade in ["Kindergarten", "First", "Second", "Third"] else result_grade
 
+    # === Table Data ===
     table_data = [
         {
             "word": r["word"],
             "attempt": r["user_input"],
             "correct": r["points"] == r["max_points"],
-            "error_type": next((k for k, v in r.get("mistakes", {}).items() if k != "spelling"), None) or ("Sight word" if r["type"] == "sight" and not r["points"] else None),
+            "error_type": next((k for k, v in r.get("mistakes", {}).items() if k != "spelling"), None)
+                          or ("Sight word" if r["type"] == "sight" and not r["points"] else None),
             "time": r.get("time", 0.0),
             "hints_used": r.get("hints_used", 0),
             "icon": "Correct" if r["points"] == r["max_points"] else "Incorrect"
@@ -955,25 +1086,22 @@ async def complete_result(request: CompleteResultRequest):
         for r in all_results
     ]
 
+    # === Final Response – 100% SAME AS BEFORE ===
     return {
         "user_id": user_id,
         "child_id": request.child_id,
         "grade": result_grade,
         "parent_summary": {
-            "overall_accuracy": round(overall_accuracy),
-            "phonics_score": round(phonics_score),
-            "sight_word_score": round(sight_word_score),
+            "overall_accuracy": round(overall_acc),
+            "phonics_score": round(phonics_pct),
+            "sight_word_score": round(sight_pct),
             "confidence": confidence,
             "key_error_patterns": key_error_patterns,
+            "strengths": strengths,           # Now 75%+ correct
+            "focus_areas": focus_areas,       # 2+ errors
             "recommendation": recommendation,
             "note": "Note: Placement is instructional and not a clinical diagnosis.",
-            "strengths": strengths,
-            "focus_areas": focus_areas,
-            "grade_band": {
-                "band": grade_band,
-                "placement": placement,
-                "next_step": next_step
-            },
+            "grade_band": {"band": grade_band, "placement": placement, "next_step": next_step},
             "actions": [
                 {"label": "Start Practice Pack", "type": "button", "action": "start_pack"},
                 {"label": "Review Missed Words", "type": "button", "action": "review_missed"},
@@ -994,6 +1122,69 @@ async def complete_result(request: CompleteResultRequest):
         }
     }
 
+@app.post("/feedback/")
+async def submit_feedback(feedback: FeedbackRequest):
+    try:
+        # Verify token and get user info
+        decoded = auth.verify_id_token(feedback.idToken)
+        user_id = decoded["uid"]
+        user_email = decoded.get("email", "unknown@example.com")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+    # Optional: Still verify child exists (for security)
+    if not db_ref.child(f"users/{user_id}/children/{feedback.child_id}").get():
+        raise HTTPException(status_code=404, detail="Child not found")
+
+    feedback_id = str(uuid.uuid4())
+
+    # Save under parent_feedback/
+    payload = {
+        "user_id": user_id,
+        "email": user_email,
+        "child_id": feedback.child_id,
+        "answers": {
+            "What grade is your child currently in?": feedback.q1_grade,
+            "Has your child taken spelling assessments before?": feedback.q2_prior_assessments,
+            "How confident is your child typically with spelling?": feedback.q3_spelling_confidence,
+            "How did you find the length of this assessment?": feedback.q4_assessment_length,
+            "How would you rate the difficulty level for your child?": feedback.q5_difficulty_level,
+            "How engaged was your child during the assessment?": feedback.q6_engagement_level,
+            "Did you experience any technical difficulties?": feedback.q7_technical_issues,
+            "How clear and understandable are the results?": feedback.q8_results_clarity,
+            "How helpful are the recommendations provided?": feedback.q9_recommendations_helpful,
+            "Is the amount of information provided appropriate?": feedback.q10_information_amount,
+            "Overall, how satisfied are you with this spelling assessment?": feedback.q11_overall_satisfaction,
+            "Any additional comments or suggestions?": feedback.q12_comments.strip()
+        },
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+
+    try:
+        # Save under parent_feedback/
+        db_ref.child("parent_feedback").child(feedback_id).set(payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save: {str(e)}")
+
+    return {
+        "message": "Feedback saved successfully",
+        "feedback_id": feedback_id,
+        "saved_under": "parent_feedback",
+        "email": user_email,
+        "timestamp": payload["timestamp"]
+    }
+
+@app.get("/admin/feedback/")
+async def get_all_feedback(idToken: str):
+    try:
+        decoded = auth.verify_id_token(idToken)
+        if decoded.get("admin") != True:
+            raise HTTPException(403, "Admin access required")
+    except:
+        raise HTTPException(401, "Invalid admin token")
+
+    feedbacks = db_ref.child("feedback").get() or {}
+    return {"count": len(feedbacks), "feedbacks": list(feedbacks.values())}
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
