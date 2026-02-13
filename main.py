@@ -4,11 +4,14 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict
 import firebase_admin
+
+from firebase_admin import auth as firebase_auth
 from dotenv import load_dotenv
 from firebase_admin import credentials, auth, db
 import requests
 import uuid
 import os
+import time
 import base64
 import json
 from typing import Optional
@@ -147,7 +150,9 @@ class CompleteResultRequest(BaseModel):
     idToken: str
     child_id: str
     grade: str = None
-
+class MakeAdminRequest(BaseModel):
+    idToken: str
+targetEmail: str  # CHANGED: email instead of UID
 # Word lists
 word_lists = {
     "Kindergarten": {
@@ -821,8 +826,8 @@ from fastapi import HTTPException
 # ----------------------------------------------------------------------
 # HUMAN-LIKE VOICE SETTINGS
 # ----------------------------------------------------------------------
-NEURAL_VOICE_ID = "Emma"          # British, warm, child-friendly
-LANGUAGE_CODE   = "en-GB"
+NEURAL_VOICE_ID = "Joanna"        # American female – warm, clear, child-friendly
+LANGUAGE_CODE   = "en-US"         # American English
 
 @app.post("/generate_all_grade_audio/")
 async def generate_all_grade_audio(request: GradeInput):
@@ -1173,18 +1178,136 @@ async def submit_feedback(feedback: FeedbackRequest):
         "email": user_email,
         "timestamp": payload["timestamp"]
     }
-
-@app.get("/admin/feedback/")
-async def get_all_feedback(idToken: str):
+# === ADMIN: MAKE USER ADMIN ===
+# === ADMIN: MAKE USER ADMIN BY EMAIL ===
+@app.post("/admin/make-admin/")
+async def make_admin(request: MakeAdminRequest):
     try:
-        decoded = auth.verify_id_token(idToken)
-        if decoded.get("admin") != True:
-            raise HTTPException(403, "Admin access required")
-    except:
-        raise HTTPException(401, "Invalid admin token")
+        # === 1. Verify caller is admin ===
+        decoded = auth.verify_id_token(request.idToken)
+        caller_uid = decoded["uid"]
 
-    feedbacks = db_ref.child("feedback").get() or {}
-    return {"count": len(feedbacks), "feedbacks": list(feedbacks.values())}
+        caller_data = db_ref.child("users").child(caller_uid).get()
+        if not caller_data or not caller_data.get("isAdmin", False):
+            raise HTTPException(status_code=403, detail="Only admins can promote users")
+
+        # === 2. Find target user by email ===
+        target_email = request.targetEmail.strip().lower()
+        all_users = db_ref.child("users").get() or {}
+
+        target_uid = None
+        for uid, data in all_users.items():
+            if data.get("email", "").strip().lower() == target_email:
+                target_uid = uid
+                break
+
+        if not target_uid:
+            raise HTTPException(status_code=404, detail=f"User with email '{target_email}' not found")
+
+        # === 3. Update isAdmin = true ===
+        db_ref.child("users").child(target_uid).update({"isAdmin": True})
+
+        return {
+            "message": f"User {target_email} is now an admin",
+            "updated": True,
+            "targetUid": target_uid  # Optional: helpful for logs
+        }
+
+    except auth.InvalidIdTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+@app.post("/admin/stats/")
+async def get_admin_stats(request: GetDetailsRequest):
+    try:
+        # === 1. Verify token & get UID ===
+        decoded = auth.verify_id_token(request.idToken)
+        current_uid = decoded["uid"]
+        current_user = db_ref.child("users").child(current_uid).get()
+        if not current_user or not current_user.get("isAdmin", False):
+            return {
+                "isAdmin": False,
+                "totalUsers": 0,
+                "users": []
+            }
+
+        # === 2. Fetch ALL users from Realtime DB ===
+        all_users_raw = db_ref.child("users").get() or {}
+        user_list = []
+
+        for uid, data in all_users_raw.items():
+            email = data.get("email", "N/A")
+
+            # === GET REAL CREATION TIME FROM FIREBASE AUTH ===
+            try:
+                auth_user = firebase_auth.get_user(uid)
+                created_at = int(auth_user.user_metadata.creation_timestamp / 1000)  # ms → sec
+            except:
+                # Fallback: use DB createdAt or estimate
+                created_at = data.get("createdAt")
+                if not created_at or not isinstance(created_at, (int, float)):
+                    created_at = int(time.time()) - (30 * 24 * 3600)  # 30 days ago as fallback
+
+            # Format date
+            joined_date = time.strftime("%Y-%m-%d %H:%M", time.localtime(created_at))
+
+            user_list.append({
+                "email": email,
+                "joinedDate": joined_date,
+                "timestamp": created_at
+            })
+
+        # === 3. Sort: Newest first ===
+        user_list.sort(key=lambda x: x["timestamp"], reverse=True)
+
+        # === 4. Final output ===
+        final_users = [
+            {"email": u["email"], "joinedDate": u["joinedDate"]}
+            for u in user_list
+        ]
+
+        return {
+            "isAdmin": True,
+            "totalUsers": len(final_users),
+            "users": final_users
+        }
+
+    except auth.InvalidIdTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.post("/admin/feedback/")
+async def get_all_feedback(request: GetDetailsRequest):
+    try:
+        # Verify Firebase ID token
+        decoded_token = auth.verify_id_token(request.idToken)
+        uid = decoded_token["uid"]
+
+        # Fetch user data from Firebase Realtime DB
+        user_data = db_ref.child("users").child(uid).get()
+        if not user_data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Check isAdmin flag in DB
+        if not user_data.get("isAdmin", False):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+    except auth.InvalidIdTokenError:
+        raise HTTPException(status_code=401, detail="Invalid ID token")
+    except auth.ExpiredIdTokenError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth failed: {str(e)}")
+
+    # Only admins reach here
+    feedbacks = db_ref.child("parent_feedback").get() or {}
+    feedback_list = list(feedbacks.values())
+
+    return {
+        "count": len(feedback_list),
+        "feedbacks": feedback_list
+    }
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
