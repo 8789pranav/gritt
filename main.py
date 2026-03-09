@@ -1,9 +1,13 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Dict
 import firebase_admin
+import openai
+import tempfile
+import re
+import io
 
 from firebase_admin import auth as firebase_auth
 from dotenv import load_dotenv
@@ -38,6 +42,10 @@ FIREBASE_CRED_BASE64 = os.getenv("FIREBASE_CRED_BASE64")
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
+
+# OpenAI API Configuration
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+openai_client = openai.OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # Initialize Firebase Admin SDK
 if not firebase_admin._apps:
@@ -152,7 +160,82 @@ class CompleteResultRequest(BaseModel):
     grade: str = None
 class MakeAdminRequest(BaseModel):
     idToken: str
-targetEmail: str  # CHANGED: email instead of UID
+    targetEmail: str  # email instead of UID
+
+# ==================== SPEAKING TEST MODELS ====================
+class SpeakingSentenceRequest(BaseModel):
+    idToken: str
+    child_id: str
+    grade: str
+
+class SpeakingAnalyzeRequest(BaseModel):
+    """Request to analyze speech from base64 audio"""
+    idToken: str
+    child_id: str
+    grade: str
+    original_sentence: str
+    audio_base64: str  # Base64 encoded audio (mp3, wav, webm, m4a)
+    audio_format: str = "mp3"  # Format hint: mp3, wav, webm, m4a
+
+class SpeakingSubmitRequest(BaseModel):
+    """Submit speaking test with audio for full analysis and save"""
+    idToken: str
+    child_id: str
+    grade: str
+    sentence_id: str
+    original_sentence: str
+    audio_base64: str
+    audio_format: str = "mp3"
+
+class SpeakingResultRequest(BaseModel):
+    idToken: str
+    child_id: str
+    grade: str = None
+
+# ==================== SPEAKING TEST SENTENCE LISTS ====================
+speaking_sentences = {
+    "Kindergarten": [
+        {"id": "k1", "sentence": "The cat sat on the mat.", "word_count": 6, "difficulty": "easy"},
+        {"id": "k2", "sentence": "I see a big red dog.", "word_count": 6, "difficulty": "easy"},
+        {"id": "k3", "sentence": "The sun is very hot.", "word_count": 5, "difficulty": "easy"},
+        {"id": "k4", "sentence": "My mom has a blue cup.", "word_count": 6, "difficulty": "easy"},
+        {"id": "k5", "sentence": "The fish can swim fast.", "word_count": 5, "difficulty": "easy"},
+        {"id": "k6", "sentence": "I like to run and hop.", "word_count": 6, "difficulty": "medium"},
+        {"id": "k7", "sentence": "The little bug is on the leaf.", "word_count": 7, "difficulty": "medium"},
+        {"id": "k8", "sentence": "Dad and I play in the park.", "word_count": 7, "difficulty": "medium"},
+    ],
+    "First": [
+        {"id": "f1", "sentence": "The brown dog likes to play with the ball.", "word_count": 9, "difficulty": "easy"},
+        {"id": "f2", "sentence": "She went to the store to buy some apples.", "word_count": 9, "difficulty": "easy"},
+        {"id": "f3", "sentence": "The children are playing outside in the rain.", "word_count": 8, "difficulty": "medium"},
+        {"id": "f4", "sentence": "My friend has a pretty yellow flower.", "word_count": 7, "difficulty": "easy"},
+        {"id": "f5", "sentence": "We like to read books before bedtime.", "word_count": 7, "difficulty": "medium"},
+        {"id": "f6", "sentence": "The rabbit jumped over the small fence.", "word_count": 7, "difficulty": "medium"},
+        {"id": "f7", "sentence": "I can see the bright stars at night.", "word_count": 8, "difficulty": "medium"},
+        {"id": "f8", "sentence": "The teacher told us a funny story today.", "word_count": 8, "difficulty": "medium"},
+    ],
+    "Second": [
+        {"id": "s1", "sentence": "The beautiful butterfly landed on the colorful flower.", "word_count": 8, "difficulty": "medium"},
+        {"id": "s2", "sentence": "Yesterday we went to the zoo and saw elephants.", "word_count": 9, "difficulty": "medium"},
+        {"id": "s3", "sentence": "My grandmother bakes delicious cookies every weekend.", "word_count": 7, "difficulty": "medium"},
+        {"id": "s4", "sentence": "The excited children ran quickly to the playground.", "word_count": 8, "difficulty": "medium"},
+        {"id": "s5", "sentence": "We learned about different animals in science class.", "word_count": 8, "difficulty": "hard"},
+        {"id": "s6", "sentence": "The thunder was loud but the lightning was bright.", "word_count": 9, "difficulty": "hard"},
+        {"id": "s7", "sentence": "She carefully placed the fragile glass on the table.", "word_count": 9, "difficulty": "hard"},
+        {"id": "s8", "sentence": "The astronaut floated in space looking at Earth.", "word_count": 8, "difficulty": "hard"},
+    ],
+    "Third": [
+        {"id": "t1", "sentence": "The magnificent castle stood proudly on top of the mountain.", "word_count": 10, "difficulty": "medium"},
+        {"id": "t2", "sentence": "Scientists discovered an unusual species of fish in the ocean.", "word_count": 10, "difficulty": "hard"},
+        {"id": "t3", "sentence": "The determined athlete practiced every morning before school started.", "word_count": 8, "difficulty": "hard"},
+        {"id": "t4", "sentence": "My favorite subject is mathematics because I enjoy solving problems.", "word_count": 9, "difficulty": "hard"},
+        {"id": "t5", "sentence": "The ancient Egyptian pyramids are thousands of years old.", "word_count": 8, "difficulty": "hard"},
+        {"id": "t6", "sentence": "We celebrated my sister's birthday with a spectacular surprise party.", "word_count": 9, "difficulty": "hard"},
+        {"id": "t7", "sentence": "The courageous firefighter rescued the kitten from the tall tree.", "word_count": 10, "difficulty": "hard"},
+        {"id": "t8", "sentence": "Reading comprehension improves when you practice regularly every day.", "word_count": 8, "difficulty": "hard"},
+    ]
+}
+
 # Word lists
 word_lists = {
     "Kindergarten": {
@@ -1308,6 +1391,590 @@ async def get_all_feedback(request: GetDetailsRequest):
         "count": len(feedback_list),
         "feedbacks": feedback_list
     }
+
+# ==================== SPEAKING TEST APIs ====================
+
+# ==================== OPENAI SPEECH FUNCTIONS ====================
+
+async def transcribe_audio_with_openai(audio_base64: str, audio_format: str = "mp3") -> Dict:
+    """
+    Use OpenAI Whisper to transcribe audio and get word-level timestamps.
+    """
+    if not openai_client:
+        return {
+            "success": False,
+            "error": "OpenAI API key not configured",
+            "transcribed_text": "",
+            "word_timestamps": []
+        }
+    
+    try:
+        # Decode base64 audio
+        audio_bytes = base64.b64decode(audio_base64)
+        
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(suffix=f".{audio_format}", delete=False) as temp_file:
+            temp_file.write(audio_bytes)
+            temp_path = temp_file.name
+        
+        # Transcribe with Whisper
+        with open(temp_path, "rb") as audio_file:
+            transcript = openai_client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file,
+                response_format="verbose_json",
+                timestamp_granularities=["word"]
+            )
+        
+        # Clean up temp file
+        os.unlink(temp_path)
+        
+        # Extract word timestamps if available
+        word_timestamps = []
+        if hasattr(transcript, 'words') and transcript.words:
+            for word_info in transcript.words:
+                word_timestamps.append({
+                    "word": word_info.word,
+                    "start": word_info.start,
+                    "end": word_info.end
+                })
+        
+        return {
+            "success": True,
+            "transcribed_text": transcript.text,
+            "word_timestamps": word_timestamps,
+            "duration": transcript.duration if hasattr(transcript, 'duration') else 0
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "transcribed_text": "",
+            "word_timestamps": []
+        }
+
+
+async def analyze_speech_with_openai(original_sentence: str, transcribed_text: str, word_timestamps: List[Dict], duration_seconds: float, grade: str) -> Dict:
+    """
+    Use OpenAI GPT to perform comprehensive speech analysis.
+    """
+    if not openai_client:
+        return {
+            "success": False,
+            "error": "OpenAI API key not configured",
+            "analysis": None
+        }
+    
+    try:
+        # Build the analysis prompt
+        prompt = f"""You are an expert speech therapist and language teacher for children. Analyze the following speech sample from a {grade} grade student.
+
+ORIGINAL SENTENCE (what they should say):
+"{original_sentence}"
+
+WHAT THE CHILD ACTUALLY SAID (transcribed):
+"{transcribed_text}"
+
+WORD TIMING DATA:
+{json.dumps(word_timestamps, indent=2) if word_timestamps else "No detailed timing available"}
+
+TOTAL DURATION: {duration_seconds} seconds
+EXPECTED WORD COUNT: {len(original_sentence.split())}
+ACTUAL WORD COUNT: {len(transcribed_text.split())}
+
+Please analyze and provide scores (0-100) and feedback for:
+
+1. PRONUNCIATION ACCURACY: How accurately did the child pronounce each word?
+2. SPEAKING RATE/PACE: Is their speaking speed appropriate? (normal for children: 100-150 WPM)
+3. FLUENCY & GAPS: How smoothly did they speak? (pauses > 1 second are concerning)
+4. GRAMMAR & WORD ORDER: Did they maintain correct grammar?
+
+Respond in this exact JSON format:
+{{
+    "pronunciation": {{
+        "score": <0-100>,
+        "correct_words": <number>,
+        "total_words": <number>,
+        "mispronounced_words": [
+            {{"expected": "word", "heard": "what_child_said", "feedback": "specific tip"}}
+        ],
+        "feedback": "child-friendly feedback"
+    }},
+    "speaking_rate": {{
+        "score": <0-100>,
+        "wpm": <calculated words per minute>,
+        "status": "Too Slow/Slightly Slow/Perfect/Slightly Fast/Too Fast",
+        "feedback": "child-friendly feedback"
+    }},
+    "fluency": {{
+        "score": <0-100>,
+        "long_pauses_count": <number>,
+        "feedback": "child-friendly feedback"
+    }},
+    "grammar": {{
+        "score": <0-100>,
+        "issues": [
+            {{"type": "missing_word/extra_word/wrong_order", "detail": "description"}}
+        ],
+        "feedback": "child-friendly feedback"
+    }},
+    "overall": {{
+        "score": <weighted average>,
+        "status": "Above/At/Below",
+        "level": "Excellent Speaker/Good Speaker/Developing Speaker",
+        "strengths": ["list of strengths"],
+        "areas_to_improve": ["list of areas"],
+        "recommendation": "personalized recommendation for the child",
+        "parent_tip": "tip for parents to help"
+    }}
+}}"""
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a child speech analysis expert. Always respond with valid JSON only, no markdown formatting."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000
+        )
+        
+        # Parse the response
+        result_text = response.choices[0].message.content.strip()
+        
+        # Remove markdown code blocks if present
+        if result_text.startswith("```"):
+            result_text = re.sub(r'^```json?\s*', '', result_text)
+            result_text = re.sub(r'\s*```$', '', result_text)
+        
+        analysis = json.loads(result_text)
+        
+        return {
+            "success": True,
+            "analysis": analysis
+        }
+        
+    except json.JSONDecodeError as e:
+        return {
+            "success": False,
+            "error": f"Failed to parse AI response: {str(e)}",
+            "analysis": None
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "analysis": None
+        }
+
+
+def analyze_pronunciation_fallback(original: str, transcribed: str) -> Dict:
+    """Fallback pronunciation analysis without OpenAI."""
+    original_words = original.lower().strip().split()
+    transcribed_words = transcribed.lower().strip().split()
+    
+    original_clean = [re.sub(r'[^\w]', '', w) for w in original_words]
+    transcribed_clean = [re.sub(r'[^\w]', '', w) for w in transcribed_words]
+    
+    correct_words = 0
+    mispronounced = []
+    
+    for i, orig_word in enumerate(original_clean):
+        if orig_word in transcribed_clean:
+            correct_words += 1
+        else:
+            mispronounced.append({"expected": orig_word, "heard": "missing"})
+    
+    total_words = len(original_clean)
+    score = round((correct_words / total_words) * 100, 1) if total_words > 0 else 0
+    
+    return {
+        "score": score,
+        "correct_words": correct_words,
+        "total_words": total_words,
+        "mispronounced_words": mispronounced,
+        "feedback": "Good effort! Keep practicing." if score >= 70 else "Practice reading slowly and clearly."
+    }
+
+
+def analyze_speaking_rate_fallback(word_count: int, duration_seconds: float) -> Dict:
+    """Fallback speaking rate analysis."""
+    if duration_seconds <= 0:
+        return {"score": 0, "wpm": 0, "status": "Invalid", "feedback": "Recording too short"}
+    
+    wpm = round((word_count / duration_seconds) * 60, 1)
+    
+    if wpm < 60:
+        status, score = "Too Slow", 50
+    elif wpm < 100:
+        status, score = "Slightly Slow", 80
+    elif wpm <= 150:
+        status, score = "Perfect", 100
+    elif wpm <= 180:
+        status, score = "Slightly Fast", 80
+    else:
+        status, score = "Too Fast", 50
+    
+    return {"score": score, "wpm": wpm, "status": status, "feedback": f"Speaking at {wpm} words per minute."}
+
+
+# ==================== SPEAKING API ENDPOINTS ====================
+
+@app.post("/speaking/get_sentence/")
+async def get_speaking_sentence(request: SpeakingSentenceRequest):
+    """Get a sentence for speaking test based on grade."""
+    try:
+        decoded_token = auth.verify_id_token(request.idToken)
+        user_id = decoded_token["uid"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    # Verify child exists
+    child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
+    if not child_data:
+        raise HTTPException(status_code=404, detail="Child not found")
+    
+    grade = request.grade
+    if grade not in speaking_sentences:
+        raise HTTPException(status_code=400, detail="Invalid grade. Must be: Kindergarten, First, Second, or Third")
+    
+    # Get sentences for the grade and shuffle
+    sentences = speaking_sentences[grade].copy()
+    random.shuffle(sentences)
+    
+    # Generate audio for the sentence using Polly
+    selected = sentences[0]
+    sentence_ssml = f'<speak><prosody rate="90%">{selected["sentence"]}</prosody></speak>'
+    
+    try:
+        audio_response = polly_client.synthesize_speech(
+            Text=sentence_ssml,
+            TextType='ssml',
+            OutputFormat='mp3',
+            VoiceId='Joanna',
+            Engine='neural',
+            LanguageCode='en-US'
+        )
+        audio_base64 = base64.b64encode(audio_response['AudioStream'].read()).decode('utf-8')
+    except Exception as e:
+        audio_base64 = None
+    
+    return {
+        "grade": grade,
+        "sentence_id": selected["id"],
+        "sentence": selected["sentence"],
+        "word_count": selected["word_count"],
+        "difficulty": selected["difficulty"],
+        "audio_base64": audio_base64,
+        "instructions": "Listen to the sentence, then record yourself saying it clearly."
+    }
+
+
+@app.post("/speaking/get_all_sentences/")
+async def get_all_speaking_sentences(request: SpeakingSentenceRequest):
+    """Get all sentences for a speaking test with audio."""
+    try:
+        decoded_token = auth.verify_id_token(request.idToken)
+        user_id = decoded_token["uid"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
+    if not child_data:
+        raise HTTPException(status_code=404, detail="Child not found")
+    
+    grade = request.grade
+    if grade not in speaking_sentences:
+        raise HTTPException(status_code=400, detail="Invalid grade")
+    
+    sentences = speaking_sentences[grade].copy()
+    random.shuffle(sentences)
+    
+    result_sentences = []
+    for sent in sentences:
+        try:
+            sentence_ssml = f'<speak><prosody rate="90%">{sent["sentence"]}</prosody></speak>'
+            audio_response = polly_client.synthesize_speech(
+                Text=sentence_ssml,
+                TextType='ssml',
+                OutputFormat='mp3',
+                VoiceId='Joanna',
+                Engine='neural',
+                LanguageCode='en-US'
+            )
+            audio_base64 = base64.b64encode(audio_response['AudioStream'].read()).decode('utf-8')
+        except:
+            audio_base64 = None
+        
+        result_sentences.append({
+            "sentence_id": sent["id"],
+            "sentence": sent["sentence"],
+            "word_count": sent["word_count"],
+            "difficulty": sent["difficulty"],
+            "audio_base64": audio_base64
+        })
+    
+    return {
+        "grade": grade,
+        "total_sentences": len(result_sentences),
+        "sentences": result_sentences
+    }
+
+
+@app.post("/speaking/analyze/")
+async def analyze_speaking(request: SpeakingAnalyzeRequest):
+    """
+    Analyze child's speech from base64 audio.
+    1. Transcribes audio using OpenAI Whisper
+    2. Analyzes speech using GPT-4o
+    3. Returns detailed scores and feedback
+    """
+    try:
+        decoded_token = auth.verify_id_token(request.idToken)
+        user_id = decoded_token["uid"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
+    if not child_data:
+        raise HTTPException(status_code=404, detail="Child not found")
+    
+    grade = request.grade
+    if grade not in speaking_sentences:
+        raise HTTPException(status_code=400, detail="Invalid grade")
+    
+    original = request.original_sentence
+    
+    # Step 1: Transcribe audio with OpenAI Whisper
+    transcription_result = await transcribe_audio_with_openai(request.audio_base64, request.audio_format)
+    
+    if not transcription_result["success"]:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {transcription_result.get('error', 'Unknown error')}")
+    
+    transcribed = transcription_result["transcribed_text"]
+    word_timestamps = transcription_result["word_timestamps"]
+    duration = transcription_result.get("duration", 0)
+    
+    # Step 2: Analyze with GPT-4o
+    ai_result = await analyze_speech_with_openai(original, transcribed, word_timestamps, duration, grade)
+    
+    if ai_result["success"] and ai_result["analysis"]:
+        analysis = ai_result["analysis"]
+        return {
+            "original_sentence": original,
+            "transcribed_text": transcribed,
+            "duration_seconds": duration,
+            "word_timestamps": word_timestamps,
+            "analysis_method": "openai_gpt4",
+            "pronunciation": analysis.get("pronunciation", {}),
+            "speaking_rate": analysis.get("speaking_rate", {}),
+            "fluency": analysis.get("fluency", {}),
+            "grammar": analysis.get("grammar", {}),
+            "overall": analysis.get("overall", {}),
+            "recommendation": analysis.get("overall", {}).get("recommendation", ""),
+            "parent_tip": analysis.get("overall", {}).get("parent_tip", "")
+        }
+    
+    # Fallback to basic analysis
+    pronunciation = analyze_pronunciation_fallback(original, transcribed)
+    word_count = len(original.split())
+    rate = analyze_speaking_rate_fallback(word_count, duration)
+    
+    overall_score = round((pronunciation["score"] * 0.5 + rate["score"] * 0.5), 1)
+    
+    return {
+        "original_sentence": original,
+        "transcribed_text": transcribed,
+        "duration_seconds": duration,
+        "word_timestamps": word_timestamps,
+        "analysis_method": "basic_fallback",
+        "pronunciation": pronunciation,
+        "speaking_rate": rate,
+        "fluency": {"score": 70, "feedback": "Analysis limited without AI"},
+        "grammar": {"score": 70, "feedback": "Analysis limited without AI"},
+        "overall": {
+            "score": overall_score,
+            "status": "At" if overall_score >= 70 else "Below",
+            "level": "Good Speaker" if overall_score >= 70 else "Developing Speaker"
+        },
+        "recommendation": "Keep practicing reading aloud daily!"
+    }
+
+
+@app.post("/speaking/submit/")
+async def submit_speaking_test(request: SpeakingSubmitRequest):
+    """
+    Submit speaking test: transcribe, analyze, and save to Firebase.
+    """
+    try:
+        decoded_token = auth.verify_id_token(request.idToken)
+        user_id = decoded_token["uid"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
+    if not child_data:
+        raise HTTPException(status_code=404, detail="Child not found")
+    
+    grade = request.grade
+    if grade not in speaking_sentences:
+        raise HTTPException(status_code=400, detail="Invalid grade")
+    
+    original = request.original_sentence
+    
+    # Step 1: Transcribe
+    transcription_result = await transcribe_audio_with_openai(request.audio_base64, request.audio_format)
+    
+    if not transcription_result["success"]:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {transcription_result.get('error', 'Unknown error')}")
+    
+    transcribed = transcription_result["transcribed_text"]
+    word_timestamps = transcription_result["word_timestamps"]
+    duration = transcription_result.get("duration", 0)
+    
+    # Step 2: Analyze
+    ai_result = await analyze_speech_with_openai(original, transcribed, word_timestamps, duration, grade)
+    
+    if ai_result["success"] and ai_result["analysis"]:
+        analysis = ai_result["analysis"]
+        analysis_method = "openai_gpt4"
+        pronunciation = analysis.get("pronunciation", {})
+        rate = analysis.get("speaking_rate", {})
+        fluency = analysis.get("fluency", {})
+        grammar = analysis.get("grammar", {})
+        overall = analysis.get("overall", {})
+        recommendation = overall.get("recommendation", "Keep practicing!")
+    else:
+        analysis_method = "basic_fallback"
+        pronunciation = analyze_pronunciation_fallback(original, transcribed)
+        word_count = len(original.split())
+        rate = analyze_speaking_rate_fallback(word_count, duration)
+        fluency = {"score": 70, "feedback": "Keep practicing!"}
+        grammar = {"score": 70, "feedback": "Good effort!"}
+        overall_score = round((pronunciation["score"] * 0.5 + rate["score"] * 0.5), 1)
+        overall = {
+            "score": overall_score,
+            "status": "At" if overall_score >= 70 else "Below",
+            "level": "Good Speaker" if overall_score >= 70 else "Developing Speaker"
+        }
+        recommendation = "Keep practicing reading aloud!"
+    
+    # Step 3: Save to Firebase
+    score_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_scores").push().key
+    score_data = {
+        "grade": grade,
+        "sentence_id": request.sentence_id,
+        "original_sentence": original,
+        "transcribed_text": transcribed,
+        "duration_seconds": duration,
+        "pronunciation": pronunciation,
+        "speaking_rate": rate,
+        "fluency": fluency,
+        "grammar": grammar,
+        "overall": overall,
+        "recommendation": recommendation,
+        "analysis_method": analysis_method,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_scores/{score_id}").set(score_data)
+    
+    return {
+        "user_id": user_id,
+        "child_id": request.child_id,
+        "score_id": score_id,
+        "transcribed_text": transcribed,
+        "analysis_method": analysis_method,
+        "pronunciation": pronunciation,
+        "speaking_rate": rate,
+        "fluency": fluency,
+        "grammar": grammar,
+        "overall": overall,
+        "recommendation": recommendation,
+        "message": "Speaking test submitted successfully"
+    }
+
+
+@app.post("/speaking/complete_result/")
+async def speaking_complete_result(request: SpeakingResultRequest):
+    """Get complete speaking test results for a child."""
+    try:
+        decoded_token = auth.verify_id_token(request.idToken)
+        user_id = decoded_token["uid"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
+    if not child_data:
+        raise HTTPException(status_code=404, detail="Child not found")
+    
+    # Fetch speaking scores
+    scores_data = db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_scores").get() or {}
+    if not scores_data:
+        raise HTTPException(status_code=404, detail="No speaking test results found")
+    
+    # Filter by grade if specified
+    filtered = []
+    for score_id, s in scores_data.items():
+        g = s.get("grade")
+        if request.grade and g != request.grade:
+            continue
+        filtered.append((s.get("timestamp", ""), s, score_id))
+    
+    if not filtered:
+        raise HTTPException(status_code=404, detail=f"No speaking results for grade: {request.grade or 'any'}")
+    
+    filtered.sort(key=lambda x: x[0], reverse=True)
+    _, latest, latest_id = filtered[0]
+    
+    # Calculate averages
+    all_scores = []
+    for _, s, _ in filtered:
+        overall = s.get("overall", {})
+        if isinstance(overall, dict) and "score" in overall:
+            all_scores.append(overall["score"])
+    
+    avg_score = round(sum(all_scores) / len(all_scores), 1) if all_scores else 0
+    
+    latest_overall = latest.get("overall", {})
+    status = latest_overall.get("status", "Below")
+    
+    placement = {
+        "Above": "Above Grade Level",
+        "At": "At Grade Level",
+        "Below": "Below Grade Level"
+    }.get(status, "Below Grade Level")
+    
+    return {
+        "user_id": user_id,
+        "child_id": request.child_id,
+        "grade": latest.get("grade"),
+        "tests_completed": len(filtered),
+        "latest_result": {
+            "score_id": latest_id,
+            "sentence": latest.get("original_sentence"),
+            "transcribed": latest.get("transcribed_text"),
+            "overall": latest_overall,
+            "timestamp": latest.get("timestamp")
+        },
+        "parent_summary": {
+            "average_score": avg_score,
+            "level": latest_overall.get("level", "Developing Speaker"),
+            "recommendation": latest.get("recommendation", ""),
+            "grade_placement": placement,
+            "note": "Assessment is instructional and not a clinical diagnosis."
+        },
+        "all_results": [
+            {
+                "score_id": sid,
+                "sentence": s.get("original_sentence"),
+                "overall_score": s.get("overall", {}).get("score", 0),
+                "timestamp": s.get("timestamp")
+            }
+            for _, s, sid in filtered
+        ]
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
