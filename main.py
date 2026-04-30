@@ -177,15 +177,25 @@ class SpeakingAnalyzeRequest(BaseModel):
     audio_base64: str  # Base64 encoded audio (mp3, wav, webm, m4a)
     audio_format: str = "mp3"  # Format hint: mp3, wav, webm, m4a
 
-class SpeakingSubmitRequest(BaseModel):
-    """Submit speaking test with audio for full analysis and save"""
-    idToken: str
-    child_id: str
-    grade: str
+class SpeakingSubmissionItem(BaseModel):
+    """Single submission item for batch processing"""
     sentence_id: str
     original_sentence: str
     audio_base64: str
     audio_format: str = "mp3"
+
+class SpeakingSubmitRequest(BaseModel):
+    """Submit speaking test - supports single or batch submission"""
+    idToken: str
+    child_id: str
+    grade: str
+    # Single submission (backward compatible)
+    sentence_id: Optional[str] = None
+    original_sentence: Optional[str] = None
+    audio_base64: Optional[str] = None
+    audio_format: Optional[str] = "mp3"
+    # Batch submission
+    submissions: Optional[List[SpeakingSubmissionItem]] = None
 
 class SpeakingResultRequest(BaseModel):
     idToken: str
@@ -1568,54 +1578,6 @@ Respond in this exact JSON format:
         }
 
 
-def analyze_pronunciation_fallback(original: str, transcribed: str) -> Dict:
-    """Fallback pronunciation analysis without OpenAI."""
-    original_words = original.lower().strip().split()
-    transcribed_words = transcribed.lower().strip().split()
-    
-    original_clean = [re.sub(r'[^\w]', '', w) for w in original_words]
-    transcribed_clean = [re.sub(r'[^\w]', '', w) for w in transcribed_words]
-    
-    correct_words = 0
-    mispronounced = []
-    
-    for i, orig_word in enumerate(original_clean):
-        if orig_word in transcribed_clean:
-            correct_words += 1
-        else:
-            mispronounced.append({"expected": orig_word, "heard": "missing"})
-    
-    total_words = len(original_clean)
-    score = round((correct_words / total_words) * 100, 1) if total_words > 0 else 0
-    
-    return {
-        "score": score,
-        "correct_words": correct_words,
-        "total_words": total_words,
-        "mispronounced_words": mispronounced,
-        "feedback": "Good effort! Keep practicing." if score >= 70 else "Practice reading slowly and clearly."
-    }
-
-
-def analyze_speaking_rate_fallback(word_count: int, duration_seconds: float) -> Dict:
-    """Fallback speaking rate analysis."""
-    if duration_seconds <= 0:
-        return {"score": 0, "wpm": 0, "status": "Invalid", "feedback": "Recording too short"}
-    
-    wpm = round((word_count / duration_seconds) * 60, 1)
-    
-    if wpm < 60:
-        status, score = "Too Slow", 50
-    elif wpm < 100:
-        status, score = "Slightly Slow", 80
-    elif wpm <= 150:
-        status, score = "Perfect", 100
-    elif wpm <= 180:
-        status, score = "Slightly Fast", 80
-    else:
-        status, score = "Too Fast", 50
-    
-    return {"score": score, "wpm": wpm, "status": status, "feedback": f"Speaking at {wpm} words per minute."}
 
 
 # ==================== SPEAKING API ENDPOINTS ====================
@@ -1775,122 +1737,173 @@ async def analyze_speaking(request: SpeakingAnalyzeRequest):
             "parent_tip": analysis.get("overall", {}).get("parent_tip", "")
         }
     
-    # Fallback to basic analysis
-    pronunciation = analyze_pronunciation_fallback(original, transcribed)
-    word_count = len(original.split())
-    rate = analyze_speaking_rate_fallback(word_count, duration)
-    
-    overall_score = round((pronunciation["score"] * 0.5 + rate["score"] * 0.5), 1)
-    
-    return {
-        "original_sentence": original,
-        "transcribed_text": transcribed,
-        "duration_seconds": duration,
-        "word_timestamps": word_timestamps,
-        "analysis_method": "basic_fallback",
-        "pronunciation": pronunciation,
-        "speaking_rate": rate,
-        "fluency": {"score": 70, "feedback": "Analysis limited without AI"},
-        "grammar": {"score": 70, "feedback": "Analysis limited without AI"},
-        "overall": {
-            "score": overall_score,
-            "status": "At" if overall_score >= 70 else "Below",
-            "level": "Good Speaker" if overall_score >= 70 else "Developing Speaker"
-        },
-        "recommendation": "Keep practicing reading aloud daily!"
-    }
+    raise HTTPException(status_code=500, detail="Speech analysis failed. Please try again later.")
 
 
 @app.post("/speaking/submit/")
 async def submit_speaking_test(request: SpeakingSubmitRequest):
     """
-    Submit speaking test: transcribe, analyze, and save to Firebase.
+    Enhanced: Always submit all sentences for the grade. For unanswered sentences, mark as 'Not Attempted'. Only score answered ones.
     """
     try:
         decoded_token = auth.verify_id_token(request.idToken)
         user_id = decoded_token["uid"]
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
-    
+
     child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
     if not child_data:
         raise HTTPException(status_code=404, detail="Child not found")
-    
+
     grade = request.grade
     if grade not in speaking_sentences:
         raise HTTPException(status_code=400, detail="Invalid grade")
-    
-    original = request.original_sentence
-    
-    # Step 1: Transcribe
-    transcription_result = await transcribe_audio_with_openai(request.audio_base64, request.audio_format)
-    
-    if not transcription_result["success"]:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {transcription_result.get('error', 'Unknown error')}")
-    
-    transcribed = transcription_result["transcribed_text"]
-    word_timestamps = transcription_result["word_timestamps"]
-    duration = transcription_result.get("duration", 0)
-    
-    # Step 2: Analyze
-    ai_result = await analyze_speech_with_openai(original, transcribed, word_timestamps, duration, grade)
-    
-    if ai_result["success"] and ai_result["analysis"]:
-        analysis = ai_result["analysis"]
-        analysis_method = "openai_gpt4"
-        pronunciation = analysis.get("pronunciation", {})
-        rate = analysis.get("speaking_rate", {})
-        fluency = analysis.get("fluency", {})
-        grammar = analysis.get("grammar", {})
-        overall = analysis.get("overall", {})
-        recommendation = overall.get("recommendation", "Keep practicing!")
-    else:
-        analysis_method = "basic_fallback"
-        pronunciation = analyze_pronunciation_fallback(original, transcribed)
-        word_count = len(original.split())
-        rate = analyze_speaking_rate_fallback(word_count, duration)
-        fluency = {"score": 70, "feedback": "Keep practicing!"}
-        grammar = {"score": 70, "feedback": "Good effort!"}
-        overall_score = round((pronunciation["score"] * 0.5 + rate["score"] * 0.5), 1)
-        overall = {
-            "score": overall_score,
-            "status": "At" if overall_score >= 70 else "Below",
-            "level": "Good Speaker" if overall_score >= 70 else "Developing Speaker"
+
+    # Get all sentences for the grade
+    all_sentences = speaking_sentences[grade]
+    sentence_map = {s["id"]: s for s in all_sentences}
+
+    # Build a map of submitted answers (if any)
+    submitted = {}
+    if hasattr(request, "submissions") and request.submissions:
+        for item in request.submissions:
+            sid = item.get("sentence_id") if isinstance(item, dict) else item.sentence_id
+            submitted[sid] = item
+    elif hasattr(request, "sentence_id") and request.sentence_id:
+        # Single submission backward compatible
+        submitted[request.sentence_id] = {
+            "sentence_id": request.sentence_id,
+            "original_sentence": getattr(request, "original_sentence", ""),
+            "audio_base64": getattr(request, "audio_base64", ""),
+            "audio_format": getattr(request, "audio_format", "mp3")
         }
-        recommendation = "Keep practicing reading aloud!"
-    
-    # Step 3: Save to Firebase
-    score_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_scores").push().key
-    score_data = {
+
+    results = []
+    total_score = 0
+    answered_count = 0
+    total_sentences = len(all_sentences)
+    for sent in all_sentences:
+        sid = sent["id"]
+        original = sent["sentence"]
+        item = submitted.get(sid)
+        audio_base64 = None
+        audio_format = "mp3"
+        if item is not None:
+            if isinstance(item, dict):
+                audio_base64 = item.get("audio_base64", "")
+                audio_format = item.get("audio_format", "mp3")
+            else:
+                audio_base64 = getattr(item, "audio_base64", "")
+                audio_format = getattr(item, "audio_format", "mp3")
+        if audio_base64:
+            transcription_result = await transcribe_audio_with_openai(audio_base64, audio_format)
+            if not transcription_result["success"]:
+                results.append({
+                    "sentence_id": sid,
+                    "original_sentence": original,
+                    "transcription_error": transcription_result.get('error', 'Unknown'),
+                    "transcribed_text": "",
+                    "analysis": None,
+                    "status": "Error"
+                })
+                continue
+            transcribed = transcription_result["transcribed_text"]
+            word_timestamps = transcription_result["word_timestamps"]
+            duration = transcription_result.get("duration", 0)
+            ai_result = await analyze_speech_with_openai(original, transcribed, word_timestamps, duration, grade)
+            if ai_result["success"] and ai_result["analysis"]:
+                analysis = ai_result["analysis"]
+                analysis_method = "openai_gpt4"
+                pronunciation = analysis.get("pronunciation", {})
+                rate = analysis.get("speaking_rate", {})
+                fluency = analysis.get("fluency", {})
+                grammar = analysis.get("grammar", {})
+                overall = analysis.get("overall", {})
+                recommendation = overall.get("recommendation", "Keep practicing!")
+            else:
+                results.append({
+                    "sentence_id": sid,
+                    "original_sentence": original,
+                    "transcribed_text": transcribed,
+                    "analysis": None,
+                    "status": "Analysis Error"
+                })
+                continue
+            overall_score = overall.get("score", 0)
+            total_score += overall_score
+            answered_count += 1
+            results.append({
+                "sentence_id": sid,
+                "original_sentence": original,
+                "transcribed_text": transcribed,
+                "duration_seconds": duration,
+                "pronunciation": pronunciation,
+                "speaking_rate": rate,
+                "fluency": fluency,
+                "grammar": grammar,
+                "overall": overall,
+                "recommendation": recommendation,
+                "analysis_method": analysis_method,
+                "status": "Answered"
+            })
+        else:
+            results.append({
+                "sentence_id": sid,
+                "original_sentence": original,
+                "transcribed_text": "",
+                "duration_seconds": 0,
+                "pronunciation": {},
+                "speaking_rate": {},
+                "fluency": {},
+                "grammar": {},
+                "overall": {"score": 0, "status": "Not Attempted", "level": "Not Attempted"},
+                "recommendation": "Not attempted.",
+                "analysis_method": "",
+                "status": "Not Attempted"
+            })
+
+    max_score = total_sentences * 100
+    user_score = round(total_score, 1)
+    percentage = round((user_score / max_score) * 100, 1) if max_score else 0
+    # Level mapping based on percentage
+    if percentage >= 90:
+        level = "Excellent Speaker"
+    elif percentage >= 75:
+        level = "Good Speaker"
+    elif percentage >= 50:
+        level = "Developing Speaker"
+    else:
+        level = "Needs Improvement"
+    avg_score = round(total_score / total_sentences, 1) if total_sentences else 0
+    # Save the entire batch as a single test
+    test_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_tests").push().key
+    test_data = {
         "grade": grade,
-        "sentence_id": request.sentence_id,
-        "original_sentence": original,
-        "transcribed_text": transcribed,
-        "duration_seconds": duration,
-        "pronunciation": pronunciation,
-        "speaking_rate": rate,
-        "fluency": fluency,
-        "grammar": grammar,
-        "overall": overall,
-        "recommendation": recommendation,
-        "analysis_method": analysis_method,
+        "results": results,
+        "total_marks": max_score,
+        "user_score": user_score,
+        "answered_count": answered_count,
+        "average_score": avg_score,
+        "percentage": percentage,
+        "level": level,
         "timestamp": datetime.utcnow().isoformat()
     }
-    db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_scores/{score_id}").set(score_data)
-    
+    db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_tests/{test_id}").set(test_data)
+
     return {
+        "success": True,
         "user_id": user_id,
         "child_id": request.child_id,
-        "score_id": score_id,
-        "transcribed_text": transcribed,
-        "analysis_method": analysis_method,
-        "pronunciation": pronunciation,
-        "speaking_rate": rate,
-        "fluency": fluency,
-        "grammar": grammar,
-        "overall": overall,
-        "recommendation": recommendation,
-        "message": "Speaking test submitted successfully"
+        "grade": grade,
+        "test_id": test_id,
+        "total_marks": max_score,
+        "user_score": user_score,
+        "answered_count": answered_count,
+        "average_score": avg_score,
+        "percentage": percentage,
+        "level": level,
+        "results": results,
+        "message": f"Submission completed: {answered_count} answered, {len(results) - answered_count} not attempted."
     }
 
 
@@ -1907,71 +1920,57 @@ async def speaking_complete_result(request: SpeakingResultRequest):
     if not child_data:
         raise HTTPException(status_code=404, detail="Child not found")
     
-    # Fetch speaking scores
-    scores_data = db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_scores").get() or {}
-    if not scores_data:
+    # Fetch all speaking test batches for the child and grade
+    tests_data = db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_tests").get() or {}
+    if not tests_data:
         raise HTTPException(status_code=404, detail="No speaking test results found")
-    
+
     # Filter by grade if specified
     filtered = []
-    for score_id, s in scores_data.items():
-        g = s.get("grade")
+    for test_id, t in tests_data.items():
+        g = t.get("grade")
         if request.grade and g != request.grade:
             continue
-        filtered.append((s.get("timestamp", ""), s, score_id))
-    
+        filtered.append((t.get("timestamp", ""), t, test_id))
     if not filtered:
         raise HTTPException(status_code=404, detail=f"No speaking results for grade: {request.grade or 'any'}")
-    
+
+    # Sort by timestamp descending (latest first)
     filtered.sort(key=lambda x: x[0], reverse=True)
-    _, latest, latest_id = filtered[0]
-    
-    # Calculate averages
-    all_scores = []
-    for _, s, _ in filtered:
-        overall = s.get("overall", {})
-        if isinstance(overall, dict) and "score" in overall:
-            all_scores.append(overall["score"])
-    
-    avg_score = round(sum(all_scores) / len(all_scores), 1) if all_scores else 0
-    
-    latest_overall = latest.get("overall", {})
-    status = latest_overall.get("status", "Below")
-    
-    placement = {
-        "Above": "Above Grade Level",
-        "At": "At Grade Level",
-        "Below": "Below Grade Level"
-    }.get(status, "Below Grade Level")
-    
+    latest_test = filtered[0][1]
+
+    all_results = latest_test.get("results", [])
+    user_score = latest_test.get("user_score", 0)
+    answered_count = latest_test.get("answered_count", 0)
+    avg_score = latest_test.get("average_score", 0)
+    level = latest_test.get("level", "Developing Speaker")
+    total_marks = latest_test.get("total_marks", 100)
+    percentage = latest_test.get("percentage", 0)
+    # Placement logic (optional, can be refined)
+    if percentage >= 90:
+        placement = "Above Grade Level"
+    elif percentage >= 75:
+        placement = "At Grade Level"
+    else:
+        placement = "Below Grade Level"
+
     return {
         "user_id": user_id,
         "child_id": request.child_id,
-        "grade": latest.get("grade"),
-        "tests_completed": len(filtered),
-        "latest_result": {
-            "score_id": latest_id,
-            "sentence": latest.get("original_sentence"),
-            "transcribed": latest.get("transcribed_text"),
-            "overall": latest_overall,
-            "timestamp": latest.get("timestamp")
-        },
+        "grade": latest_test.get("grade"),
+        "total_marks": total_marks,
+        "user_score": user_score,
+        "answered_count": answered_count,
+        "average_score": avg_score,
+        "percentage": percentage,
+        "level": level,
         "parent_summary": {
-            "average_score": avg_score,
-            "level": latest_overall.get("level", "Developing Speaker"),
-            "recommendation": latest.get("recommendation", ""),
+            "level": level,
+            "recommendation": "See detailed feedback for each sentence.",
             "grade_placement": placement,
             "note": "Assessment is instructional and not a clinical diagnosis."
         },
-        "all_results": [
-            {
-                "score_id": sid,
-                "sentence": s.get("original_sentence"),
-                "overall_score": s.get("overall", {}).get("score", 0),
-                "timestamp": s.get("timestamp")
-            }
-            for _, s, sid in filtered
-        ]
+        "all_results": all_results
     }
 
 
