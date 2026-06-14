@@ -21,8 +21,20 @@ import json
 from typing import Optional
 from datetime import datetime
 import boto3
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
 import random
+from logic_routes import (
+    GetLogicTestRequest,
+    SubmitLogicResponseRequest,
+    SubmitLogicTestRequest,
+    CompleteLogicResultRequest,
+)
+from logic_service import (
+    get_logic_test_payload,
+    score_logic_item_response,
+    aggregate_logic_test_results,
+    build_complete_logic_result,
+)
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -33,6 +45,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/logic/ui")
+async def logic_ui():
+    """Serve the logic assessment web UI."""
+    return FileResponse(os.path.join(os.path.dirname(__file__), "logic_test_web.html"))
+
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
 # Load environment variables
@@ -202,6 +220,31 @@ class SpeakingResultRequest(BaseModel):
     child_id: str
     grade: str = None
 
+# ==================== READING COMPREHENSION MODELS ====================
+class ComprehensionQuestionAnswer(BaseModel):
+    question_id: str
+    selected_index: int  # 0-3 for options A-D
+
+class ComprehensionStoryAnswer(BaseModel):
+    story_id: str
+    answers: List[ComprehensionQuestionAnswer]
+
+class ComprehensionGetRequest(BaseModel):
+    idToken: str
+    child_id: str
+    grade: str
+
+class ComprehensionSubmitRequest(BaseModel):
+    idToken: str
+    child_id: str
+    grade: str
+    story_answers: List[ComprehensionStoryAnswer]
+
+class ComprehensionResultRequest(BaseModel):
+    idToken: str
+    child_id: str
+    grade: str = None
+
 # ==================== SPEAKING TEST SENTENCE LISTS ====================
 speaking_sentences = {
     "Kindergarten": [
@@ -243,6 +286,345 @@ speaking_sentences = {
         {"id": "t6", "sentence": "We celebrated my sister's birthday with a spectacular surprise party.", "word_count": 9, "difficulty": "hard"},
         {"id": "t7", "sentence": "The courageous firefighter rescued the kitten from the tall tree.", "word_count": 10, "difficulty": "hard"},
         {"id": "t8", "sentence": "Reading comprehension improves when you practice regularly every day.", "word_count": 8, "difficulty": "hard"},
+    ]
+}
+
+# ==================== READING COMPREHENSION STORIES ====================
+# Stories written with emotional cues for expressive TTS narration
+comprehension_stories = {
+    "Kindergarten": [
+        {
+            "id": "k_story1",
+            "title": "The Friendly Dog",
+            "story": """Once upon a time, there was a small brown dog named Max. 
+He lived in a cozy red house with a little boy named Tom.
+Every morning, Max would wake up early and stretch his legs. Yaaawn!
+He loved to run around in the yard. Zoom, zoom, zoom!
+Tom would throw a bright yellow ball, and Max would catch it. Good boy, Max!
+Max had a soft, fluffy bed near the window. It was his favorite spot.
+He loved to sleep there after playing. Zzzzz...
+One sunny day, Max found a new friend! Oh, how exciting!
+It was a fluffy white cat named Fluffy. Meow!
+They played together all day long. Chase, chase, chase!
+Max was SO happy! He wagged his tail super fast and barked with joy. Woof woof!
+Tom smiled and gave them both yummy treats. Munch, munch!
+And from that day on, Max and Fluffy became the very best of friends. Forever and ever!
+The End.""",
+            "duration_estimate": "60 seconds",
+            "questions": [
+                {
+                    "id": "k1_q1",
+                    "question": "What color was Max the dog?",
+                    "options": ["White", "Brown", "Black", "Yellow"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "k1_q2",
+                    "question": "What did Tom throw for Max?",
+                    "options": ["A stick", "A bone", "A yellow ball", "A toy"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "k1_q3",
+                    "question": "What was the cat's name?",
+                    "options": ["Fluffy", "Snowball", "Kitty", "Max"],
+                    "correct_index": 0
+                },
+                {
+                    "id": "k1_q4",
+                    "question": "Where did Max like to sleep?",
+                    "options": ["On the floor", "In Tom's bed", "Near the window", "Outside"],
+                    "correct_index": 2
+                }
+            ]
+        },
+        {
+            "id": "k_story2",
+            "title": "The Magic Garden",
+            "story": """Once upon a time, a little girl named Lily had a tiny garden behind her house.
+She planted teeny-tiny seeds in the soft brown dirt. Pat, pat, pat!
+Every single day, she gave them water from her special blue watering can. Splish, splash!
+She talked sweetly to her plants and sang them little songs. La la la!
+Then one sunny morning... Lily saw something AMAZING!
+A tiny green leaf popped right up from the ground! Pop!
+Lily was SO excited! She jumped up and down!
+"Mommy, Mommy! Come see!" she called.
+More and more leaves grew each day. Growing, growing, growing!
+Then... WOW! Beautiful flowers bloomed everywhere!
+There were red ones, pretty pink ones, and lovely purple ones too!
+One day, a beautiful butterfly came to visit. Flutter, flutter!
+It landed gently on the biggest red flower.
+Lily smiled the biggest smile and clapped her happy hands. Clap, clap, clap!
+Her garden was the most magical place in the whole wide world!
+The End.""",
+            "duration_estimate": "65 seconds",
+            "questions": [
+                {
+                    "id": "k2_q1",
+                    "question": "What color was Lily's watering can?",
+                    "options": ["Red", "Green", "Blue", "Yellow"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "k2_q2",
+                    "question": "What came to visit Lily's garden?",
+                    "options": ["A bird", "A butterfly", "A bee", "A ladybug"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "k2_q3",
+                    "question": "What did Lily do to help her plants grow?",
+                    "options": ["She read to them", "She gave them water", "She painted them", "She played music"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "k2_q4",
+                    "question": "What color was NOT mentioned for the flowers?",
+                    "options": ["Red", "Pink", "Orange", "Purple"],
+                    "correct_index": 2
+                }
+            ]
+        }
+    ],
+    "First": [
+        {
+            "id": "f_story1",
+            "title": "The Lost Kitten",
+            "story": """One rainy afternoon, drip drop drip drop, little Emma heard a tiny sound outside her window.
+"Meow... meow..." What was that?
+She looked outside and saw... oh no! A small gray kitten, all alone under a bush!
+The poor little thing was wet and shivering. Brrr!
+Emma's heart went out to the kitty. "I have to help!" she said.
+She quickly grabbed an umbrella and ran outside. Splash, splash through the puddles!
+Very gently, she picked up the scared little kitten. "It's okay, little one. I've got you."
+She brought the kitten inside where it was warm and dry.
+Her mother helped her wrap the kitten in a soft, fluffy towel. So cozy!
+They gave the kitten some warm milk in a tiny bowl. Lap, lap, lap!
+The kitten started to purr. Purrrr, purrrr! That meant it was happy!
+Emma made a cozy little bed from her old blanket.
+The next day, they put up signs everywhere. "Found: One adorable gray kitten!"
+They waited... and waited... a whole week went by!
+But nobody came to claim the sweet little kitten.
+Emma's parents looked at each other and smiled. "Emma, would you like to keep her?"
+"Really?! Oh, thank you, thank you, THANK YOU!" Emma was SO happy!
+She named the kitten Misty, because she found her on that misty, rainy day.
+And Emma and Misty became the very best of friends!
+The End.""",
+            "duration_estimate": "75 seconds",
+            "questions": [
+                {
+                    "id": "f1_q1",
+                    "question": "What was the weather like when Emma found the kitten?",
+                    "options": ["Sunny", "Snowy", "Rainy", "Windy"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "f1_q2",
+                    "question": "What color was the kitten?",
+                    "options": ["White", "Gray", "Orange", "Black"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "f1_q3",
+                    "question": "What did they give the kitten to drink?",
+                    "options": ["Water", "Juice", "Warm milk", "Tea"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "f1_q4",
+                    "question": "Why did Emma name the kitten Misty?",
+                    "options": ["Because it was gray", "Because of the rainy, misty day", "Because it had misty eyes", "Because her mom chose the name"],
+                    "correct_index": 1
+                }
+            ]
+        },
+        {
+            "id": "f_story2",
+            "title": "The Birthday Surprise",
+            "story": """Jake was SO excited! He was turning seven years old!
+And he wanted something more than anything else in the whole wide world... a BICYCLE!
+His old tricycle was way too small for him now. He was a big kid!
+On his birthday morning, Jake woke up super early. His eyes popped open!
+He jumped out of bed and ran downstairs as fast as he could. Thump, thump, thump!
+The living room was AMAZING! Balloons everywhere! Red ones, blue ones, green ones floating in the air!
+His mom and dad were smiling big smiles. "Happy Birthday, Jake!"
+But wait... Jake looked around. Where was the bicycle? 
+He didn't see one anywhere. Oh no...
+He tried SO hard not to look sad. He put on a brave smile.
+Then his dad said with a twinkle in his eye, "Jake... look in the garage!"
+Jake's heart started beating fast. He ran to the garage and threw open the door!
+And THERE IT WAS! 
+A shiny, sparkly BLUE bicycle with silver handlebars! It was BEAUTIFUL!
+"WOOOHOOO!" Jake jumped up and down like a bouncy ball!
+He hugged his mom and dad super tight. "Thank you, thank you, THANK YOU!"
+That afternoon, Dad taught Jake how to ride.
+Wobble, wobble... CRASH! Jake fell down. Ouch!
+But did he give up? NO WAY!
+He got back up and tried again. Fall number two. Then fall number three!
+But Jake never, ever gave up.
+And by sunset, guess what? Jake could ride his bicycle ALL BY HIMSELF!
+What a perfect birthday!
+The End.""",
+            "duration_estimate": "80 seconds",
+            "questions": [
+                {
+                    "id": "f2_q1",
+                    "question": "How old was Jake turning?",
+                    "options": ["Five", "Six", "Seven", "Eight"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "f2_q2",
+                    "question": "What color was Jake's new bicycle?",
+                    "options": ["Red", "Green", "Blue", "Yellow"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "f2_q3",
+                    "question": "Where was the bicycle hidden?",
+                    "options": ["In his bedroom", "In the backyard", "In the garage", "In the basement"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "f2_q4",
+                    "question": "How many times did Jake fall while learning to ride?",
+                    "options": ["One time", "Two times", "Three times", "Four times"],
+                    "correct_index": 2
+                }
+            ]
+        }
+    ],
+    "Second": [
+        {
+            "id": "s_story1",
+            "title": "The Treasure Map",
+            "story": "Sophie found an old piece of paper in her grandmother's attic. It looked like a treasure map with an X marked in red. The map showed her grandmother's backyard with trees and a small pond. Sophie decided to follow the map carefully. She walked past the old oak tree and turned left at the rose bushes. Then she counted ten steps toward the vegetable garden. The X was right next to the tomato plants. Sophie started digging with her small shovel. After a few minutes, she hit something hard. It was a metal box covered in rust. Her heart was beating fast with excitement. Inside the box, she found her grandmother's childhood treasures. There were old coins, pretty marbles, a silver locket with a photograph, and a letter. Her grandmother smiled when Sophie showed her. She told Sophie stories about each treasure. Sophie learned that the real treasure was the memories and stories from long ago.",
+            "duration_estimate": "65 seconds",
+            "questions": [
+                {
+                    "id": "s1_q1",
+                    "question": "Where did Sophie find the treasure map?",
+                    "options": ["In the basement", "In the attic", "In the kitchen", "In the garden"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "s1_q2",
+                    "question": "What was the X marked next to?",
+                    "options": ["The oak tree", "The rose bushes", "The tomato plants", "The pond"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "s1_q3",
+                    "question": "What was inside the metal box?",
+                    "options": ["Gold and diamonds", "Old coins, marbles, a locket, and a letter", "Toys and games", "Money and jewelry"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "s1_q4",
+                    "question": "According to the story, what was the real treasure?",
+                    "options": ["The old coins", "The silver locket", "The memories and stories", "The metal box"],
+                    "correct_index": 2
+                }
+            ]
+        },
+        {
+            "id": "s_story2",
+            "title": "The Science Fair Project",
+            "story": "Marcus had two weeks to prepare for the school science fair. He decided to create a volcano that would actually erupt. His father helped him build a mountain shape using cardboard and paper. They painted it brown and gray to look like real rocks. Marcus researched how volcanoes work. He learned about magma deep inside the Earth. For the eruption, he would use baking soda and vinegar. On the day of the science fair, Marcus was nervous. Many students had impressive projects. Some made robots, others had plant experiments. When it was his turn, Marcus explained how volcanoes form. Then he poured the vinegar into the volcano. Red foam bubbled up and flowed down the sides like real lava. Everyone clapped and cheered. The judges were very impressed. Marcus won second place and received a blue ribbon. He felt proud of all his hard work and learning.",
+            "duration_estimate": "62 seconds",
+            "questions": [
+                {
+                    "id": "s2_q1",
+                    "question": "How much time did Marcus have to prepare?",
+                    "options": ["One week", "Two weeks", "Three weeks", "One month"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "s2_q2",
+                    "question": "What materials did Marcus use to make the volcano erupt?",
+                    "options": ["Water and soap", "Baking soda and vinegar", "Oil and food coloring", "Salt and lemon juice"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "s2_q3",
+                    "question": "What place did Marcus win at the science fair?",
+                    "options": ["First place", "Second place", "Third place", "He did not win"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "s2_q4",
+                    "question": "What color ribbon did Marcus receive?",
+                    "options": ["Red", "Blue", "Yellow", "Green"],
+                    "correct_index": 1
+                }
+            ]
+        }
+    ],
+    "Third": [
+        {
+            "id": "t_story1",
+            "title": "The Mysterious Letter",
+            "story": "On a chilly October morning, twelve-year-old Aria discovered an unusual letter in her mailbox. It had no return address, just her name written in elegant cursive. Inside, she found a riddle that read: Where books sleep and knowledge grows, find the clue where the wise owl shows. Aria thought carefully about the riddle. The school library had an owl statue near the entrance! After school, she rushed to the library and searched around the owl. Behind a loose brick, she found another envelope. This riddle mentioned the place where stories come alive on stage. That meant the auditorium! She found the third clue taped under seat number forty-two. The final riddle led her to the old oak tree in the schoolyard. There, she discovered a small wooden box containing a beautiful journal and a note from her grandmother. The note explained that her grandmother had created this treasure hunt when she attended the same school fifty years ago. She wanted Aria to have her special journal filled with stories and poems. Aria realized her grandmother was sharing a piece of her childhood through this magical adventure.",
+            "duration_estimate": "70 seconds",
+            "questions": [
+                {
+                    "id": "t1_q1",
+                    "question": "What time of year did Aria find the mysterious letter?",
+                    "options": ["Spring", "Summer", "Fall/October", "Winter"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "t1_q2",
+                    "question": "Where did Aria find the first clue?",
+                    "options": ["In the auditorium", "Behind the owl statue at the library", "Under a tree", "In her classroom"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "t1_q3",
+                    "question": "What seat number had the third clue?",
+                    "options": ["Seat twenty-four", "Seat thirty-two", "Seat forty-two", "Seat fifty-two"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "t1_q4",
+                    "question": "Who created the treasure hunt and when?",
+                    "options": ["Her mother, ten years ago", "Her grandmother, fifty years ago", "Her teacher, last year", "Her father, twenty years ago"],
+                    "correct_index": 1
+                }
+            ]
+        },
+        {
+            "id": "t_story2",
+            "title": "The Courage to Try",
+            "story": "Daniel had always been terrified of water. While his friends enjoyed swimming at the community pool, he sat on the sidelines watching. His fear began when he fell into a pond as a young child. His parents encouraged him to take swimming lessons, but he always refused. One summer, his family planned a trip to the beach. Daniel felt anxious for weeks. His older sister, Maya, noticed his worry and offered to help him. They started slowly at the shallow end of their neighbor's pool. Maya taught him to put his face in the water and blow bubbles. Each day, Daniel became a little braver. He learned to float on his back, then to kick his feet. By the end of three weeks, Daniel could swim across the pool. When the beach trip finally arrived, something amazing happened. Daniel walked into the ocean waves without fear. He splashed and played with his family for the first time. That evening, as the sun set over the water, Daniel realized that facing his fear had given him something wonderful, the confidence to try new things.",
+            "duration_estimate": "68 seconds",
+            "questions": [
+                {
+                    "id": "t2_q1",
+                    "question": "Why was Daniel afraid of water?",
+                    "options": ["He saw a scary movie", "He fell into a pond as a child", "His friend got hurt swimming", "He never learned to swim"],
+                    "correct_index": 1
+                },
+                {
+                    "id": "t2_q2",
+                    "question": "Who helped Daniel overcome his fear?",
+                    "options": ["His parents", "A swimming coach", "His older sister Maya", "His best friend"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "t2_q3",
+                    "question": "How long did it take Daniel to learn to swim across the pool?",
+                    "options": ["One week", "Two weeks", "Three weeks", "One month"],
+                    "correct_index": 2
+                },
+                {
+                    "id": "t2_q4",
+                    "question": "What important lesson did Daniel learn?",
+                    "options": ["Swimming is easy", "The ocean is safe", "Facing fears gives confidence", "Sisters are helpful"],
+                    "correct_index": 2
+                }
+            ]
+        }
     ]
 }
 
@@ -797,6 +1179,104 @@ async def get_all_child_details(request: GetDetailsRequest):
         return {"children": children}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch detailed children data: {str(e)}")
+
+
+def verify_child_and_token(id_token: str, child_id: str):
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        user_id = decoded_token["uid"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+
+    child_data = db_ref.child(f"users/{user_id}/children/{child_id}").get()
+    if not child_data:
+        raise HTTPException(status_code=404, detail="Child not found")
+
+    return user_id, child_data
+
+
+@app.post("/logic/get_test/")
+async def logic_get_test(request: GetLogicTestRequest):
+    verify_child_and_token(request.idToken, request.child_id)
+    response_payload = get_logic_test_payload(request.grade)
+    return {"success": True, **response_payload}
+
+
+@app.post("/logic/submit_response/")
+async def logic_submit_response(request: SubmitLogicResponseRequest):
+    verify_child_and_token(request.idToken, request.child_id)
+    result = score_logic_item_response(
+        student_id=request.child_id,
+        item_id=request.item_id,
+        selected_answer_index=request.selected_answer_index,
+        response_time_seconds=request.response_time_seconds,
+        attempts=request.attempts,
+        self_corrected=request.self_corrected,
+        explanation_provided=request.explanation_provided,
+    )
+    return {"success": True, **result}
+
+
+@app.post("/logic/submit_test/")
+async def logic_submit_test(request: SubmitLogicTestRequest):
+    user_id, _ = verify_child_and_token(request.idToken, request.child_id)
+    result = aggregate_logic_test_results(
+        student_id=request.child_id,
+        grade=request.grade,
+        responses=request.responses,
+    )
+
+    score_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/logic_tests").push().key
+    score_data = {
+        "grade": request.grade,
+        "score": result["score"],
+        "percentage": result["percentage"],
+        "correct_answers": result["correct_answers"],
+        "total_items": result["total_items"],
+        "level": result["level"],
+        "cognitive_tags": result["cognitive_tags"],
+        "tag_breakdown": result["tag_breakdown"],
+        "reasoning_under_load_detected": result["reasoning_under_load_detected"],
+        "trial_and_error_detected": result["trial_and_error_detected"],
+        "strategy_shift_difficulty_detected": result["strategy_shift_difficulty_detected"],
+        "message": result["message"],
+        "timestamp": datetime.utcnow().isoformat(),
+        "responses": request.responses,
+    }
+    db_ref.child(f"users/{user_id}/children/{request.child_id}/logic_tests/{score_id}").set(sanitize_firebase_data(score_data))
+
+    result["score_id"] = score_id
+    return {"success": True, **result}
+
+
+@app.post("/logic/complete_result/")
+async def logic_complete_result(request: CompleteLogicResultRequest):
+    user_id, _ = verify_child_and_token(request.idToken, request.child_id)
+
+    # Query logic_tests path (like speaking uses speaking_tests)
+    logic_data = db_ref.child(f"users/{user_id}/children/{request.child_id}/logic_tests").get() or {}
+
+    # Filter by grade and sort by timestamp
+    filtered = []
+    for test_id, s in logic_data.items():
+        if request.grade and s.get("grade") != request.grade:
+            continue
+        filtered.append((s.get("timestamp", ""), s))
+
+    if not filtered:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No logic test results found for child {request.child_id}" + (f" in grade {request.grade}" if request.grade else "")
+        )
+
+    # Get the latest logic result
+    filtered.sort(key=lambda x: x[0], reverse=True)
+    _, latest_score = filtered[0]
+
+    return build_complete_logic_result(
+        request.child_id, request.grade, score_data=latest_score
+    )
+
 
 @app.post("/submit_words/")
 async def submit_words(request: SubmitWordsRequest):
@@ -1971,6 +2451,493 @@ async def speaking_complete_result(request: SpeakingResultRequest):
             "note": "Assessment is instructional and not a clinical diagnosis."
         },
         "all_results": all_results
+    }
+
+
+# ==================== READING COMPREHENSION APIs ====================
+
+async def generate_story_audio_openai(story_text: str, voice: str = "nova") -> str:
+    """
+    Generate expressive story narration using OpenAI TTS.
+    Voice options:
+    - 'nova': Warm, friendly female voice - BEST for children's stories
+    - 'fable': British accent, expressive storytelling
+    - 'shimmer': Clear, expressive female voice
+    - 'alloy': Neutral, versatile
+    """
+    if not openai_client:
+        return None
+    
+    try:
+        # Clean up the story text for better TTS
+        clean_text = story_text.strip()
+        
+        # Generate with OpenAI TTS HD
+        response = openai_client.audio.speech.create(
+            model="tts-1-hd",   # High definition quality
+            voice=voice,        # 'nova' for warm children's voice
+            input=clean_text,
+            speed=0.85          # Slower for young children to follow
+        )
+        
+        # Get audio bytes and encode to base64
+        audio_bytes = response.content
+        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+        return audio_base64
+        
+    except Exception as e:
+        print(f"OpenAI TTS error: {str(e)}")
+        return None
+
+
+@app.post("/admin/pregenerate_story_audio/")
+async def pregenerate_story_audio(request: GetDetailsRequest):
+    """
+    Admin endpoint to pre-generate all story audio and save to Firebase.
+    This should be called once to cache all audio.
+    """
+    try:
+        decoded = auth.verify_id_token(request.idToken)
+        uid = decoded["uid"]
+        user_data = db_ref.child("users").child(uid).get()
+        if not user_data or not user_data.get("isAdmin", False):
+            raise HTTPException(status_code=403, detail="Admin access required")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth failed: {str(e)}")
+    
+    results = {"generated": [], "failed": [], "skipped": []}
+    
+    for grade, stories in comprehension_stories.items():
+        for story in stories:
+            story_id = story["id"]
+            
+            # Check if already cached
+            cached = db_ref.child(f"story_audio/{grade}/{story_id}").get()
+            if cached and cached.get("audio_base64"):
+                results["skipped"].append(f"{grade}/{story_id}")
+                continue
+            
+            # Generate audio
+            audio_base64 = await generate_story_audio_openai(story["story"], voice="nova")
+            
+            if audio_base64:
+                # Save to Firebase
+                db_ref.child(f"story_audio/{grade}/{story_id}").set({
+                    "audio_base64": audio_base64,
+                    "title": story["title"],
+                    "voice": "nova",
+                    "generated_at": datetime.utcnow().isoformat()
+                })
+                results["generated"].append(f"{grade}/{story_id}")
+            else:
+                results["failed"].append(f"{grade}/{story_id}")
+    
+    return {
+        "success": True,
+        "message": "Audio pre-generation complete",
+        "results": results
+    }
+
+
+@app.post("/admin/regenerate_story_audio/")
+async def regenerate_story_audio(request: GetDetailsRequest, grade: str = None, story_id: str = None):
+    """
+    Admin endpoint to regenerate specific story audio or all.
+    """
+    try:
+        decoded = auth.verify_id_token(request.idToken)
+        uid = decoded["uid"]
+        user_data = db_ref.child("users").child(uid).get()
+        if not user_data or not user_data.get("isAdmin", False):
+            raise HTTPException(status_code=403, detail="Admin access required")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth failed: {str(e)}")
+    
+    results = {"regenerated": [], "failed": []}
+    
+    # Determine which stories to regenerate
+    if grade and story_id:
+        # Specific story
+        story = next((s for s in comprehension_stories.get(grade, []) if s["id"] == story_id), None)
+        if not story:
+            raise HTTPException(status_code=404, detail="Story not found")
+        stories_to_process = [(grade, story)]
+    elif grade:
+        # All stories in a grade
+        stories_to_process = [(grade, s) for s in comprehension_stories.get(grade, [])]
+    else:
+        # All stories
+        stories_to_process = [(g, s) for g, stories in comprehension_stories.items() for s in stories]
+    
+    for g, story in stories_to_process:
+        audio_base64 = await generate_story_audio_openai(story["story"], voice="nova")
+        if audio_base64:
+            db_ref.child(f"story_audio/{g}/{story['id']}").set({
+                "audio_base64": audio_base64,
+                "title": story["title"],
+                "voice": "nova",
+                "generated_at": datetime.utcnow().isoformat()
+            })
+            results["regenerated"].append(f"{g}/{story['id']}")
+        else:
+            results["failed"].append(f"{g}/{story['id']}")
+    
+    return {"success": True, "results": results}
+
+
+@app.post("/comprehension/get_stories/")
+async def get_comprehension_stories(request: ComprehensionGetRequest):
+    """
+    Get 2 stories with audio and questions for the specified grade.
+    First checks for pre-generated audio in Firebase, then generates on-demand if not found.
+    """
+    try:
+        decoded_token = auth.verify_id_token(request.idToken)
+        user_id = decoded_token["uid"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    # Verify child exists
+    child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
+    if not child_data:
+        raise HTTPException(status_code=404, detail="Child not found")
+    
+    grade = request.grade
+    if grade not in comprehension_stories:
+        raise HTTPException(status_code=400, detail="Invalid grade. Must be: Kindergarten, First, Second, or Third")
+    
+    # Get stories for the grade
+    stories = comprehension_stories[grade]
+    
+    result_stories = []
+    for story in stories:
+        story_id = story["id"]
+        story_audio_base64 = None
+        audio_source = "none"
+        
+        # First, try to get pre-generated audio from Firebase
+        cached_audio = db_ref.child(f"story_audio/{grade}/{story_id}").get()
+        if cached_audio and cached_audio.get("audio_base64"):
+            story_audio_base64 = cached_audio["audio_base64"]
+            audio_source = "cached_openai"
+        else:
+            # Generate audio on-demand using OpenAI TTS
+            story_audio_base64 = await generate_story_audio_openai(
+                story_text=story["story"],
+                voice="nova"  # Warm voice for children
+            )
+            if story_audio_base64:
+                audio_source = "openai_tts"
+                # Cache it for future use
+                db_ref.child(f"story_audio/{grade}/{story_id}").set({
+                    "audio_base64": story_audio_base64,
+                    "title": story["title"],
+                    "voice": "nova",
+                    "generated_at": datetime.utcnow().isoformat()
+                })
+        
+        # Fallback to Polly if OpenAI fails
+        if not story_audio_base64:
+            try:
+                # Use plain text for Polly (story text might have special characters)
+                plain_story = story["story"].replace('"', '').replace("'", "")
+                story_ssml = f'<speak><prosody rate="85%">{plain_story[:2900]}</prosody></speak>'
+                audio_response = polly_client.synthesize_speech(
+                    Text=story_ssml,
+                    TextType='ssml',
+                    OutputFormat='mp3',
+                    VoiceId='Joanna',
+                    Engine='neural',
+                    LanguageCode='en-US'
+                )
+                story_audio_base64 = base64.b64encode(audio_response['AudioStream'].read()).decode('utf-8')
+                audio_source = "aws_polly"
+            except Exception as e:
+                print(f"Polly fallback failed: {e}")
+                story_audio_base64 = None
+        
+        # Prepare questions (without correct_index for client)
+        questions_for_client = []
+        for q in story["questions"]:
+            questions_for_client.append({
+                "id": q["id"],
+                "question": q["question"],
+                "options": q["options"]
+                # Note: correct_index is NOT sent to client
+            })
+        
+        result_stories.append({
+            "story_id": story["id"],
+            "title": story["title"],
+            "story_text": story["story"],
+            "story_audio_base64": story_audio_base64,
+            "audio_source": audio_source,
+            "duration_estimate": story.get("duration_estimate", "60 seconds"),
+            "questions": questions_for_client,
+            "total_questions": len(questions_for_client)
+        })
+    
+    return {
+        "grade": grade,
+        "total_stories": len(result_stories),
+        "total_questions": sum(s["total_questions"] for s in result_stories),
+        "instructions": "Listen to each story carefully, then answer the questions. Each question has 4 options.",
+        "stories": result_stories
+    }
+
+
+@app.post("/comprehension/submit/")
+async def submit_comprehension_test(request: ComprehensionSubmitRequest):
+    """
+    Submit answers for the reading comprehension test.
+    Calculates score and saves results to Firebase.
+    """
+    try:
+        decoded_token = auth.verify_id_token(request.idToken)
+        user_id = decoded_token["uid"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
+    if not child_data:
+        raise HTTPException(status_code=404, detail="Child not found")
+    
+    grade = request.grade
+    if grade not in comprehension_stories:
+        raise HTTPException(status_code=400, detail="Invalid grade")
+    
+    # Get the correct answers from our data
+    stories_data = comprehension_stories[grade]
+    story_map = {s["id"]: s for s in stories_data}
+    
+    # Build question answer key
+    answer_key = {}
+    for story in stories_data:
+        for q in story["questions"]:
+            answer_key[q["id"]] = {
+                "correct_index": q["correct_index"],
+                "correct_answer": q["options"][q["correct_index"]],
+                "question": q["question"],
+                "options": q["options"],
+                "story_id": story["id"],
+                "story_title": story["title"]
+            }
+    
+    # Process submitted answers
+    results = []
+    total_correct = 0
+    total_questions = 0
+    
+    for story_answer in request.story_answers:
+        story_id = story_answer.story_id
+        story_info = story_map.get(story_id, {})
+        story_title = story_info.get("title", "Unknown Story")
+        
+        story_results = {
+            "story_id": story_id,
+            "story_title": story_title,
+            "questions": []
+        }
+        
+        for qa in story_answer.answers:
+            question_id = qa.question_id
+            selected_index = qa.selected_index
+            
+            if question_id in answer_key:
+                key = answer_key[question_id]
+                is_correct = selected_index == key["correct_index"]
+                
+                if is_correct:
+                    total_correct += 1
+                total_questions += 1
+                
+                story_results["questions"].append({
+                    "question_id": question_id,
+                    "question": key["question"],
+                    "selected_index": selected_index,
+                    "selected_answer": key["options"][selected_index] if 0 <= selected_index < len(key["options"]) else "Invalid",
+                    "correct_index": key["correct_index"],
+                    "correct_answer": key["correct_answer"],
+                    "is_correct": is_correct
+                })
+            else:
+                # Question not found
+                total_questions += 1
+                story_results["questions"].append({
+                    "question_id": question_id,
+                    "question": "Unknown question",
+                    "selected_index": selected_index,
+                    "selected_answer": "Unknown",
+                    "correct_index": -1,
+                    "correct_answer": "Unknown",
+                    "is_correct": False
+                })
+        
+        results.append(story_results)
+    
+    # Calculate overall metrics
+    max_score = len(answer_key)  # Total possible questions (8 for 2 stories × 4 questions)
+    percentage = round((total_correct / max_score) * 100, 1) if max_score > 0 else 0
+    
+    # Determine level
+    if percentage >= 90:
+        level = "Excellent Reader"
+        status = "Above"
+    elif percentage >= 75:
+        level = "Good Reader"
+        status = "At"
+    elif percentage >= 50:
+        level = "Developing Reader"
+        status = "Below"
+    else:
+        level = "Needs Practice"
+        status = "Below"
+    
+    # Generate recommendation
+    if percentage >= 90:
+        recommendation = f"Outstanding comprehension! Consider advancing to more challenging texts."
+    elif percentage >= 75:
+        recommendation = f"Good understanding of the stories. Continue practicing with varied reading materials."
+    elif percentage >= 50:
+        recommendation = f"Keep practicing! Try re-reading stories and discussing them with an adult."
+    else:
+        recommendation = f"Focus on listening carefully to stories. Practice summarizing what happened after each story."
+    
+    # Save to Firebase
+    test_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/comprehension_tests").push().key
+    test_data = {
+        "grade": grade,
+        "results": results,
+        "total_questions": max_score,
+        "correct_answers": total_correct,
+        "score": total_correct,
+        "max_score": max_score,
+        "percentage": percentage,
+        "level": level,
+        "status": status,
+        "recommendation": recommendation,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    db_ref.child(f"users/{user_id}/children/{request.child_id}/comprehension_tests/{test_id}").set(test_data)
+    
+    return {
+        "success": True,
+        "user_id": user_id,
+        "child_id": request.child_id,
+        "grade": grade,
+        "test_id": test_id,
+        "total_questions": max_score,
+        "correct_answers": total_correct,
+        "score": total_correct,
+        "max_score": max_score,
+        "percentage": percentage,
+        "level": level,
+        "status": status,
+        "recommendation": recommendation,
+        "results": results,
+        "message": f"Test completed: {total_correct}/{max_score} correct ({percentage}%)"
+    }
+
+
+@app.post("/comprehension/complete_result/")
+async def comprehension_complete_result(request: ComprehensionResultRequest):
+    """
+    Get complete reading comprehension test results for a child.
+    Returns the latest test result with detailed breakdown.
+    """
+    try:
+        decoded_token = auth.verify_id_token(request.idToken)
+        user_id = decoded_token["uid"]
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    
+    child_data = db_ref.child(f"users/{user_id}/children/{request.child_id}").get()
+    if not child_data:
+        raise HTTPException(status_code=404, detail="Child not found")
+    
+    # Fetch all comprehension tests for the child
+    tests_data = db_ref.child(f"users/{user_id}/children/{request.child_id}/comprehension_tests").get() or {}
+    if not tests_data:
+        raise HTTPException(status_code=404, detail="No comprehension test results found")
+    
+    # Filter by grade if specified
+    filtered = []
+    for test_id, t in tests_data.items():
+        g = t.get("grade")
+        if request.grade and g != request.grade:
+            continue
+        filtered.append((t.get("timestamp", ""), t, test_id))
+    
+    if not filtered:
+        raise HTTPException(status_code=404, detail=f"No comprehension results for grade: {request.grade or 'any'}")
+    
+    # Sort by timestamp descending (latest first)
+    filtered.sort(key=lambda x: x[0], reverse=True)
+    latest_test = filtered[0][1]
+    
+    # Build response
+    results = latest_test.get("results", [])
+    correct_answers = latest_test.get("correct_answers", 0)
+    max_score = latest_test.get("max_score", 8)
+    percentage = latest_test.get("percentage", 0)
+    level = latest_test.get("level", "Developing Reader")
+    status = latest_test.get("status", "Below")
+    recommendation = latest_test.get("recommendation", "")
+    
+    # Determine placement
+    if percentage >= 90:
+        placement = "Above Grade Level"
+        next_step = "Consider more advanced reading materials"
+    elif percentage >= 75:
+        placement = "At Grade Level"
+        next_step = "Continue with current grade level materials"
+    else:
+        placement = "Below Grade Level"
+        next_step = "Practice with guided reading and comprehension activities"
+    
+    # Calculate per-story breakdown
+    story_breakdown = []
+    for story_result in results:
+        story_correct = sum(1 for q in story_result.get("questions", []) if q.get("is_correct", False))
+        story_total = len(story_result.get("questions", []))
+        story_pct = round((story_correct / story_total) * 100, 1) if story_total > 0 else 0
+        
+        story_breakdown.append({
+            "story_id": story_result.get("story_id"),
+            "story_title": story_result.get("story_title"),
+            "correct": story_correct,
+            "total": story_total,
+            "percentage": story_pct,
+            "questions": story_result.get("questions", [])
+        })
+    
+    return {
+        "user_id": user_id,
+        "child_id": request.child_id,
+        "grade": latest_test.get("grade"),
+        "test_timestamp": latest_test.get("timestamp"),
+        "summary": {
+            "total_questions": max_score,
+            "correct_answers": correct_answers,
+            "percentage": percentage,
+            "level": level,
+            "status": status
+        },
+        "parent_summary": {
+            "overall_score": f"{correct_answers}/{max_score}",
+            "percentage": percentage,
+            "level": level,
+            "grade_placement": placement,
+            "next_step": next_step,
+            "recommendation": recommendation,
+            "note": "Assessment is instructional and not a clinical diagnosis."
+        },
+        "story_breakdown": story_breakdown,
+        "actions": [
+            {"label": "Retry Test", "type": "button", "action": "retry_test"},
+            {"label": "View Stories", "type": "button", "action": "view_stories"},
+            {"label": "Download Report (PDF)", "type": "button", "action": "download_pdf"}
+        ]
     }
 
 
