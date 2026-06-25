@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📖 Reading Comprehension Test</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      font-family: 'Segoe UI', Arial, sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      margin: 0; 
+      padding: 20px; 
+    }
+    .container { 
+      max-width: 800px; 
+      margin: 0 auto; 
+      background: #fff; 
+      border-radius: 16px; 
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2); 
+      padding: 32px; 
+    }
+    h1 { 
+      text-align: center; 
+      color: #4a5568; 
+      margin-bottom: 8px;
+      font-size: 2em;
+    }
+    .subtitle {
+      text-align: center;
+      color: #718096;
+      margin-bottom: 24px;
+    }
+    
+    /* Login Section */
+    .login-section {
+      background: #f7fafc;
+      padding: 20px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+    }
+    .login-section h3 {
+      margin-top: 0;
+      color: #4a5568;
+    }
+    label { 
+      display: block; 
+      margin-top: 12px; 
+      font-weight: 600; 
+      color: #4a5568;
+      font-size: 0.9em;
+    }
+    input, select { 
+      width: 100%; 
+      padding: 12px; 
+      margin-top: 4px; 
+      border-radius: 8px; 
+      border: 2px solid #e2e8f0;
+      font-size: 1em;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    button { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff; 
+      font-weight: bold; 
+      cursor: pointer; 
+      border: none;
+      padding: 14px 24px;
+      border-radius: 8px;
+      font-size: 1em;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    button:disabled { 
+      background: #cbd5e0; 
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn-secondary {
+      background: #48bb78;
+    }
+    .btn-warning {
+      background: #ed8936;
+    }
+    
+    /* Story Section */
+    .story-section {
+      display: none;
+      margin-top: 24px;
+    }
+    .story-card {
+      background: linear-gradient(135deg, #f6f9fc 0%, #edf2f7 100%);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 2px solid #e2e8f0;
+    }
+    .story-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .story-title {
+      font-size: 1.4em;
+      color: #2d3748;
+      font-weight: 700;
+    }
+    .story-badge {
+      background: #667eea;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8em;
+    }
+    .story-text {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      line-height: 1.8;
+      color: #4a5568;
+      font-size: 1.1em;
+      margin-bottom: 16px;
+      border-left: 4px solid #667eea;
+    }
+    .audio-player {
+      background: #2d3748;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    .audio-player audio {
+      width: 100%;
+    }
+    .audio-label {
+      color: #a0aec0;
+      font-size: 0.9em;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .audio-source {
+      background: #48bb78;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75em;
+    }
+    
+    /* Questions Section */
+    .questions-section {
+      margin-top: 24px;
+    }
+    .question-card {
+      background: white;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      transition: border-color 0.2s;
+    }
+    .question-card:hover {
+      border-color: #667eea;
+    }
+    .question-card.answered {
+      border-color: #48bb78;
+      background: #f0fff4;
+    }
+    .question-text {
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 16px;
+      font-size: 1.1em;
+    }
+    .question-number {
+      background: #667eea;
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 8px;
+      font-size: 0.9em;
+    }
+    .options {
+      display: grid;
+      gap: 10px;
+    }
+    .option {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      background: #f7fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .option:hover {
+      background: #edf2f7;
+      border-color: #667eea;
+    }
+    .option.selected {
+      background: #ebf4ff;
+      border-color: #667eea;
+    }
+    .option-letter {
+      background: #667eea;
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 12px;
+      font-weight: bold;
+      font-size: 0.9em;
+    }
+    .option.selected .option-letter {
+      background: #48bb78;
+    }
+    
+    /* Results Section */
+    .results-section {
+      display: none;
+      margin-top: 24px;
+    }
+    .result-card {
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      color: white;
+      border-radius: 16px;
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .result-score {
+      font-size: 3em;
+      font-weight: bold;
+    }
+    .result-level {
+      font-size: 1.4em;
+      margin-top: 8px;
+    }
+    .result-details {
+      background: #f7fafc;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .result-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .result-item:last-child {
+      border-bottom: none;
+    }
+    
+    /* Messages */
+    .message {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-top: 16px;
+      display: none;
+    }
+    .message.error {
+      background: #fed7d7;
+      color: #c53030;
+      display: block;
+    }
+    .message.success {
+      background: #c6f6d5;
+      color: #276749;
+      display: block;
+    }
+    .message.info {
+      background: #bee3f8;
+      color: #2b6cb0;
+      display: block;
+    }
+    
+    /* Loading */
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+    .loading.active {
+      display: block;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #e2e8f0;
+      border-top-color: #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Navigation */
+    .nav-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 24px;
+    }
+    .story-nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .story-nav button {
+      flex: 1;
+      padding: 10px;
+    }
+    .story-nav button.active {
+      background: #48bb78;
+    }
+    
+    /* Progress */
+    .progress-bar {
+      height: 8px;
+      background: #e2e8f0;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #48bb78);
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📖 Reading Comprehension Test</h1>
+    <p class="subtitle">Listen to stories with expressive AI narration and answer questions</p>
+    
+    <!-- Login Section -->
+    <div class="login-section">
+      <h3>🔐 Authentication</h3>
+      
+      <!-- Quick Login -->
+      <div style="background:#e8f4fd; padding:16px; border-radius:8px; margin-bottom:16px;">
+        <strong>Quick Login:</strong>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input type="email" id="loginEmail" placeholder="Email" style="flex:1;">
+          <input type="password" id="loginPassword" placeholder="Password" style="flex:1;">
+          <button id="loginBtn" style="width:auto; margin-top:0; padding:12px 20px;">Login</button>
+        </div>
+      </div>
+      
+      <label>Firebase ID Token</label>
+      <input type="password" id="idToken" placeholder="Or paste your Firebase idToken">
+      <label>Child ID</label>
+      <input type="text" id="childId" placeholder="Enter child ID">
+      <button id="loadChildrenBtn" style="width:auto; display:inline-block; margin-right:8px;">Load Children</button>
+      <select id="childSelect" style="display:none; width:auto; margin-top:8px;"></select>
+      <label>Grade Level</label>
+      <select id="grade">
+        <option value="Kindergarten">Kindergarten</option>
+        <option value="First">First Grade</option>
+        <option value="Second">Second Grade</option>
+        <option value="Third">Third Grade</option>
+      </select>
+      <button id="fetchBtn" style="width:100%; margin-top:16px;">
+        🎧 Load Stories
+      </button>
+    </div>
+    
+    <!-- Loading -->
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>Loading stories with AI narration...</p>
+      <small>This may take 30-60 seconds for audio generation</small>
+    </div>
+    
+    <!-- Message -->
+    <div class="message" id="message"></div>
+    
+    <!-- Story Section -->
+    <div class="story-section" id="storySection">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+      </div>
+      
+      <div class="story-nav" id="storyNav"></div>
+      
+      <div id="storyContent"></div>
+      
+      <div class="nav-buttons">
+        <button id="prevStoryBtn" disabled>⬅️ Previous Story</button>
+        <button id="submitBtn" class="btn-secondary" style="display:none;">📝 Submit Answers</button>
+        <button id="nextStoryBtn">Next Story ➡️</button>
+      </div>
+    </div>
+    
+    <!-- Results Section -->
+    <div class="results-section" id="resultsSection">
+      <div class="result-card" id="resultCard">
+        <div class="result-score" id="resultScore">0/8</div>
+        <div class="result-level" id="resultLevel">Loading...</div>
+      </div>
+      <div class="result-details" id="resultDetails"></div>
+      <button id="retryBtn" style="width:100%; margin-top:16px;">🔄 Try Again</button>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:8000';
+    
+    let stories = [];
+    let currentStoryIndex = 0;
+    let answers = {}; // {question_id: selected_index}
+    
+    // Elements
+    const fetchBtn = document.getElementById('fetchBtn');
+    const loading = document.getElementById('loading');
+    const message = document.getElementById('message');
+    const storySection = document.getElementById('storySection');
+    const storyContent = document.getElementById('storyContent');
+    const storyNav = document.getElementById('storyNav');
+    const progressFill = document.getElementById('progressFill');
+    const prevStoryBtn = document.getElementById('prevStoryBtn');
+    const nextStoryBtn = document.getElementById('nextStoryBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const resultsSection = document.getElementById('resultsSection');
+    const retryBtn = document.getElementById('retryBtn');
+    
+    // Show message
+    function showMessage(text, type = 'info') {
+      message.className = `message ${type}`;
+      message.textContent = text;
+      message.style.display = 'block';
+      setTimeout(() => message.style.display = 'none', 5000);
+    }
+    
+    // Login functionality
+    document.getElementById('loginBtn').onclick = async function() {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value.trim();
+      
+      if (!email || !password) {
+        showMessage('Please enter email and password', 'error');
+        return;
+      }
+      
+      try {
+        const resp = await fetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        
+        if (resp.ok) {
+          const data = await resp.json();
+          document.getElementById('idToken').value = data.id_token;
+          showMessage('Login successful! Token loaded.', 'success');
+        } else {
+          const err = await resp.json();
+          showMessage('Login failed: ' + (err.detail || 'Unknown error'), 'error');
+        }
+      } catch (e) {
+        showMessage('Network error: ' + e.message, 'error');
+      }
+    };
+    
+    // Load children
+    document.getElementById('loadChildrenBtn').onclick = async function() {
+      const idToken = document.getElementById('idToken').value.trim();
+      if (!idToken) {
+        showMessage('Please login or enter token first', 'error');
+        return;
+      }
+      
+      try {
+        const resp = await fetch(`${API_BASE}/get_children/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken })
+        });
+        
+        if (resp.ok) {
+          const data = await resp.json();
+          const children = data.children || [];
+          const select = document.getElementById('childSelect');
+          select.innerHTML = children.map(c => 
+            `<option value="${c.child_id}">${c.name} (${c.grade})</option>`
+          ).join('');
+          select.style.display = 'inline-block';
+          select.onchange = () => {
+            document.getElementById('childId').value = select.value;
+            // Auto-set grade
+            const child = children.find(c => c.child_id === select.value);
+            if (child) document.getElementById('grade').value = child.grade;
+          };
+          if (children.length > 0) {
+            document.getElementById('childId').value = children[0].child_id;
+            document.getElementById('grade').value = children[0].grade;
+          }
+          showMessage(`Found ${children.length} children`, 'success');
+        } else {
+          showMessage('Failed to load children', 'error');
+        }
+      } catch (e) {
+        showMessage('Network error: ' + e.message, 'error');
+      }
+    };
+    
+    // Clean token (remove b'...' wrapper if present)
+    function cleanToken(token) {
+      if (token.startsWith("b'") && token.endsWith("'")) {
+        return token.slice(2, -1);
+      }
+      if (token.startsWith('b"') && token.endsWith('"')) {
+        return token.slice(2, -1);
+      }
+      return token;
+    }
+    
+    // Fetch stories
+    fetchBtn.onclick = async function() {
+      let idToken = document.getElementById('idToken').value.trim();
+      idToken = cleanToken(idToken); // Clean the token
+      const childId = document.getElementById('childId').value.trim();
+      const grade = document.getElementById('grade').value;
+      
+      if (!idToken || !childId) {
+        showMessage('Please fill in all fields', 'error');
+        return;
+      }
+      
+      loading.classList.add('active');
+      storySection.style.display = 'none';
+      resultsSection.style.display = 'none';
+      
+      try {
+        const resp = await fetch(`${API_BASE}/comprehension/get_stories/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken, child_id: childId, grade })
+        });
+        
+        if (resp.ok) {
+          const data = await resp.json();
+          stories = data.stories;
+          currentStoryIndex = 0;
+          answers = {};
+          
+          showMessage(`Loaded ${stories.length} stories with ${data.total_questions} questions!`, 'success');
+          renderStoryNav();
+          renderStory();
+          storySection.style.display = 'block';
+        } else {
+          const err = await resp.json();
+          showMessage(err.detail || 'Failed to load stories', 'error');
+        }
+      } catch (e) {
+        showMessage('Network error: ' + e.message, 'error');
+      }
+      
+      loading.classList.remove('active');
+    };
+    
+    // Render story navigation
+    function renderStoryNav() {
+      storyNav.innerHTML = stories.map((s, i) => `
+        <button class="${i === currentStoryIndex ? 'active' : ''}" onclick="goToStory(${i})">
+          📖 Story ${i + 1}: ${s.title}
+        </button>
+      `).join('');
+    }
+    
+    // Go to specific story
+    window.goToStory = function(index) {
+      currentStoryIndex = index;
+      renderStoryNav();
+      renderStory();
+    };
+    
+    // Render current story
+    function renderStory() {
+      const story = stories[currentStoryIndex];
+      if (!story) return;
+      
+      // Update progress
+      const answeredCount = Object.keys(answers).length;
+      const totalQuestions = stories.reduce((sum, s) => sum + s.questions.length, 0);
+      progressFill.style.width = `${(answeredCount / totalQuestions) * 100}%`;
+      
+      // Update navigation
+      prevStoryBtn.disabled = currentStoryIndex === 0;
+      nextStoryBtn.disabled = currentStoryIndex === stories.length - 1;
+      
+      // Show submit button only on last story
+      submitBtn.style.display = currentStoryIndex === stories.length - 1 ? 'inline-block' : 'none';
+      
+      // Render story content
+      storyContent.innerHTML = `
+        <div class="story-card">
+          <div class="story-header">
+            <span class="story-title">📖 ${story.title}</span>
+            <span class="story-badge">Story ${currentStoryIndex + 1} of ${stories.length}</span>
+          </div>
+          
+          <div class="audio-player">
+            <div class="audio-label">
+              🎧 Listen to the story
+              <span class="audio-source">${story.audio_source === 'openai_tts' ? '🤖 OpenAI TTS' : 'AWS Polly'}</span>
+            </div>
+            ${story.story_audio_base64 
+              ? `<audio controls src="data:audio/mp3;base64,${story.story_audio_base64}"></audio>`
+              : '<p style="color:#a0aec0">No audio available</p>'
+            }
+          </div>
+          
+          <div class="story-text">${story.story_text}</div>
+          
+          <div class="questions-section">
+            <h3 style="color:#4a5568; margin-bottom:16px;">📝 Questions</h3>
+            ${story.questions.map((q, qi) => `
+              <div class="question-card ${answers[q.id] !== undefined ? 'answered' : ''}" id="q-${q.id}">
+                <div class="question-text">
+                  <span class="question-number">${qi + 1}</span>
+                  ${q.question}
+                </div>
+                <div class="options">
+                  ${q.options.map((opt, oi) => `
+                    <div class="option ${answers[q.id] === oi ? 'selected' : ''}" 
+                         onclick="selectOption('${q.id}', ${oi})">
+                      <span class="option-letter">${String.fromCharCode(65 + oi)}</span>
+                      ${opt}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+    
+    // Select option
+    window.selectOption = function(questionId, optionIndex) {
+      answers[questionId] = optionIndex;
+      renderStory();
+    };
+    
+    // Navigation
+    prevStoryBtn.onclick = () => {
+      if (currentStoryIndex > 0) {
+        currentStoryIndex--;
+        renderStoryNav();
+        renderStory();
+        window.scrollTo(0, 0);
+      }
+    };
+    
+    nextStoryBtn.onclick = () => {
+      if (currentStoryIndex < stories.length - 1) {
+        currentStoryIndex++;
+        renderStoryNav();
+        renderStory();
+        window.scrollTo(0, 0);
+      }
+    };
+    
+    // Submit answers
+    submitBtn.onclick = async function() {
+      let idToken = document.getElementById('idToken').value.trim();
+      idToken = cleanToken(idToken);
+      const childId = document.getElementById('childId').value.trim();
+      const grade = document.getElementById('grade').value;
+      
+      // Build story_answers array
+      const storyAnswers = stories.map(story => ({
+        story_id: story.story_id,
+        answers: story.questions.map(q => ({
+          question_id: q.id,
+          selected_index: answers[q.id] !== undefined ? answers[q.id] : -1
+        }))
+      }));
+      
+      // Check if all answered
+      const totalQuestions = stories.reduce((sum, s) => sum + s.questions.length, 0);
+      const answeredCount = Object.keys(answers).length;
+      
+      if (answeredCount < totalQuestions) {
+        if (!confirm(`You've only answered ${answeredCount}/${totalQuestions} questions. Submit anyway?`)) {
+          return;
+        }
+      }
+      
+      loading.classList.add('active');
+      
+      try {
+        const resp = await fetch(`${API_BASE}/comprehension/submit/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            idToken,
+            child_id: childId,
+            grade,
+            story_answers: storyAnswers
+          })
+        });
+        
+        if (resp.ok) {
+          const data = await resp.json();
+          showResults(data);
+        } else {
+          const err = await resp.json();
+          showMessage(err.detail || 'Submission failed', 'error');
+        }
+      } catch (e) {
+        showMessage('Network error: ' + e.message, 'error');
+      }
+      
+      loading.classList.remove('active');
+    };
+    
+    // Show results
+    function showResults(data) {
+      storySection.style.display = 'none';
+      resultsSection.style.display = 'block';
+      
+      // Set score
+      document.getElementById('resultScore').textContent = 
+        `${data.correct_answers}/${data.max_score}`;
+      
+      // Set level with emoji
+      const levelEmojis = {
+        'Excellent Reader': '🌟',
+        'Good Reader': '👍',
+        'Developing Reader': '📚',
+        'Needs Practice': '💪'
+      };
+      document.getElementById('resultLevel').textContent = 
+        `${levelEmojis[data.level] || '📖'} ${data.level}`;
+      
+      // Color based on level
+      const resultCard = document.getElementById('resultCard');
+      if (data.percentage >= 90) {
+        resultCard.style.background = 'linear-gradient(135deg, #48bb78 0%, #38a169 100%)';
+      } else if (data.percentage >= 75) {
+        resultCard.style.background = 'linear-gradient(135deg, #4299e1 0%, #3182ce 100%)';
+      } else if (data.percentage >= 50) {
+        resultCard.style.background = 'linear-gradient(135deg, #ed8936 0%, #dd6b20 100%)';
+      } else {
+        resultCard.style.background = 'linear-gradient(135deg, #e53e3e 0%, #c53030 100%)';
+      }
+      
+      // Details
+      const details = document.getElementById('resultDetails');
+      let detailsHTML = `
+        <div class="result-item">
+          <span>📊 Score</span>
+          <strong>${data.percentage}%</strong>
+        </div>
+        <div class="result-item">
+          <span>📝 Questions</span>
+          <strong>${data.correct_answers} / ${data.max_score} correct</strong>
+        </div>
+        <div class="result-item">
+          <span>📈 Status</span>
+          <strong>${data.status}</strong>
+        </div>
+        <div class="result-item">
+          <span>💡 Recommendation</span>
+          <span>${data.recommendation}</span>
+        </div>
+        <hr style="margin: 16px 0; border: none; border-top: 1px solid #e2e8f0;">
+        <h4 style="margin-bottom:12px;">📖 Story Breakdown</h4>
+      `;
+      
+      // Add per-story results
+      data.results.forEach((story, i) => {
+        const storyCorrect = story.questions.filter(q => q.is_correct).length;
+        const storyTotal = story.questions.length;
+        const emoji = storyCorrect === storyTotal ? '✅' : storyCorrect > 0 ? '⚠️' : '❌';
+        
+        detailsHTML += `
+          <div class="result-item">
+            <span>${emoji} ${story.story_title}</span>
+            <strong>${storyCorrect}/${storyTotal}</strong>
+          </div>
+        `;
+        
+        // Show each question result
+        story.questions.forEach((q, qi) => {
+          detailsHTML += `
+            <div style="padding: 8px 0 8px 24px; color: ${q.is_correct ? '#48bb78' : '#e53e3e'}; font-size:0.9em;">
+              ${q.is_correct ? '✓' : '✗'} Q${qi+1}: ${q.question.substring(0, 40)}...
+              ${!q.is_correct ? `<br><small style="color:#718096">Your answer: ${q.selected_answer} | Correct: ${q.correct_answer}</small>` : ''}
+            </div>
+          `;
+        });
+      });
+      
+      details.innerHTML = detailsHTML;
+    }
+    
+    // Retry
+    retryBtn.onclick = () => {
+      resultsSection.style.display = 'none';
+      answers = {};
+      currentStoryIndex = 0;
+      renderStoryNav();
+      renderStory();
+      storySection.style.display = 'block';
+    };
+  </script>
+</body>
+</html>

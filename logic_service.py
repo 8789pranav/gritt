@@ -146,23 +146,14 @@ def aggregate_logic_test_results(student_id: str, grade: str, responses: List[di
     }
 
 
-def build_complete_logic_result(student_id: str, grade: str, score_data: Optional[dict] = None) -> dict:
+def build_complete_logic_result(student_id: str, grade: str, score_data: dict) -> dict:
     """Build complete logic result from stored score data.
     
     Args:
         student_id: The child's ID
         grade: Grade level string
-        grade: Grade level string
-        score_data: The stored score data from Firebase (optional, if not found returns empty result)
+        score_data: The stored score data from Firebase (must not be None)
     """
-    if not score_data:
-        return {
-            "success": False,
-            "error": "No results found for this test",
-            "student_id": student_id,
-            "grade": grade,
-        }
-
     percentage = score_data.get("percentage", 0)
     level = _get_performance_level(percentage)
     cognitive_tags = score_data.get("cognitive_tags", [])
