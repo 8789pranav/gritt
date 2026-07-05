@@ -35,6 +35,13 @@ from logic_service import (
     aggregate_logic_test_results,
     build_complete_logic_result,
 )
+from tagging_engine import (
+    tag_logic_test,
+    tag_spelling_test,
+    tag_speaking_test,
+    tag_comprehension_test,
+)
+from logic_assessment import ALL_LOGIC_ITEMS
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -626,6 +633,51 @@ The End.""",
             ]
         }
     ]
+}
+
+# ==================== COMPREHENSION QUESTION TYPE MAPPING ====================
+# Each question classified as literal (explicit details), inferential (reasoning), or vocabulary
+COMPREHENSION_QUESTION_TYPES = {
+    # Kindergarten - Story 1: The Friendly Dog
+    "k1_q1": "literal",       # What color was Max? (explicit detail)
+    "k1_q2": "literal",       # What did Tom throw? (explicit detail)
+    "k1_q3": "literal",       # What was the cat's name? (explicit detail)
+    "k1_q4": "literal",       # Where did Max sleep? (explicit detail)
+    # Kindergarten - Story 2: The Magic Garden
+    "k2_q1": "literal",       # What color was watering can? (explicit detail)
+    "k2_q2": "literal",       # What came to visit? (explicit detail)
+    "k2_q3": "literal",       # What did Lily do to help plants? (explicit detail)
+    "k2_q4": "inferential",   # What color NOT mentioned? (requires reasoning about negation)
+    # First Grade - Story 1: The Lost Kitten
+    "f1_q1": "literal",       # What was the weather? (explicit detail)
+    "f1_q2": "literal",       # What color was kitten? (explicit detail)
+    "f1_q3": "literal",       # What did they give kitten? (explicit detail)
+    "f1_q4": "inferential",   # Why name Misty? (requires inference about naming reason)
+    # First Grade - Story 2: The Birthday Surprise
+    "f2_q1": "literal",       # How old was Jake? (explicit detail)
+    "f2_q2": "literal",       # What color bicycle? (explicit detail)
+    "f2_q3": "literal",       # Where was bicycle hidden? (explicit detail)
+    "f2_q4": "literal",       # How many times fell? (explicit detail)
+    # Second Grade - Story 1: The Treasure Map
+    "s1_q1": "literal",       # Where found map? (explicit detail)
+    "s1_q2": "literal",       # What was X next to? (explicit detail)
+    "s1_q3": "literal",       # What was inside box? (explicit detail)
+    "s1_q4": "inferential",   # What was the real treasure? (requires theme inference)
+    # Second Grade - Story 2: The Science Fair
+    "s2_q1": "literal",       # How much time? (explicit detail)
+    "s2_q2": "literal",       # What materials? (explicit detail)
+    "s2_q3": "literal",       # What place won? (explicit detail)
+    "s2_q4": "vocabulary",    # What color ribbon? (contextual detail/vocabulary)
+    # Third Grade - Story 1: The Mysterious Letter
+    "t1_q1": "literal",       # What time of year? (explicit detail)
+    "t1_q2": "literal",       # Where first clue? (explicit detail)
+    "t1_q3": "literal",       # What seat number? (explicit detail)
+    "t1_q4": "inferential",   # Who created hunt and when? (requires connecting details)
+    # Third Grade - Story 2: The Courage to Try
+    "t2_q1": "inferential",   # Why afraid of water? (cause-effect inference)
+    "t2_q2": "literal",       # Who helped Daniel? (explicit detail)
+    "t2_q3": "literal",       # How long to learn? (explicit detail)
+    "t2_q4": "inferential",   # What lesson learned? (theme inference)
 }
 
 # Word lists
@@ -1226,6 +1278,17 @@ async def logic_submit_test(request: SubmitLogicTestRequest):
         responses=request.responses,
     )
 
+    # Dear Parent Phase 2: compute tags from raw responses
+    items_lookup = {
+        item.item_id: {
+            "correct_answer_index": item.correct_answer_index,
+            "expected_latency_seconds": item.expected_latency_seconds,
+            "item_type": item.item_type,
+        }
+        for item in ALL_LOGIC_ITEMS
+    }
+    dear_parent_tags = tag_logic_test(request.responses, items_lookup)
+
     score_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/logic_tests").push().key
     score_data = {
         "grade": request.grade,
@@ -1239,6 +1302,7 @@ async def logic_submit_test(request: SubmitLogicTestRequest):
         "reasoning_under_load_detected": result["reasoning_under_load_detected"],
         "trial_and_error_detected": result["trial_and_error_detected"],
         "strategy_shift_difficulty_detected": result["strategy_shift_difficulty_detected"],
+        "dear_parent_tags": dear_parent_tags,
         "message": result["message"],
         "timestamp": datetime.utcnow().isoformat(),
         "responses": request.responses,
@@ -1246,6 +1310,7 @@ async def logic_submit_test(request: SubmitLogicTestRequest):
     db_ref.child(f"users/{user_id}/children/{request.child_id}/logic_tests/{score_id}").set(sanitize_firebase_data(score_data))
 
     result["score_id"] = score_id
+    result["dear_parent_tags"] = dear_parent_tags
     return {"success": True, **result}
 
 
@@ -1347,6 +1412,9 @@ async def submit_words(request: SubmitWordsRequest):
         }
     }
 
+    # Dear Parent Phase 2: compute spelling tags
+    dear_parent_tags = tag_spelling_test(results, grade)
+
     score_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/scores").push().key
     score_data = {
         "grade": grade,
@@ -1354,6 +1422,7 @@ async def submit_words(request: SubmitWordsRequest):
         "assessment_summary": sanitize_firebase_data(assessment_summary),
         "error_analysis": sanitize_firebase_data(error_counts),
         "instructional_recommendation": recommendation,
+        "dear_parent_tags": dear_parent_tags,
         "results": sanitize_firebase_data(results),
         "analysis": sanitize_firebase_data(analysis),
         "timestamp": datetime.utcnow().isoformat()
@@ -1368,7 +1437,8 @@ async def submit_words(request: SubmitWordsRequest):
         "evaluation": evaluation,
         "assessment_summary": assessment_summary,
         "error_analysis": error_counts,
-        "instructional_recommendation": recommendation
+        "instructional_recommendation": recommendation,
+        "dear_parent_tags": dear_parent_tags
     }
 
 @app.post("/generate_text_audio/")
@@ -1557,6 +1627,7 @@ async def complete_result(request: CompleteResultRequest):
                     {"label": "Review Missed Words", "type": "button", "action": "review_missed"},
                     {"label": "Download Report (PDF)", "type": "button", "action": "download_pdf"}]
             },
+            "dear_parent_tags": latest.get("dear_parent_tags", []),
             "teacher_admin_detail": {
                 "test_level": result_grade,
                 "words": len(all_results),
@@ -1686,6 +1757,7 @@ async def complete_result(request: CompleteResultRequest):
                 {"label": "Download Report (PDF)", "type": "button", "action": "download_pdf"}
             ]
         },
+        "dear_parent_tags": latest.get("dear_parent_tags", []),
         "teacher_admin_detail": {
             "test_level": result_grade,
             "words": total_words,
@@ -2355,6 +2427,18 @@ async def submit_speaking_test(request: SpeakingSubmitRequest):
     else:
         level = "Needs Improvement"
     avg_score = round(total_score / total_sentences, 1) if total_sentences else 0
+
+    # Dear Parent Phase 2: compute speaking tags
+    # Enrich results with difficulty from sentence bank for the tagger
+    tagging_results = []
+    for r in results:
+        enriched = dict(r)
+        sid = r.get("sentence_id", "")
+        if sid in sentence_map:
+            enriched["difficulty"] = sentence_map[sid].get("difficulty", "medium")
+        tagging_results.append(enriched)
+    dear_parent_tags = tag_speaking_test(tagging_results)
+
     # Save the entire batch as a single test
     test_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_tests").push().key
     test_data = {
@@ -2366,6 +2450,7 @@ async def submit_speaking_test(request: SpeakingSubmitRequest):
         "average_score": avg_score,
         "percentage": percentage,
         "level": level,
+        "dear_parent_tags": dear_parent_tags,
         "timestamp": datetime.utcnow().isoformat()
     }
     db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_tests/{test_id}").set(test_data)
@@ -2383,6 +2468,7 @@ async def submit_speaking_test(request: SpeakingSubmitRequest):
         "percentage": percentage,
         "level": level,
         "results": results,
+        "dear_parent_tags": dear_parent_tags,
         "message": f"Submission completed: {answered_count} answered, {len(results) - answered_count} not attempted."
     }
 
@@ -2450,6 +2536,7 @@ async def speaking_complete_result(request: SpeakingResultRequest):
             "grade_placement": placement,
             "note": "Assessment is instructional and not a clinical diagnosis."
         },
+        "dear_parent_tags": latest_test.get("dear_parent_tags", []),
         "all_results": all_results
     }
 
@@ -2803,6 +2890,9 @@ async def submit_comprehension_test(request: ComprehensionSubmitRequest):
     else:
         recommendation = f"Focus on listening carefully to stories. Practice summarizing what happened after each story."
     
+    # Dear Parent Phase 2: compute comprehension tags
+    dear_parent_tags = tag_comprehension_test(results, COMPREHENSION_QUESTION_TYPES)
+
     # Save to Firebase
     test_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/comprehension_tests").push().key
     test_data = {
@@ -2816,6 +2906,7 @@ async def submit_comprehension_test(request: ComprehensionSubmitRequest):
         "level": level,
         "status": status,
         "recommendation": recommendation,
+        "dear_parent_tags": dear_parent_tags,
         "timestamp": datetime.utcnow().isoformat()
     }
     db_ref.child(f"users/{user_id}/children/{request.child_id}/comprehension_tests/{test_id}").set(test_data)
@@ -2835,6 +2926,7 @@ async def submit_comprehension_test(request: ComprehensionSubmitRequest):
         "status": status,
         "recommendation": recommendation,
         "results": results,
+        "dear_parent_tags": dear_parent_tags,
         "message": f"Test completed: {total_correct}/{max_score} correct ({percentage}%)"
     }
 
@@ -2933,6 +3025,7 @@ async def comprehension_complete_result(request: ComprehensionResultRequest):
             "note": "Assessment is instructional and not a clinical diagnosis."
         },
         "story_breakdown": story_breakdown,
+        "dear_parent_tags": latest_test.get("dear_parent_tags", []),
         "actions": [
             {"label": "Retry Test", "type": "button", "action": "retry_test"},
             {"label": "View Stories", "type": "button", "action": "view_stories"},

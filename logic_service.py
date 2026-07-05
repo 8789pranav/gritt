@@ -220,6 +220,7 @@ def build_complete_logic_result(student_id: str, grade: str, score_data: dict) -
             "recommendation": recommendation_map.get(level, "Continue practicing logic puzzles."),
             "note": "This assessment is instructional and not a clinical diagnosis.",
         },
+        "dear_parent_tags": score_data.get("dear_parent_tags", []),
         "behavioral_signals": {
             "reasoning_under_load": score_data.get("reasoning_under_load_detected", False),
             "trial_and_error": score_data.get("trial_and_error_detected", False),
