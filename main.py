@@ -1334,49 +1334,13 @@ async def logic_get_test_with_audio(request: GetLogicTestRequest):
     # Batch read all cached audio from Firebase in 1 call
     all_cached = db_ref.child(f"logic_audio/{grade}").get() or {}
 
-    # Identify which items need audio generation
-    items_to_generate = []
-    for item in items:
-        if item.item_id not in all_cached or not all_cached[item.item_id].get("question_audio"):
-            items_to_generate.append(item)
-
-    # Generate audio in parallel for all uncached items
-    if items_to_generate:
-        async def gen_item_audio(item):
-            question_audio = await generate_tts_audio(item.question_text)
-            opt_audios = await asyncio.gather(
-                *[generate_tts_audio(opt.text) for opt in item.options]
-            )
-            return item.item_id, question_audio, list(opt_audios)
-
-        generated = await asyncio.gather(
-            *[gen_item_audio(item) for item in items_to_generate]
-        )
-
-        # Cache generated audio and build lookup
-        generated_map = {}
-        for item_id, q_audio, o_audios in generated:
-            generated_map[item_id] = {
-                "question_audio": q_audio,
-                "option_audios": o_audios,
-            }
-            if q_audio:
-                db_ref.child(f"logic_audio/{grade}/{item_id}").set({
-                    "question_audio": q_audio,
-                    "option_audios": o_audios,
-                    "voice": "nova",
-                    "generated_at": datetime.utcnow().isoformat(),
-                })
-    else:
-        generated_map = {}
-
-    # Build response from cache + generated
+    # Build response from cache only — no real-time generation
     formatted_items = []
     for item in items:
-        cached = all_cached.get(item.item_id) or generated_map.get(item.item_id, {})
+        cached = all_cached.get(item.item_id, {})
         question_audio = cached.get("question_audio")
         option_audios = cached.get("option_audios", [])
-        audio_source = "cached" if item.item_id in all_cached else "openai_tts"
+        audio_source = "cached" if item.item_id in all_cached else "not_cached"
 
         fmt = {
             "item_id": item.item_id,
@@ -1701,25 +1665,13 @@ async def generate_word_audio(request: AudioRequest):
 
     word = request.text
     try:
-        # Check Firebase cache first (by grade if available, else by word)
+        # Read from Firebase cache only — no real-time generation
         cached = db_ref.child(f"spelling_audio/_all/{word}").get()
         if cached and cached.get("word_audio"):
             return {"base64_audio": cached["word_audio"]}
-
-        word_base64 = await generate_tts_audio(word, speed=0.9)
-        if word_base64:
-            # Cache for future use
-            db_ref.child(f"spelling_audio/_all/{word}").set({
-                "word_audio": word_base64,
-                "voice": "nova",
-                "generated_at": datetime.utcnow().isoformat(),
-            })
-            return {"base64_audio": word_base64}
-        raise HTTPException(status_code=500, detail="Failed to generate audio")
-    except HTTPException:
-        raise
+        return {"base64_audio": None}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate audio: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get audio: {str(e)}")
 
 import random
 import base64
@@ -1752,38 +1704,7 @@ async def generate_all_grade_audio(request: GradeInput):
         # Batch read all cached audio from Firebase in 1 call
         all_cached = db_ref.child(f"spelling_audio/{grade}").get() or {}
 
-        # Identify which words need audio generation
-        words_to_generate = []
-        for item in shuffled_words:
-            word = item["word"]
-            if word not in all_cached or not all_cached[word].get("word_audio"):
-                words_to_generate.append(item)
-
-        # Generate audio in parallel for all uncached words
-        if words_to_generate:
-            async def gen_word_audio(item):
-                word = item["word"]
-                sentence = item["sentence"]
-                word_base64 = await generate_tts_audio(word, speed=0.95)
-                sentence_base64 = await generate_tts_audio(sentence, speed=1.0)
-                return word, word_base64, sentence_base64
-
-            generated = await asyncio.gather(
-                *[gen_word_audio(item) for item in words_to_generate]
-            )
-
-            # Cache to Firebase
-            for word, w_b64, s_b64 in generated:
-                if w_b64:
-                    db_ref.child(f"spelling_audio/{grade}/{word}").set({
-                        "word_audio": w_b64,
-                        "sentence_audio": s_b64,
-                        "voice": "nova",
-                        "generated_at": datetime.utcnow().isoformat(),
-                    })
-                    all_cached[word] = {"word_audio": w_b64, "sentence_audio": s_b64}
-
-        # Build response from cache
+        # Build response from cache only — no real-time generation
         for item in shuffled_words:
             word = item["word"]
             sentence = item["sentence"]
@@ -1791,9 +1712,6 @@ async def generate_all_grade_audio(request: GradeInput):
             cached = all_cached.get(word, {})
             word_base64 = cached.get("word_audio")
             sentence_base64 = cached.get("sentence_audio")
-
-            if not word_base64 or not sentence_base64:
-                raise HTTPException(status_code=500, detail=f"Failed to generate audio for word: {word}")
 
             audio_files.append({
                 "word": word,
@@ -2427,21 +2345,10 @@ async def get_speaking_sentence(request: SpeakingSentenceRequest):
     sentences = speaking_sentences[grade].copy()
     random.shuffle(sentences)
     
-    # Generate audio for the sentence (nova - same voice as all tests)
+    # Get sentence from DB cache only — no real-time generation
     selected = sentences[0]
-
-    # Check Firebase cache first
-    cached = db_ref.child(f"speaking_audio/{grade}/{selected['id']}").get()
-    if cached and cached.get("audio_base64"):
-        audio_base64 = cached["audio_base64"]
-    else:
-        audio_base64 = await generate_tts_audio(selected["sentence"], speed=0.9)
-        if audio_base64:
-            db_ref.child(f"speaking_audio/{grade}/{selected['id']}").set({
-                "audio_base64": audio_base64,
-                "voice": "nova",
-                "generated_at": datetime.utcnow().isoformat(),
-            })
+    cached = db_ref.child(f"speaking_audio/{grade}/{selected['id']}").get() or {}
+    audio_base64 = cached.get("audio_base64")
     
     return {
         "grade": grade,
@@ -2456,7 +2363,7 @@ async def get_speaking_sentence(request: SpeakingSentenceRequest):
 
 @app.post("/speaking/get_all_sentences/")
 async def get_all_speaking_sentences(request: SpeakingSentenceRequest):
-    """Get all sentences for a speaking test with audio."""
+    """Get all sentences for a speaking test with audio (from DB cache only)."""
     try:
         decoded_token = auth.verify_id_token(request.idToken)
         user_id = decoded_token["uid"]
@@ -2474,37 +2381,10 @@ async def get_all_speaking_sentences(request: SpeakingSentenceRequest):
     sentences = speaking_sentences[grade].copy()
     random.shuffle(sentences)
     
-    # Batch read all cached audio from Firebase in 1 call
+    # Read all cached audio from Firebase in 1 call
     all_cached = db_ref.child(f"speaking_audio/{grade}").get() or {}
     
-    # Identify which sentences need audio generation
-    sents_to_generate = []
-    for sent in sentences:
-        sid = sent["id"]
-        if sid not in all_cached or not all_cached[sid].get("audio_base64"):
-            sents_to_generate.append(sent)
-    
-    # Generate audio in parallel for all uncached sentences
-    if sents_to_generate:
-        async def gen_sent_audio(sent):
-            audio = await generate_tts_audio(sent["sentence"], speed=0.9)
-            return sent["id"], audio
-        
-        generated = await asyncio.gather(
-            *[gen_sent_audio(sent) for sent in sents_to_generate]
-        )
-        
-        # Cache to Firebase
-        for sid, audio_b64 in generated:
-            if audio_b64:
-                db_ref.child(f"speaking_audio/{grade}/{sid}").set({
-                    "audio_base64": audio_b64,
-                    "voice": "nova",
-                    "generated_at": datetime.utcnow().isoformat(),
-                })
-                all_cached[sid] = {"audio_base64": audio_b64}
-    
-    # Build response from cache
+    # Build response from cache only — no real-time generation
     result_sentences = []
     for sent in sentences:
         cached = all_cached.get(sent["id"], {})
@@ -2902,6 +2782,69 @@ async def pregenerate_speaking_audio(request: GetDetailsRequest):
     }
 
 
+@app.post("/admin/pregenerate_spelling_audio/")
+async def pregenerate_spelling_audio(request: GetDetailsRequest):
+    """
+    Admin endpoint to pre-generate all spelling word + sentence audio and save to Firebase.
+    Call once after deploying to cache all audio so /generate_all_grade_audio/ is instant.
+    """
+    try:
+        decoded = auth.verify_id_token(request.idToken)
+        uid = decoded["uid"]
+        user_data = db_ref.child("users").child(uid).get()
+        if not user_data or not user_data.get("isAdmin", False):
+            raise HTTPException(status_code=403, detail="Admin access required")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth failed: {str(e)}")
+
+    results = {"generated": [], "failed": [], "skipped": []}
+
+    for grade in word_lists:
+        words = _audio_words_for_grade(grade)
+        if not words:
+            continue
+
+        existing = db_ref.child(f"spelling_audio/{grade}").get() or {}
+
+        words_to_gen = []
+        for item in words:
+            word = item["word"]
+            if word in existing and existing[word].get("word_audio"):
+                results["skipped"].append(f"{grade}/{word}")
+            else:
+                words_to_gen.append(item)
+
+        if not words_to_gen:
+            continue
+
+        async def gen_word(item):
+            w = item["word"]
+            s = item["sentence"]
+            w_b64 = await generate_tts_audio(w, speed=0.95)
+            s_b64 = await generate_tts_audio(s, speed=1.0)
+            return w, w_b64, s_b64
+
+        generated = await asyncio.gather(*[gen_word(i) for i in words_to_gen])
+
+        for word, w_b64, s_b64 in generated:
+            if w_b64:
+                db_ref.child(f"spelling_audio/{grade}/{word}").set({
+                    "word_audio": w_b64,
+                    "sentence_audio": s_b64,
+                    "voice": "nova",
+                    "generated_at": datetime.utcnow().isoformat(),
+                })
+                results["generated"].append(f"{grade}/{word}")
+            else:
+                results["failed"].append(f"{grade}/{word}")
+
+    return {
+        "success": True,
+        "message": "Spelling audio pre-generation complete",
+        "results": results
+    }
+
+
 @app.post("/admin/pregenerate_story_audio/")
 async def pregenerate_story_audio(request: GetDetailsRequest):
     """
@@ -3001,7 +2944,7 @@ async def regenerate_story_audio(request: GetDetailsRequest, grade: str = None, 
 async def get_comprehension_stories(request: ComprehensionGetRequest):
     """
     Get 2 stories with audio and questions for the specified grade.
-    First checks for pre-generated audio in Firebase, then generates on-demand if not found.
+    Reads pre-generated audio from Firebase cache only — no real-time generation.
     """
     try:
         decoded_token = auth.verify_id_token(request.idToken)
@@ -3024,36 +2967,7 @@ async def get_comprehension_stories(request: ComprehensionGetRequest):
     # Batch read all cached audio from Firebase in 1 call
     all_cached = db_ref.child(f"story_audio/{grade}").get() or {}
     
-    # Identify which stories need audio generation
-    stories_to_generate = []
-    for story in stories:
-        sid = story["id"]
-        if sid not in all_cached or not all_cached[sid].get("audio_base64"):
-            stories_to_generate.append(story)
-    
-    # Generate audio in parallel for uncached stories
-    if stories_to_generate:
-        async def gen_story_audio(story):
-            audio = await generate_story_audio_openai(story["story"], voice="nova")
-            return story["id"], audio
-        
-        generated = await asyncio.gather(
-            *[gen_story_audio(s) for s in stories_to_generate]
-        )
-        
-        # Cache to Firebase
-        for sid, audio_b64 in generated:
-            if audio_b64:
-                story_obj = next(s for s in stories if s["id"] == sid)
-                db_ref.child(f"story_audio/{grade}/{sid}").set({
-                    "audio_base64": audio_b64,
-                    "title": story_obj["title"],
-                    "voice": "nova",
-                    "generated_at": datetime.utcnow().isoformat()
-                })
-                all_cached[sid] = {"audio_base64": audio_b64, "title": story_obj["title"]}
-    
-    # Build response from cache
+    # Build response from cache only — no real-time generation
     result_stories = []
     for story in stories:
         story_id = story["id"]
