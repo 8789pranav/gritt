@@ -323,24 +323,20 @@ LOGIC_ITEMS_K1 = [
         item_number="K1-10",
         item_type="two_step",
         question_text=(
-            "Part 1: Look at these numbers: 2, 5, 3, 7. "
-            "Which of these are bigger than 4? "
-            "A) 5, 7  B) 2, 3  C) 5, 3  D) All of them\n"
-            "Part 2: Now look only at 5 and 7. Which one is bigger? "
-            "A) 7  B) 5  C) They are the same  D) Not sure"
+            "Look at these numbers: 2, 5, 3, 7. "
+            "Which of these are bigger than 4?"
         ),
         options=[
-            LogicOption(index=0, text="Correct two-step"),
-            LogicOption(index=1, text="Correct first step only"),
-            LogicOption(index=2, text="Incorrect"),
-            LogicOption(index=3, text="Didn't attempt"),
+            LogicOption(index=0, text="5, 7"),
+            LogicOption(index=1, text="2, 3"),
+            LogicOption(index=2, text="5, 3"),
+            LogicOption(index=3, text="All of them"),
         ],
         correct_answer_index=0,
         expected_latency_seconds=60,
         primary_tag=CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING,
         conditional_tags={
-            "answer_1": CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
-            "answer_2": CognitiveTag.RULE_MAINTENANCE_DIFFICULTY,
+            "wrong_slow": CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
         },
         difficulty="hard",
     ),
@@ -442,27 +438,21 @@ LOGIC_ITEMS_1_2 = [
         item_number="1-2-6",
         item_type="two_step",
         question_text=(
-            "Part 1: You have five cards, each with a number: "
+            "You have five cards, each with a number: "
             "Card A = 9, Card B = 4, Card C = 11, Card D = 6, Card E = 14. "
-            "Which cards have a number bigger than 8? "
-            "A) Card A, Card C, Card E  B) Card B, Card D  "
-            "C) Card A, Card C  D) All of them\n"
-            "Part 2: Now look only at Card A, Card C, and Card E. "
-            "Which one has the biggest number? "
-            "A) Card E  B) Card A  C) Card C  D) None of them"
+            "Which cards have a number bigger than 8?"
         ),
         options=[
-            LogicOption(index=0, text="Correct two-step"),
-            LogicOption(index=1, text="Correct first step only"),
-            LogicOption(index=2, text="Incorrect"),
-            LogicOption(index=3, text="Didn't attempt"),
+            LogicOption(index=0, text="Card A, Card C, Card E"),
+            LogicOption(index=1, text="Card B, Card D"),
+            LogicOption(index=2, text="Card A, Card C"),
+            LogicOption(index=3, text="All of them"),
         ],
         correct_answer_index=0,
         expected_latency_seconds=50,
         primary_tag=CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING,
         conditional_tags={
-            "answer_1": CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
-            "answer_2": CognitiveTag.RULE_MAINTENANCE_DIFFICULTY,
+            "wrong_slow": CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
         },
         difficulty="medium",
     ),
@@ -531,24 +521,20 @@ LOGIC_ITEMS_1_2 = [
         item_number="1-2-10",
         item_type="two_step",
         question_text=(
-            "Part 1: Look at these numbers: 4, 9, 10, 6, 14. "
-            "Which of these are bigger than 8? "
-            "A) 9, 10, 14  B) 4, 6  C) 9, 10  D) All of them\n"
-            "Part 2: Now look only at 9, 10, and 14. Which one is an odd number? "
-            "A) 9  B) 10  C) 14  D) None of them"
+            "Look at these numbers: 4, 9, 10, 6, 14. "
+            "Which of these are bigger than 8?"
         ),
         options=[
-            LogicOption(index=0, text="Correct two-step"),
-            LogicOption(index=1, text="Correct first step only"),
-            LogicOption(index=2, text="Incorrect"),
-            LogicOption(index=3, text="Didn't attempt"),
+            LogicOption(index=0, text="9, 10, 14"),
+            LogicOption(index=1, text="4, 6"),
+            LogicOption(index=2, text="9, 10"),
+            LogicOption(index=3, text="All of them"),
         ],
         correct_answer_index=0,
         expected_latency_seconds=70,
         primary_tag=CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING,
         conditional_tags={
-            "answer_1": CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
-            "answer_2": CognitiveTag.RULE_MAINTENANCE_DIFFICULTY,
+            "wrong_slow": CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
         },
         difficulty="hard",
     ),
@@ -720,24 +706,20 @@ LOGIC_ITEMS_2_3 = [
         item_number="2-3-10",
         item_type="two_step",
         question_text=(
-            "Part 1: Look at these numbers: 12, 25, 8, 30, 17. "
-            "Which of these are bigger than 15? "
-            "A) 25, 30, 17  B) 12, 8  C) 25, 30  D) All of them\n"
-            "Part 2: Now look only at 25, 30, and 17. Which one ends in a 0? "
-            "A) 30  B) 25  C) 17  D) None of them"
+            "Look at these numbers: 12, 25, 8, 30, 17. "
+            "Which of these are bigger than 15?"
         ),
         options=[
-            LogicOption(index=0, text="Correct two-step"),
-            LogicOption(index=1, text="Correct first step only"),
-            LogicOption(index=2, text="Incorrect"),
-            LogicOption(index=3, text="Didn't attempt"),
+            LogicOption(index=0, text="25, 30, 17"),
+            LogicOption(index=1, text="12, 8"),
+            LogicOption(index=2, text="25, 30"),
+            LogicOption(index=3, text="All of them"),
         ],
         correct_answer_index=0,
         expected_latency_seconds=90,
         primary_tag=CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING,
         conditional_tags={
-            "answer_1": CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
-            "answer_2": CognitiveTag.RULE_MAINTENANCE_DIFFICULTY,
+            "wrong_slow": CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
         },
         difficulty="hard",
     ),
@@ -909,24 +891,20 @@ LOGIC_ITEMS_3_4 = [
         item_number="3-4-10",
         item_type="two_step",
         question_text=(
-            "Part 1: Look at these numbers: 9, 24, 31, 40, 15. "
-            "Which of these are bigger than 20? "
-            "A) 24, 31, 40  B) 9, 15  C) 24, 31  D) All of them\n"
-            "Part 2: Now look only at 24, 31, and 40. Which one is a multiple of 3? "
-            "A) 24  B) 31  C) 40  D) None of them"
+            "Look at these numbers: 9, 24, 31, 40, 15. "
+            "Which of these are bigger than 20?"
         ),
         options=[
-            LogicOption(index=0, text="Correct two-step"),
-            LogicOption(index=1, text="Correct first step only"),
-            LogicOption(index=2, text="Incorrect"),
-            LogicOption(index=3, text="Didn't attempt"),
+            LogicOption(index=0, text="24, 31, 40"),
+            LogicOption(index=1, text="9, 15"),
+            LogicOption(index=2, text="24, 31"),
+            LogicOption(index=3, text="All of them"),
         ],
         correct_answer_index=0,
         expected_latency_seconds=90,
         primary_tag=CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING,
         conditional_tags={
-            "answer_1": CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
-            "answer_2": CognitiveTag.RULE_MAINTENANCE_DIFFICULTY,
+            "wrong_slow": CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
         },
         difficulty="hard",
     ),
@@ -1042,10 +1020,6 @@ def aggregate_test_results(
                               "multi_step_quantity", "two_step"):
             if not is_correct or actual_time > expected_time * latency_mult:
                 load_fails += 1
-
-        # Rule maintenance fails: two_step items where child selected "Incorrect"
-        if item.item_type == "two_step" and response.selected_answer_index == 2:
-            rule_maintenance_fails += 1
 
         # Sort task: determine shift result
         if item.item_type == "sort_task":
