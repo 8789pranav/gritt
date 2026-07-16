@@ -39,8 +39,9 @@ def get_grade_level(grade: str) -> GradeLevel:
 
 
 def format_logic_items(items: List[LogicItem]) -> List[dict]:
-    return [
-        {
+    result = []
+    for item in items:
+        fmt = {
             "item_id": item.item_id,
             "item_number": item.item_number,
             "item_type": item.item_type,
@@ -51,8 +52,21 @@ def format_logic_items(items: List[LogicItem]) -> List[dict]:
                 for opt in item.options
             ],
         }
-        for item in items
-    ]
+        if item.sort_config:
+            fmt["sort_config"] = {
+                "cards": item.sort_config.cards,
+                "rounds": [
+                    {
+                        "round_number": r.round_number,
+                        "sort_rule": r.sort_rule,
+                        "num_bins": r.num_bins,
+                        "rule_shown": r.rule_shown,
+                    }
+                    for r in item.sort_config.rounds
+                ],
+            }
+        result.append(fmt)
+    return result
 
 
 def get_logic_test_payload(grade: str) -> dict:
@@ -124,6 +138,8 @@ def aggregate_logic_test_results(student_id: str, grade: str, responses: List[di
                 attempts=resp.get("attempts", 1),
                 self_corrected=resp.get("self_corrected", False),
                 explanation_provided=resp.get("explanation_provided"),
+                post_shift_accuracy=resp.get("post_shift_accuracy"),
+                rule_inferred=resp.get("rule_inferred"),
             )
         )
 
@@ -138,10 +154,18 @@ def aggregate_logic_test_results(student_id: str, grade: str, responses: List[di
         "percentage": result.score_percentage,
         "level": _get_performance_level(result.score_percentage),
         "cognitive_tags": [str(tag.value) for tag in result.final_tags],
+        "tag_outputs": [
+            {"tag": str(t.tag.value), "confidence": t.confidence, "evidence": t.evidence}
+            for t in result.tag_outputs
+        ],
         "tag_breakdown": result.tag_counts,
         "reasoning_under_load_detected": result.reasoning_under_load_detected,
         "trial_and_error_detected": result.trial_and_error_detected,
         "strategy_shift_difficulty_detected": result.strategy_shift_difficulty_detected,
+        "impulsive_response_detected": result.impulsive_response_detected,
+        "self_correction_detected": result.self_correction_detected,
+        "cognitive_flexibility_intact": result.cognitive_flexibility_intact,
+        "flexible_strategy_use_detected": result.flexible_strategy_use_detected,
         "message": f"Test completed: {result.total_correct}/{result.total_items} correct ({result.score_percentage:.1f}%)",
     }
 
@@ -162,17 +186,19 @@ def build_complete_logic_result(student_id: str, grade: str, score_data: dict) -
     # Build strengths from cognitive tags
     strength_map = {
         "pattern_detection_strong": "Strong pattern recognition and detection",
+        "pattern_detection_emerging": "Pattern recognition developing well",
         "relational_reasoning_present": "Good relational reasoning abilities",
         "systematic_problem_solving": "Systematic and methodical problem-solving",
         "cognitive_flexibility_intact": "Flexible thinking and strategy adaptation",
         "flexible_strategy_use": "Creative and flexible approach to problems",
+        "self_correction_present": "Catches and fixes own mistakes",
     }
 
     weakness_map = {
-        "reasoning_under_load_emerging": "May struggle with reasoning under time pressure",
-        "trial_and_error_strategy": "Tends to use trial-and-error rather than systematic approach",
-        "strategy_shift_difficulty": "Difficulty shifting strategies when first approach fails",
-        "pattern_detection_emerging": "Pattern recognition still developing",
+        "reasoning_under_load_emerging": "May struggle when holding multiple features at once",
+        "trial_and_error_strategy": "Tends to use trial-and-error rather than planning ahead",
+        "strategy_shift_difficulty": "Difficulty shifting strategies when the rule changes",
+        "impulsive_response": "Responds quickly without sufficient reflection",
     }
 
     strengths = [strength_map.get(tag, tag.replace("_", " ").title()) for tag in cognitive_tags if tag in strength_map]
@@ -221,6 +247,7 @@ def build_complete_logic_result(student_id: str, grade: str, score_data: dict) -
             "note": "This assessment is instructional and not a clinical diagnosis.",
         },
         "dear_parent_tags": score_data.get("dear_parent_tags", []),
+        "per_item_tags": score_data.get("per_item_tags", []),
         "behavioral_signals": {
             "reasoning_under_load": score_data.get("reasoning_under_load_detected", False),
             "trial_and_error": score_data.get("trial_and_error_detected", False),

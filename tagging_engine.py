@@ -24,9 +24,47 @@ with open(_CONFIG_PATH, "r") as f:
     CONFIG = json.load(f)
 
 THRESHOLDS = CONFIG["thresholds"]
+SYNTHESIS_RULES = CONFIG["synthesis_rules"]
 
 # Item type → group mapping for Logic Quest
 _LOGIC_TYPE_GROUPS = CONFIG["tests"]["logic_quest"]["item_type_groups"]
+
+# Global tag_id -> {confidence, polarity, description, weight, test} lookup,
+# built once from CONFIG so every tag's official confidence/weight is available.
+_CONFIDENCE_WEIGHTS = {
+    "high": SYNTHESIS_RULES["high_confidence_weight"],
+    "medium": (SYNTHESIS_RULES["high_confidence_weight"] + SYNTHESIS_RULES["low_confidence_weight"]) / 2,
+    "low": SYNTHESIS_RULES["low_confidence_weight"],
+}
+
+TAG_METADATA: Dict[str, Dict[str, Any]] = {}
+for _test_key, _test_cfg in CONFIG["tests"].items():
+    for _tag_def in _test_cfg.get("tags", []):
+        TAG_METADATA[_tag_def["id"]] = {
+            "test": _test_key,
+            "confidence": _tag_def["confidence"],
+            "polarity": _tag_def["polarity"],
+            "weight": _CONFIDENCE_WEIGHTS.get(_tag_def["confidence"], 0.3),
+            "description": _tag_def["description"],
+        }
+
+
+def get_tag_info(tag_id: str) -> Dict[str, Any]:
+    """Look up official confidence/polarity/weight/description for a tag id.
+    Returns a default (unknown) entry for the sentinel '0' (unanswered)."""
+    return TAG_METADATA.get(tag_id, {
+        "test": None, "confidence": None, "polarity": None,
+        "weight": 0.0, "description": "Unanswered / no tag triggered." if tag_id == "0" else "Unknown tag.",
+    })
+
+
+def attach_tag_scores(tags: List[str]) -> List[Dict[str, Any]]:
+    """Convert a flat list of tag ids into a list of {tag, confidence, weight, polarity} dicts."""
+    return [
+        {"tag": t, "confidence": get_tag_info(t)["confidence"],
+         "weight": get_tag_info(t)["weight"], "polarity": get_tag_info(t)["polarity"]}
+        for t in tags
+    ]
 
 def _classify_logic_item(item_type: str) -> str:
     """Map an item_type string to its group (pattern/relational/multistep/self_report)."""
@@ -42,25 +80,32 @@ def _classify_logic_item(item_type: str) -> str:
 
 def derive_logic_signals(responses: List[Dict], items_lookup: Dict[str, Dict]) -> Dict[str, Any]:
     """
-    Derive signals for Logic Quest from raw responses.
+    Derive signals for Logic Quest from raw responses (spec §6 Step 1).
 
     Args:
         responses: List of response dicts with keys:
             item_id, selected_answer_index, response_time_seconds, attempts, self_corrected
+            Optionally: post_shift_accuracy, rule_inferred (sort tasks)
         items_lookup: Dict mapping item_id -> item info dict with keys:
-            correct_answer_index, expected_latency_seconds, item_type
+            correct_answer_index, expected_latency_seconds, item_type, difficulty, primary_tag
     """
-    pattern_correct = 0
-    relational_correct = 0
-    multistep_correct = 0
-    items_self_corrected = 0
-    items_over_time_incorrect = 0
-    items_multiple_attempts = 0
-    fast_inaccurate_items = 0
-    selfreport_negative = 0
+    pattern_score = 0
+    relational_score = 0
+    systematic_score = 0
+    load_fails = 0
+    rule_maintenance_fails = 0
+    shift_result = "no_sort"
+    rule_inferred = False
+    multiple_attempts_count = 0
+    fast_and_wrong_count = 0
+    self_corrected_to_right_count = 0
+    pattern_hard_count = 0
 
     latency_mult = THRESHOLDS["latency_multiplier_for_over_time"]
     fast_ratio = THRESHOLDS["fast_response_ratio_for_impulsive"]
+
+    load_item_types = {"two_attribute_selection", "negation_two_attribute",
+                       "multi_step_quantity", "two_step"}
 
     for resp in responses:
         item_id = resp["item_id"]
@@ -69,50 +114,69 @@ def derive_logic_signals(responses: List[Dict], items_lookup: Dict[str, Dict]) -
             continue
 
         is_correct = resp["selected_answer_index"] == item["correct_answer_index"]
-        group = _classify_logic_item(item["item_type"])
+        item_type = item.get("item_type", "")
         expected_time = item.get("expected_latency_seconds", 30)
         response_time = resp.get("response_time_seconds", 0)
         attempts = resp.get("attempts", 1)
         self_corrected = resp.get("self_corrected", False)
+        difficulty = item.get("difficulty", "medium")
+        primary_tag = item.get("primary_tag", "")
 
-        # Count correct by group
+        # Count correct by skill group
         if is_correct:
-            if group == "pattern":
-                pattern_correct += 1
-            elif group == "relational":
-                relational_correct += 1
-            elif group == "multistep":
-                multistep_correct += 1
+            if primary_tag == "pattern_detection_emerging":
+                pattern_score += 1
+                if difficulty == "hard":
+                    pattern_hard_count += 1
+            elif primary_tag == "relational_reasoning_present":
+                relational_score += 1
+            elif primary_tag == "systematic_problem_solving":
+                systematic_score += 1
 
-        # Self-correction
-        if self_corrected:
-            items_self_corrected += 1
+        # Load fails: 2+ attribute / multi-step items wrong or slow
+        if item_type in load_item_types:
+            if not is_correct or response_time > expected_time * latency_mult:
+                load_fails += 1
 
-        # Over-time AND incorrect
-        if response_time > expected_time * latency_mult and not is_correct:
-            items_over_time_incorrect += 1
+        # Rule maintenance fails: two_step items where child selected "Incorrect"
+        # (index 2 = couldn't reliably apply even the first, single filter)
+        if item_type == "two_step" and resp.get("selected_answer_index") == 2:
+            rule_maintenance_fails += 1
+
+        # Sort task: determine shift result
+        if item_type == "sort_task":
+            post_shift = resp.get("post_shift_accuracy")
+            if post_shift == "correct":
+                shift_result = "shifted_ok"
+            elif post_shift == "incorrect":
+                shift_result = "stuck"
+            if resp.get("rule_inferred") is True:
+                rule_inferred = True
 
         # Multiple attempts
-        if attempts > 1:
-            items_multiple_attempts += 1
+        if attempts >= 2:
+            multiple_attempts_count += 1
 
-        # Fast + inaccurate (responded in less than half expected time, got it wrong)
+        # Fast and wrong
         if response_time < expected_time * fast_ratio and not is_correct:
-            fast_inaccurate_items += 1
+            fast_and_wrong_count += 1
 
-        # Self-report negative (category_shift/strategy items answered negatively)
-        if group == "self_report" and not is_correct:
-            selfreport_negative += 1
+        # Self-corrected to right
+        if self_corrected and is_correct:
+            self_corrected_to_right_count += 1
 
     return {
-        "pattern_items_correct": pattern_correct,
-        "relational_items_correct": relational_correct,
-        "multistep_items_correct": multistep_correct,
-        "items_self_corrected": items_self_corrected,
-        "items_over_time_incorrect": items_over_time_incorrect,
-        "items_multiple_attempts": items_multiple_attempts,
-        "fast_inaccurate_items": fast_inaccurate_items,
-        "selfreport_negative": selfreport_negative,
+        "pattern_score": pattern_score,
+        "pattern_hard_count": pattern_hard_count,
+        "relational_score": relational_score,
+        "systematic_score": systematic_score,
+        "load_fails": load_fails,
+        "rule_maintenance_fails": rule_maintenance_fails,
+        "shift_result": shift_result,
+        "rule_inferred": rule_inferred,
+        "multiple_attempts_count": multiple_attempts_count,
+        "fast_and_wrong_count": fast_and_wrong_count,
+        "self_corrected_to_right_count": self_corrected_to_right_count,
     }
 
 
@@ -451,6 +515,13 @@ def _evaluate_trigger(trigger: str, signals: Dict[str, Any]) -> bool:
                 try:
                     rhs_val = float(rhs)
                 except ValueError:
+                    # String literal comparison (e.g. shift_result == shifted_ok)
+                    if op in ("==", "!="):
+                        lhs_str = str(lhs_val)
+                        if op == "==":
+                            return lhs_str == rhs
+                        else:
+                            return lhs_str != rhs
                     return False
 
             # Normalize booleans for comparison
@@ -583,5 +654,255 @@ def tag_all_tests(
         output["story_explorer"] = tag_comprehension_test(
             comprehension_results, comprehension_question_types
         )
+
+    return output
+
+
+# =============================================================================
+# PER-QUESTION TAGGING — one tag per question/word/sentence, "0" if unanswered
+# =============================================================================
+
+def tag_logic_per_item(responses: List[Dict], items_lookup: Dict[str, Dict]) -> List[Dict]:
+    """
+    Build a per-item tag entry for every item in the grade's item bank.
+    Items with no matching response are marked unanswered with tag "0".
+
+    Args:
+        responses: List of raw response dicts (item_id, selected_answer_index, ...)
+        items_lookup: Dict item_id -> item info (correct_answer_index, primary_tag,
+                       conditional_tags, item_number)
+    """
+    responses_by_item = {r["item_id"]: r for r in responses}
+    results = []
+
+    for item_id, item in items_lookup.items():
+        resp = responses_by_item.get(item_id)
+        if resp is None:
+            results.append({
+                "item_id": item_id,
+                "item_number": item.get("item_number", item_id),
+                "answered": False,
+                "selected_answer_index": None,
+                "is_correct": False,
+                "tags": ["0"],
+            })
+            continue
+
+        selected = resp.get("selected_answer_index")
+        correct_index = item.get("correct_answer_index")
+        is_correct = selected == correct_index
+
+        if is_correct:
+            tag = item.get("primary_tag", "0")
+        else:
+            conditional_tags = item.get("conditional_tags", {})
+            answer_key = f"answer_{selected}"
+            if answer_key in conditional_tags:
+                tag = conditional_tags[answer_key]
+            elif "wrong_slow" in conditional_tags:
+                tag = conditional_tags["wrong_slow"]
+            else:
+                tag = "0"
+
+        results.append({
+            "item_id": item_id,
+            "item_number": item.get("item_number", item_id),
+            "answered": True,
+            "selected_answer_index": selected,
+            "is_correct": is_correct,
+            "tags": [tag],
+        })
+
+    return results
+
+
+def tag_spelling_per_word(results: List[Dict]) -> List[Dict]:
+    """
+    Build a per-word tag entry using ONLY the official Word Wizard tag ids
+    (see dear_parent_tags_config.json / word_wizard.tags). Each official trigger
+    is evaluated against this single word's own signals (a per-item stand-in for
+    the aggregate signal), so a word may earn zero, one, or several tags.
+    Unattempted words (empty user_input) get tags == ["0"].
+    """
+    begin_keys = {"beginning", "beginning_consonant"}
+    final_keys = {"final", "final_consonant"}
+    vowel_keys = {"short_vowels", "short_vowel", "long_vowel", "long_vowel_patterns",
+                  "other_vowel", "other_vowel_patterns"}
+    digraph_keys = {"consonant_digraphs", "digraph"}
+    blend_keys = {"consonant_blends", "blend"}
+
+    output = []
+    for r in results:
+        word = r.get("word", "")
+        user_input = (r.get("user_input") or "").strip()
+        word_type = r.get("type", "regular")
+        points = r.get("points", 0)
+        max_points = r.get("max_points", 0)
+        mistakes = r.get("mistakes", {})
+        hints_used = r.get("hints_used", 0)
+        time_taken = r.get("time", 999)
+
+        if not user_input:
+            output.append({"word": word, "answered": False, "is_correct": False, "tags": ["0"]})
+            continue
+
+        is_correct = points == max_points and max_points > 0
+        vowel_mistake = any(k in mistakes for k in vowel_keys)
+        digraph_mistake = any(k in mistakes for k in digraph_keys)
+        blend_mistake = any(k in mistakes for k in blend_keys)
+        begin_mistake = any(k in mistakes for k in begin_keys)
+        final_mistake = any(k in mistakes for k in final_keys)
+
+        tags = []
+
+        if word_type == "regular":
+            if not begin_mistake and not final_mistake and not vowel_mistake:
+                tags.append("phonetic_strategy_strong")
+            if not vowel_mistake:
+                tags.append("vowel_accuracy_strong")
+            else:
+                tags.append("vowel_difficulty_emerging")
+            if not digraph_mistake and not blend_mistake:
+                tags.append("digraph_blend_competent")
+            elif digraph_mistake:
+                tags.append("digraph_difficulty_emerging")
+
+        if word_type in ("sight", "nonsense"):
+            if is_correct:
+                tags.append("sight_word_recognition_strong")
+            else:
+                tags.append("sight_word_emerging")
+
+        if hints_used > 0 and is_correct:
+            tags.append("audio_support_benefit")
+
+        if max_points >= 3 and user_input:
+            tags.append("confident_attempt")
+
+        if time_taken < 3 and not is_correct:
+            tags.append("rushed_spelling")
+
+        if not tags:
+            tags = ["0"]
+
+        output.append({
+            "word": word,
+            "answered": True,
+            "is_correct": is_correct,
+            "tags": tags,
+        })
+
+    return output
+
+
+def _norm_score(score_dict: Dict, key: str = "score") -> float:
+    val = score_dict.get(key, 0) if isinstance(score_dict, dict) else 0
+    return val / 100.0 if val > 1 else val
+
+
+def tag_speaking_per_sentence(results: List[Dict]) -> List[Dict]:
+    """
+    Build a per-sentence tag entry using ONLY the official Voice Challenge tag ids
+    (see dear_parent_tags_config.json / voice_challenge.tags). Each official trigger
+    is evaluated against this single sentence's own fluency/pronunciation/prosody
+    scores and difficulty band, so a sentence may earn zero, one, or several tags.
+    "Not Attempted" sentences get tags == ["0"].
+    """
+    output = []
+    for r in results:
+        sid = r.get("sentence_id", "")
+        status = r.get("status", "")
+
+        if status != "Answered":
+            output.append({"sentence_id": sid, "answered": False, "tags": ["0"]})
+            continue
+
+        fluency_score = _norm_score(r.get("fluency", {}))
+        pronunciation_score = _norm_score(r.get("pronunciation", {}))
+        overall_score = _norm_score(r.get("overall", {}))
+        grammar_score = _norm_score(r.get("grammar", {}))
+
+        # Prosody proxy: grammar score if available, else derived from overall
+        if grammar_score > 0:
+            prosody_score = grammar_score
+        else:
+            prosody_score = max(0.0, min(1.0, 3 * overall_score - pronunciation_score - fluency_score))
+
+        difficulty = r.get("difficulty", "medium")
+
+        tags = []
+        if fluency_score >= 0.8:
+            tags.append("expressive_fluency_strong")
+        elif 0.6 <= fluency_score < 0.8:
+            tags.append("expressive_fluency_emerging")
+
+        if pronunciation_score >= 0.85:
+            tags.append("pronunciation_accurate")
+        elif pronunciation_score < 0.7:
+            tags.append("pronunciation_developing")
+
+        if prosody_score >= 0.8:
+            tags.append("prosody_strong")
+        elif prosody_score < 0.6:
+            tags.append("prosody_emerging")
+
+        if difficulty == "hard" and overall_score >= 0.8:
+            tags.append("complex_syntax_confident")
+
+        if not tags:
+            tags = ["0"]
+
+        output.append({
+            "sentence_id": sid,
+            "answered": True,
+            "fluency_score": round(fluency_score, 3),
+            "pronunciation_score": round(pronunciation_score, 3),
+            "prosody_score": round(prosody_score, 3),
+            "tags": tags,
+        })
+
+    return output
+
+
+def tag_comprehension_per_question(results: List[Dict], question_types: Dict[str, str]) -> List[Dict]:
+    """
+    Build a per-question tag entry using ONLY the official Story Explorer tag ids
+    (see dear_parent_tags_config.json / story_explorer.tags). Each official trigger
+    is evaluated against this single question's own correctness (1.0 if correct,
+    0.0 if incorrect) as a per-item stand-in for the aggregate accuracy signal.
+    Note: literal_comprehension has no official "weak" counterpart, and
+    listening_comprehension_strong is an overall-test-level signal, so neither
+    applies at single-question granularity. Unanswered questions get tags == ["0"].
+    """
+    output = []
+    for story_result in results:
+        for q in story_result.get("questions", []):
+            qid = q.get("question_id", "")
+            selected = q.get("selected_index", -1)
+            q_type = question_types.get(qid, "literal")
+
+            if selected is None or selected < 0:
+                output.append({"question_id": qid, "answered": False, "is_correct": False, "tags": ["0"]})
+                continue
+
+            is_correct = q.get("is_correct", False)
+            tags = []
+
+            if q_type == "literal" and is_correct:
+                tags.append("literal_comprehension_strong")
+            elif q_type == "inferential":
+                tags.append("inferential_comprehension_strong" if is_correct else "inferential_comprehension_emerging")
+            elif q_type == "vocabulary":
+                tags.append("vocabulary_in_context_strong" if is_correct else "vocabulary_in_context_emerging")
+
+            if not tags:
+                tags = ["0"]
+
+            output.append({
+                "question_id": qid,
+                "answered": True,
+                "is_correct": is_correct,
+                "tags": tags,
+            })
 
     return output

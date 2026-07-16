@@ -6,84 +6,107 @@
     "logic_quest": {
       "display_name": "Logic Quest",
       "item_type_groups": {
-        "pattern": ["pattern", "sequence", "skip_pattern", "alternating_pattern", "pattern_creation"],
-        "relational": ["analogy", "analogy_complex", "odd_one_out", "odd_one_out_explain", "categorization", "comparison", "matching"],
-        "multistep": ["matrix", "matrix_2rule", "matrix_multi", "rule_application", "rule_logic", "quantity", "multi_step_quantity", "two_step", "order_of_operations", "syllogism", "conditional_logic", "dual_classification"],
-        "self_report": ["category_shift", "complex_category_shift", "meta_cognitive", "strategy_shift"]
+        "pattern": ["pattern", "pattern_rule_id"],
+        "relational": ["analogy", "odd_one_out", "categorization", "comparison"],
+        "multistep": ["rule_application", "syllogism", "conditional_logic", "transitive_reasoning", "multi_step_quantity", "two_step", "sequencing", "order_of_operations"],
+        "load": ["two_attribute_selection", "negation_two_attribute", "multi_step_quantity", "two_step"]
       },
       "derived_signals": [
-        "pattern_items_correct",
-        "relational_items_correct",
-        "multistep_items_correct",
-        "items_self_corrected",
-        "items_over_time_incorrect",
-        "items_multiple_attempts",
-        "fast_inaccurate_items",
-        "selfreport_negative"
+        "pattern_score",
+        "relational_score",
+        "systematic_score",
+        "load_fails",
+        "rule_maintenance_fails",
+        "shift_result",
+        "rule_inferred",
+        "multiple_attempts_count",
+        "fast_and_wrong_count",
+        "self_corrected_to_right_count"
       ],
       "tags": [
         {
           "id": "pattern_detection_strong",
-          "trigger": "pattern_items_correct >= 3",
+          "trigger": "pattern_score >= 3 AND pattern_hard_count >= 1",
           "confidence": "high",
           "polarity": "strength",
-          "description": "Child demonstrates strong pattern recognition across multiple item types."
+          "description": "Child demonstrates strong pattern recognition across multiple items including at least one hard item."
         },
         {
           "id": "pattern_detection_emerging",
-          "trigger": "pattern_items_correct == 2",
+          "trigger": "pattern_score >= 2",
           "confidence": "high",
           "polarity": "strength",
-          "description": "Child shows early pattern recognition but not yet consistent."
+          "description": "Child shows early pattern recognition but not yet consistent across hard items."
         },
         {
           "id": "relational_reasoning_present",
-          "trigger": "relational_items_correct >= 3",
+          "trigger": "relational_score >= 3",
           "confidence": "high",
           "polarity": "strength",
           "description": "Child draws relationships between concepts effectively."
         },
         {
           "id": "systematic_problem_solving",
-          "trigger": "multistep_items_correct >= 3",
+          "trigger": "systematic_score >= 3",
           "confidence": "high",
           "polarity": "strength",
           "description": "Child applies step-by-step logical approaches to complex problems."
         },
         {
-          "id": "self_correction_present",
-          "trigger": "items_self_corrected >= 1",
-          "confidence": "high",
+          "id": "cognitive_flexibility_intact",
+          "trigger": "shift_result == shifted_ok",
+          "confidence": "medium",
           "polarity": "strength",
-          "description": "Child monitors their own thinking and revises when needed."
+          "description": "Child shifts strategy when the rule changes (observed via sort task)."
+        },
+        {
+          "id": "flexible_strategy_use",
+          "trigger": "rule_inferred == true",
+          "confidence": "medium",
+          "polarity": "strength",
+          "description": "Child infers and uses a new rule independently."
         },
         {
           "id": "reasoning_under_load_emerging",
-          "trigger": "items_over_time_incorrect >= 2",
+          "trigger": "load_fails >= 2",
           "confidence": "high",
           "polarity": "growth_edge",
-          "description": "Child struggles when problems combine time pressure with complexity."
+          "description": "Child struggles holding multiple features or steps at once."
         },
         {
-          "id": "trial_and_error_approach",
-          "trigger": "items_multiple_attempts >= 2",
+          "id": "strategy_shift_difficulty",
+          "trigger": "shift_result == stuck",
+          "confidence": "medium",
+          "polarity": "growth_edge",
+          "description": "Child stays stuck in the old rule after a change (observed via sort task)."
+        },
+        {
+          "id": "rule_maintenance_difficulty",
+          "trigger": "rule_maintenance_fails >= 2",
+          "confidence": "low",
+          "polarity": "growth_edge",
+          "description": "Child struggles to reliably apply even a single filter rule. Flagged as low confidence on single items."
+        },
+        {
+          "id": "trial_and_error_strategy",
+          "trigger": "multiple_attempts_count >= 2",
           "confidence": "high",
           "polarity": "neutral",
-          "description": "Child uses multiple attempts rather than planning ahead."
+          "description": "Child explores by trying rather than planning ahead."
         },
         {
           "id": "impulsive_response",
-          "trigger": "fast_inaccurate_items >= 2",
+          "trigger": "fast_and_wrong_count >= 2",
           "confidence": "high",
           "polarity": "growth_edge",
           "description": "Child responds quickly without sufficient reflection, leading to errors."
         },
         {
-          "id": "strategy_shift_difficulty",
-          "trigger": "selfreport_negative >= 1",
-          "confidence": "low",
-          "polarity": "growth_edge",
-          "description": "Child reports difficulty switching strategies when initial approach fails."
+          "id": "self_correction_present",
+          "trigger": "self_corrected_to_right_count >= 1",
+          "confidence": "high",
+          "polarity": "strength",
+          "description": "Child catches and fixes their own mistakes."
         }
       ]
     },

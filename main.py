@@ -18,6 +18,7 @@ import os
 import time
 import base64
 import json
+import asyncio
 from typing import Optional
 from datetime import datetime
 import boto3
@@ -40,8 +41,12 @@ from tagging_engine import (
     tag_spelling_test,
     tag_speaking_test,
     tag_comprehension_test,
+    tag_logic_per_item,
+    tag_spelling_per_word,
+    tag_speaking_per_sentence,
+    tag_comprehension_per_question,
 )
-from logic_assessment import ALL_LOGIC_ITEMS
+from logic_assessment import ALL_LOGIC_ITEMS, get_items_by_grade, GradeLevel
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -888,8 +893,8 @@ def score_response(word: str, user_input: str, grade: str, word_type: str) -> Di
     mistakes = {}
     feature_list = {
         "Kindergarten": ["beginning", "final", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"],
-        "First": ["beginning", "final", "short_vowel", "digraph", "blend", "long_vowel", "other_vowel", "inflected"],
-        "Second": ["beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"],
+        "First": ["beginning", "final", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"],
+        "Second": ["beginning", "final", "short_vowel", "digraph", "blend", "long_vowel", "other_vowel", "inflected"],
         "Third": ["beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"]
     }.get(grade, [])
 
@@ -947,8 +952,8 @@ def evaluate_test(results: List[Dict], grade: str) -> Dict:
 def analyze_errors(results: List[Dict], grade: str) -> Dict:
     feature_mapping = {
         "Kindergarten": ["beginning", "final", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"],
-        "First": ["beginning", "final", "short_vowel", "digraph", "blend", "long_vowel", "other_vowel", "inflected"],
-        "Second": ["beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"],
+        "First": ["beginning", "final", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"],
+        "Second": ["beginning", "final", "short_vowel", "digraph", "blend", "long_vowel", "other_vowel", "inflected"],
         "Third": ["beginning_consonant", "final_consonant", "short_vowels", "consonant_digraphs", "consonant_blends", "long_vowel_patterns", "other_vowel_patterns", "inflected_endings"]
     }
     
@@ -1254,6 +1259,236 @@ async def logic_get_test(request: GetLogicTestRequest):
     return {"success": True, **response_payload}
 
 
+async def generate_tts_audio(text: str, voice: str = "nova", speed: float = 0.85) -> str:
+    """
+    Shared TTS function for ALL tests (comprehension, speaking, spelling, logic).
+    Uses OpenAI TTS nova voice (same as comprehension) for consistency.
+    Falls back to AWS Polly Joanna neural if OpenAI is unavailable.
+
+    Args:
+        text: Text to synthesize
+        voice: OpenAI voice name (default 'nova' - warm, child-friendly)
+        speed: Playback speed (0.85 = slightly slower for children)
+    Returns:
+        Base64-encoded MP3 audio string, or None on failure
+    """
+    if not text or not text.strip():
+        return None
+
+    # Try OpenAI TTS first (nova - same voice as comprehension)
+    if openai_client:
+        try:
+            response = openai_client.audio.speech.create(
+                model="tts-1-hd",
+                voice=voice,
+                input=text.strip(),
+                speed=speed,
+            )
+            return base64.b64encode(response.content).decode('utf-8')
+        except Exception as e:
+            print(f"OpenAI TTS error: {str(e)}")
+
+    # Fallback to AWS Polly (Joanna neural)
+    try:
+        ssml = f'<speak><prosody rate="{int(speed * 100)}%">{text.strip()[:2900]}</prosody></speak>'
+        audio_response = polly_client.synthesize_speech(
+            Text=ssml,
+            TextType='ssml',
+            OutputFormat='mp3',
+            VoiceId='Joanna',
+            Engine='neural',
+            LanguageCode='en-US',
+        )
+        return base64.b64encode(audio_response['AudioStream'].read()).decode('utf-8')
+    except Exception as e:
+        print(f"Polly TTS error: {str(e)}")
+        return None
+
+
+@app.post("/logic/get_test_with_audio/")
+async def logic_get_test_with_audio(request: GetLogicTestRequest):
+    """
+    Get logic test items with TTS audio narration for each question and options.
+    Uses the same voice (nova) as reading comprehension for consistency.
+    Audio is cached in Firebase under logic_audio/{grade}/{item_id}.
+    """
+    verify_child_and_token(request.idToken, request.child_id)
+
+    grade = request.grade
+    grade_map = {
+        "K-1": GradeLevel.KINDERGARTEN_1,
+        "1-2": GradeLevel.GRADE_1_2,
+        "2-3": GradeLevel.GRADE_2_3,
+        "3-4": GradeLevel.GRADE_3_4,
+        "Kindergarten": GradeLevel.KINDERGARTEN_1,
+        "First": GradeLevel.GRADE_1_2,
+        "Second": GradeLevel.GRADE_2_3,
+        "Third": GradeLevel.GRADE_3_4,
+    }
+    grade_level = grade_map.get(grade)
+    if not grade_level:
+        raise HTTPException(status_code=400, detail=f"Invalid grade: {grade}")
+
+    items = get_items_by_grade(grade_level)
+
+    # Batch read all cached audio from Firebase in 1 call
+    all_cached = db_ref.child(f"logic_audio/{grade}").get() or {}
+
+    # Identify which items need audio generation
+    items_to_generate = []
+    for item in items:
+        if item.item_id not in all_cached or not all_cached[item.item_id].get("question_audio"):
+            items_to_generate.append(item)
+
+    # Generate audio in parallel for all uncached items
+    if items_to_generate:
+        async def gen_item_audio(item):
+            question_audio = await generate_tts_audio(item.question_text)
+            opt_audios = await asyncio.gather(
+                *[generate_tts_audio(opt.text) for opt in item.options]
+            )
+            return item.item_id, question_audio, list(opt_audios)
+
+        generated = await asyncio.gather(
+            *[gen_item_audio(item) for item in items_to_generate]
+        )
+
+        # Cache generated audio and build lookup
+        generated_map = {}
+        for item_id, q_audio, o_audios in generated:
+            generated_map[item_id] = {
+                "question_audio": q_audio,
+                "option_audios": o_audios,
+            }
+            if q_audio:
+                db_ref.child(f"logic_audio/{grade}/{item_id}").set({
+                    "question_audio": q_audio,
+                    "option_audios": o_audios,
+                    "voice": "nova",
+                    "generated_at": datetime.utcnow().isoformat(),
+                })
+    else:
+        generated_map = {}
+
+    # Build response from cache + generated
+    formatted_items = []
+    for item in items:
+        cached = all_cached.get(item.item_id) or generated_map.get(item.item_id, {})
+        question_audio = cached.get("question_audio")
+        option_audios = cached.get("option_audios", [])
+        audio_source = "cached" if item.item_id in all_cached else "openai_tts"
+
+        fmt = {
+            "item_id": item.item_id,
+            "item_number": item.item_number,
+            "item_type": item.item_type,
+            "question_text": item.question_text,
+            "difficulty": item.difficulty,
+            "question_audio_base64": question_audio,
+            "audio_source": audio_source,
+            "options": [
+                {
+                    "index": opt.index,
+                    "text": opt.text,
+                    "image_url": opt.image_url,
+                    "audio_base64": option_audios[i] if i < len(option_audios) else None,
+                }
+                for i, opt in enumerate(item.options)
+            ],
+        }
+
+        # Include sort config if present
+        if item.sort_config:
+            fmt["sort_config"] = {
+                "cards": item.sort_config.cards,
+                "rounds": [
+                    {
+                        "round_number": r.round_number,
+                        "sort_rule": r.sort_rule,
+                        "num_bins": r.num_bins,
+                        "rule_shown": r.rule_shown,
+                    }
+                    for r in item.sort_config.rounds
+                ],
+            }
+
+        formatted_items.append(fmt)
+
+    return {
+        "success": True,
+        "test_id": str(uuid.uuid4()),
+        "grade": grade,
+        "total_items": len(items),
+        "instructions": (
+            "Listen to each question carefully, then choose your answer. "
+            "Think about patterns, relationships, and rules. Take your time!"
+        ),
+        "items": formatted_items,
+    }
+
+
+@app.post("/admin/pregenerate_logic_audio/")
+async def pregenerate_logic_audio(request: GetDetailsRequest):
+    """
+    Admin endpoint to pre-generate all logic test audio and save to Firebase.
+    Same pattern as /admin/pregenerate_story_audio/ for comprehension.
+    Call once after deploying new items to cache all audio.
+    """
+    try:
+        decoded = auth.verify_id_token(request.idToken)
+        uid = decoded["uid"]
+        user_data = db_ref.child("users").child(uid).get()
+        if not user_data or not user_data.get("isAdmin", False):
+            raise HTTPException(status_code=403, detail="Admin access required")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth failed: {str(e)}")
+
+    grade_map = {
+        "K-1": GradeLevel.KINDERGARTEN_1,
+        "1-2": GradeLevel.GRADE_1_2,
+        "2-3": GradeLevel.GRADE_2_3,
+        "3-4": GradeLevel.GRADE_3_4,
+    }
+
+    results = {"generated": [], "failed": [], "skipped": []}
+
+    for grade_str, grade_level in grade_map.items():
+        items = get_items_by_grade(grade_level)
+        for item in items:
+            # Check if already cached
+            cached = db_ref.child(f"logic_audio/{grade_str}/{item.item_id}").get()
+            if cached and cached.get("question_audio"):
+                results["skipped"].append(f"{grade_str}/{item.item_id}")
+                continue
+
+            # Generate question audio
+            question_audio = await generate_tts_audio(item.question_text)
+            if not question_audio:
+                results["failed"].append(f"{grade_str}/{item.item_id}")
+                continue
+
+            # Generate option audio
+            option_audios = []
+            for opt in item.options:
+                opt_audio = await generate_tts_audio(opt.text)
+                option_audios.append(opt_audio)
+
+            # Save to Firebase
+            db_ref.child(f"logic_audio/{grade_str}/{item.item_id}").set({
+                "question_audio": question_audio,
+                "option_audios": option_audios,
+                "voice": "nova",
+                "generated_at": datetime.utcnow().isoformat(),
+            })
+            results["generated"].append(f"{grade_str}/{item.item_id}")
+
+    return {
+        "success": True,
+        "message": "Logic audio pre-generation complete",
+        "results": results,
+    }
+
+
 @app.post("/logic/submit_response/")
 async def logic_submit_response(request: SubmitLogicResponseRequest):
     verify_child_and_token(request.idToken, request.child_id)
@@ -1281,13 +1516,18 @@ async def logic_submit_test(request: SubmitLogicTestRequest):
     # Dear Parent Phase 2: compute tags from raw responses
     items_lookup = {
         item.item_id: {
+            "item_number": item.item_number,
             "correct_answer_index": item.correct_answer_index,
             "expected_latency_seconds": item.expected_latency_seconds,
             "item_type": item.item_type,
+            "difficulty": item.difficulty,
+            "primary_tag": str(item.primary_tag.value),
+            "conditional_tags": {k: v.value for k, v in item.conditional_tags.items()},
         }
         for item in ALL_LOGIC_ITEMS
     }
     dear_parent_tags = tag_logic_test(request.responses, items_lookup)
+    per_item_tags = tag_logic_per_item(request.responses, items_lookup)
 
     score_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/logic_tests").push().key
     score_data = {
@@ -1298,11 +1538,17 @@ async def logic_submit_test(request: SubmitLogicTestRequest):
         "total_items": result["total_items"],
         "level": result["level"],
         "cognitive_tags": result["cognitive_tags"],
+        "tag_outputs": result.get("tag_outputs", []),
         "tag_breakdown": result["tag_breakdown"],
         "reasoning_under_load_detected": result["reasoning_under_load_detected"],
         "trial_and_error_detected": result["trial_and_error_detected"],
         "strategy_shift_difficulty_detected": result["strategy_shift_difficulty_detected"],
+        "impulsive_response_detected": result.get("impulsive_response_detected", False),
+        "self_correction_detected": result.get("self_correction_detected", False),
+        "cognitive_flexibility_intact": result.get("cognitive_flexibility_intact", False),
+        "flexible_strategy_use_detected": result.get("flexible_strategy_use_detected", False),
         "dear_parent_tags": dear_parent_tags,
+        "per_item_tags": per_item_tags,
         "message": result["message"],
         "timestamp": datetime.utcnow().isoformat(),
         "responses": request.responses,
@@ -1311,6 +1557,7 @@ async def logic_submit_test(request: SubmitLogicTestRequest):
 
     result["score_id"] = score_id
     result["dear_parent_tags"] = dear_parent_tags
+    result["per_item_tags"] = per_item_tags
     return {"success": True, **result}
 
 
@@ -1414,6 +1661,7 @@ async def submit_words(request: SubmitWordsRequest):
 
     # Dear Parent Phase 2: compute spelling tags
     dear_parent_tags = tag_spelling_test(results, grade)
+    per_word_tags = tag_spelling_per_word(results)
 
     score_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/scores").push().key
     score_data = {
@@ -1423,6 +1671,7 @@ async def submit_words(request: SubmitWordsRequest):
         "error_analysis": sanitize_firebase_data(error_counts),
         "instructional_recommendation": recommendation,
         "dear_parent_tags": dear_parent_tags,
+        "per_word_tags": per_word_tags,
         "results": sanitize_firebase_data(results),
         "analysis": sanitize_firebase_data(analysis),
         "timestamp": datetime.utcnow().isoformat()
@@ -1438,7 +1687,8 @@ async def submit_words(request: SubmitWordsRequest):
         "assessment_summary": assessment_summary,
         "error_analysis": error_counts,
         "instructional_recommendation": recommendation,
-        "dear_parent_tags": dear_parent_tags
+        "dear_parent_tags": dear_parent_tags,
+        "per_word_tags": per_word_tags
     }
 
 @app.post("/generate_text_audio/")
@@ -1451,14 +1701,23 @@ async def generate_word_audio(request: AudioRequest):
 
     word = request.text
     try:
-        word_response = polly_client.synthesize_speech(
-            Text=word,
-            OutputFormat='mp3',
-            VoiceId='Joanna'
-        )
-        word_audio = word_response['AudioStream'].read()
-        word_base64 = base64.b64encode(word_audio).decode('utf-8')
-        return {"base64_audio": word_base64}
+        # Check Firebase cache first (by grade if available, else by word)
+        cached = db_ref.child(f"spelling_audio/_all/{word}").get()
+        if cached and cached.get("word_audio"):
+            return {"base64_audio": cached["word_audio"]}
+
+        word_base64 = await generate_tts_audio(word, speed=0.9)
+        if word_base64:
+            # Cache for future use
+            db_ref.child(f"spelling_audio/_all/{word}").set({
+                "word_audio": word_base64,
+                "voice": "nova",
+                "generated_at": datetime.utcnow().isoformat(),
+            })
+            return {"base64_audio": word_base64}
+        raise HTTPException(status_code=500, detail="Failed to generate audio")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate audio: {str(e)}")
 
@@ -1490,42 +1749,52 @@ async def generate_all_grade_audio(request: GradeInput):
     audio_files = []
 
     try:
+        # Batch read all cached audio from Firebase in 1 call
+        all_cached = db_ref.child(f"spelling_audio/{grade}").get() or {}
+
+        # Identify which words need audio generation
+        words_to_generate = []
+        for item in shuffled_words:
+            word = item["word"]
+            if word not in all_cached or not all_cached[word].get("word_audio"):
+                words_to_generate.append(item)
+
+        # Generate audio in parallel for all uncached words
+        if words_to_generate:
+            async def gen_word_audio(item):
+                word = item["word"]
+                sentence = item["sentence"]
+                word_base64 = await generate_tts_audio(word, speed=0.95)
+                sentence_base64 = await generate_tts_audio(sentence, speed=1.0)
+                return word, word_base64, sentence_base64
+
+            generated = await asyncio.gather(
+                *[gen_word_audio(item) for item in words_to_generate]
+            )
+
+            # Cache to Firebase
+            for word, w_b64, s_b64 in generated:
+                if w_b64:
+                    db_ref.child(f"spelling_audio/{grade}/{word}").set({
+                        "word_audio": w_b64,
+                        "sentence_audio": s_b64,
+                        "voice": "nova",
+                        "generated_at": datetime.utcnow().isoformat(),
+                    })
+                    all_cached[word] = {"word_audio": w_b64, "sentence_audio": s_b64}
+
+        # Build response from cache
         for item in shuffled_words:
             word = item["word"]
             sentence = item["sentence"]
             word_type = item["type"]
+            cached = all_cached.get(word, {})
+            word_base64 = cached.get("word_audio")
+            sentence_base64 = cached.get("sentence_audio")
 
-            # === SSML: Word (slow) + Sentence (normal) ===
-            word_ssml = f'<speak><prosody rate="95%">{word}</prosody></speak>'
-            sentence_ssml = f'<speak><prosody rate="100%">{sentence}</prosody></speak>'
+            if not word_base64 or not sentence_base64:
+                raise HTTPException(status_code=500, detail=f"Failed to generate audio for word: {word}")
 
-            # === WORD AUDIO (Neural HD) ===
-            word_response = polly_client.synthesize_speech(
-                Text=word_ssml,
-                TextType='ssml',
-                OutputFormat='mp3',
-                VoiceId=NEURAL_VOICE_ID,
-                Engine='neural',           # HD, human-like
-                LanguageCode=LANGUAGE_CODE
-            )
-            word_audio = word_response['AudioStream'].read()
-
-            # === SENTENCE AUDIO (Neural HD) ===
-            sentence_response = polly_client.synthesize_speech(
-                Text=sentence_ssml,
-                TextType='ssml',
-                OutputFormat='mp3',
-                VoiceId=NEURAL_VOICE_ID,
-                Engine='neural',
-                LanguageCode=LANGUAGE_CODE
-            )
-            sentence_audio = sentence_response['AudioStream'].read()
-
-            # === BASE64 ENCODE (EXACT SAME AS BEFORE) ===
-            word_base64 = base64.b64encode(word_audio).decode('utf-8')
-            sentence_base64 = base64.b64encode(sentence_audio).decode('utf-8')
-
-            # === SAME JSON STRUCTURE (100% compatible) ===
             audio_files.append({
                 "word": word,
                 "word_type": word_type,
@@ -1628,6 +1897,7 @@ async def complete_result(request: CompleteResultRequest):
                     {"label": "Download Report (PDF)", "type": "button", "action": "download_pdf"}]
             },
             "dear_parent_tags": latest.get("dear_parent_tags", []),
+            "per_word_tags": latest.get("per_word_tags", []),
             "teacher_admin_detail": {
                 "test_level": result_grade,
                 "words": len(all_results),
@@ -1758,6 +2028,7 @@ async def complete_result(request: CompleteResultRequest):
             ]
         },
         "dear_parent_tags": latest.get("dear_parent_tags", []),
+        "per_word_tags": latest.get("per_word_tags", []),
         "teacher_admin_detail": {
             "test_level": result_grade,
             "words": total_words,
@@ -2156,22 +2427,21 @@ async def get_speaking_sentence(request: SpeakingSentenceRequest):
     sentences = speaking_sentences[grade].copy()
     random.shuffle(sentences)
     
-    # Generate audio for the sentence using Polly
+    # Generate audio for the sentence (nova - same voice as all tests)
     selected = sentences[0]
-    sentence_ssml = f'<speak><prosody rate="90%">{selected["sentence"]}</prosody></speak>'
-    
-    try:
-        audio_response = polly_client.synthesize_speech(
-            Text=sentence_ssml,
-            TextType='ssml',
-            OutputFormat='mp3',
-            VoiceId='Joanna',
-            Engine='neural',
-            LanguageCode='en-US'
-        )
-        audio_base64 = base64.b64encode(audio_response['AudioStream'].read()).decode('utf-8')
-    except Exception as e:
-        audio_base64 = None
+
+    # Check Firebase cache first
+    cached = db_ref.child(f"speaking_audio/{grade}/{selected['id']}").get()
+    if cached and cached.get("audio_base64"):
+        audio_base64 = cached["audio_base64"]
+    else:
+        audio_base64 = await generate_tts_audio(selected["sentence"], speed=0.9)
+        if audio_base64:
+            db_ref.child(f"speaking_audio/{grade}/{selected['id']}").set({
+                "audio_base64": audio_base64,
+                "voice": "nova",
+                "generated_at": datetime.utcnow().isoformat(),
+            })
     
     return {
         "grade": grade,
@@ -2204,28 +2474,46 @@ async def get_all_speaking_sentences(request: SpeakingSentenceRequest):
     sentences = speaking_sentences[grade].copy()
     random.shuffle(sentences)
     
+    # Batch read all cached audio from Firebase in 1 call
+    all_cached = db_ref.child(f"speaking_audio/{grade}").get() or {}
+    
+    # Identify which sentences need audio generation
+    sents_to_generate = []
+    for sent in sentences:
+        sid = sent["id"]
+        if sid not in all_cached or not all_cached[sid].get("audio_base64"):
+            sents_to_generate.append(sent)
+    
+    # Generate audio in parallel for all uncached sentences
+    if sents_to_generate:
+        async def gen_sent_audio(sent):
+            audio = await generate_tts_audio(sent["sentence"], speed=0.9)
+            return sent["id"], audio
+        
+        generated = await asyncio.gather(
+            *[gen_sent_audio(sent) for sent in sents_to_generate]
+        )
+        
+        # Cache to Firebase
+        for sid, audio_b64 in generated:
+            if audio_b64:
+                db_ref.child(f"speaking_audio/{grade}/{sid}").set({
+                    "audio_base64": audio_b64,
+                    "voice": "nova",
+                    "generated_at": datetime.utcnow().isoformat(),
+                })
+                all_cached[sid] = {"audio_base64": audio_b64}
+    
+    # Build response from cache
     result_sentences = []
     for sent in sentences:
-        try:
-            sentence_ssml = f'<speak><prosody rate="90%">{sent["sentence"]}</prosody></speak>'
-            audio_response = polly_client.synthesize_speech(
-                Text=sentence_ssml,
-                TextType='ssml',
-                OutputFormat='mp3',
-                VoiceId='Joanna',
-                Engine='neural',
-                LanguageCode='en-US'
-            )
-            audio_base64 = base64.b64encode(audio_response['AudioStream'].read()).decode('utf-8')
-        except:
-            audio_base64 = None
-        
+        cached = all_cached.get(sent["id"], {})
         result_sentences.append({
             "sentence_id": sent["id"],
             "sentence": sent["sentence"],
             "word_count": sent["word_count"],
             "difficulty": sent["difficulty"],
-            "audio_base64": audio_base64
+            "audio_base64": cached.get("audio_base64")
         })
     
     return {
@@ -2438,6 +2726,7 @@ async def submit_speaking_test(request: SpeakingSubmitRequest):
             enriched["difficulty"] = sentence_map[sid].get("difficulty", "medium")
         tagging_results.append(enriched)
     dear_parent_tags = tag_speaking_test(tagging_results)
+    per_sentence_tags = tag_speaking_per_sentence(tagging_results)
 
     # Save the entire batch as a single test
     test_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_tests").push().key
@@ -2451,6 +2740,7 @@ async def submit_speaking_test(request: SpeakingSubmitRequest):
         "percentage": percentage,
         "level": level,
         "dear_parent_tags": dear_parent_tags,
+        "per_sentence_tags": per_sentence_tags,
         "timestamp": datetime.utcnow().isoformat()
     }
     db_ref.child(f"users/{user_id}/children/{request.child_id}/speaking_tests/{test_id}").set(test_data)
@@ -2469,6 +2759,7 @@ async def submit_speaking_test(request: SpeakingSubmitRequest):
         "level": level,
         "results": results,
         "dear_parent_tags": dear_parent_tags,
+        "per_sentence_tags": per_sentence_tags,
         "message": f"Submission completed: {answered_count} answered, {len(results) - answered_count} not attempted."
     }
 
@@ -2537,6 +2828,7 @@ async def speaking_complete_result(request: SpeakingResultRequest):
             "note": "Assessment is instructional and not a clinical diagnosis."
         },
         "dear_parent_tags": latest_test.get("dear_parent_tags", []),
+        "per_sentence_tags": latest_test.get("per_sentence_tags", []),
         "all_results": all_results
     }
 
@@ -2546,35 +2838,10 @@ async def speaking_complete_result(request: SpeakingResultRequest):
 async def generate_story_audio_openai(story_text: str, voice: str = "nova") -> str:
     """
     Generate expressive story narration using OpenAI TTS.
-    Voice options:
-    - 'nova': Warm, friendly female voice - BEST for children's stories
-    - 'fable': British accent, expressive storytelling
-    - 'shimmer': Clear, expressive female voice
-    - 'alloy': Neutral, versatile
+    Now uses the shared generate_tts_audio function for consistency.
+    Falls back to AWS Polly if OpenAI is unavailable.
     """
-    if not openai_client:
-        return None
-    
-    try:
-        # Clean up the story text for better TTS
-        clean_text = story_text.strip()
-        
-        # Generate with OpenAI TTS HD
-        response = openai_client.audio.speech.create(
-            model="tts-1-hd",   # High definition quality
-            voice=voice,        # 'nova' for warm children's voice
-            input=clean_text,
-            speed=0.85          # Slower for young children to follow
-        )
-        
-        # Get audio bytes and encode to base64
-        audio_bytes = response.content
-        audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-        return audio_base64
-        
-    except Exception as e:
-        print(f"OpenAI TTS error: {str(e)}")
-        return None
+    return await generate_tts_audio(story_text, voice=voice, speed=0.85)
 
 
 @app.post("/admin/pregenerate_story_audio/")
@@ -2696,52 +2963,48 @@ async def get_comprehension_stories(request: ComprehensionGetRequest):
     # Get stories for the grade
     stories = comprehension_stories[grade]
     
-    result_stories = []
+    # Batch read all cached audio from Firebase in 1 call
+    all_cached = db_ref.child(f"story_audio/{grade}").get() or {}
+    
+    # Identify which stories need audio generation
+    stories_to_generate = []
     for story in stories:
-        story_id = story["id"]
-        story_audio_base64 = None
-        audio_source = "none"
+        sid = story["id"]
+        if sid not in all_cached or not all_cached[sid].get("audio_base64"):
+            stories_to_generate.append(story)
+    
+    # Generate audio in parallel for uncached stories
+    if stories_to_generate:
+        async def gen_story_audio(story):
+            audio = await generate_story_audio_openai(story["story"], voice="nova")
+            return story["id"], audio
         
-        # First, try to get pre-generated audio from Firebase
-        cached_audio = db_ref.child(f"story_audio/{grade}/{story_id}").get()
-        if cached_audio and cached_audio.get("audio_base64"):
-            story_audio_base64 = cached_audio["audio_base64"]
-            audio_source = "cached_openai"
-        else:
-            # Generate audio on-demand using OpenAI TTS
-            story_audio_base64 = await generate_story_audio_openai(
-                story_text=story["story"],
-                voice="nova"  # Warm voice for children
-            )
-            if story_audio_base64:
-                audio_source = "openai_tts"
-                # Cache it for future use
-                db_ref.child(f"story_audio/{grade}/{story_id}").set({
-                    "audio_base64": story_audio_base64,
-                    "title": story["title"],
+        generated = await asyncio.gather(
+            *[gen_story_audio(s) for s in stories_to_generate]
+        )
+        
+        # Cache to Firebase
+        for sid, audio_b64 in generated:
+            if audio_b64:
+                story_obj = next(s for s in stories if s["id"] == sid)
+                db_ref.child(f"story_audio/{grade}/{sid}").set({
+                    "audio_base64": audio_b64,
+                    "title": story_obj["title"],
                     "voice": "nova",
                     "generated_at": datetime.utcnow().isoformat()
                 })
+                all_cached[sid] = {"audio_base64": audio_b64, "title": story_obj["title"]}
+    
+    # Build response from cache
+    result_stories = []
+    for story in stories:
+        story_id = story["id"]
+        cached = all_cached.get(story_id, {})
+        story_audio_base64 = cached.get("audio_base64")
+        audio_source = "cached_openai" if story_id in all_cached and cached.get("audio_base64") else "failed"
         
-        # Fallback to Polly if OpenAI fails
         if not story_audio_base64:
-            try:
-                # Use plain text for Polly (story text might have special characters)
-                plain_story = story["story"].replace('"', '').replace("'", "")
-                story_ssml = f'<speak><prosody rate="85%">{plain_story[:2900]}</prosody></speak>'
-                audio_response = polly_client.synthesize_speech(
-                    Text=story_ssml,
-                    TextType='ssml',
-                    OutputFormat='mp3',
-                    VoiceId='Joanna',
-                    Engine='neural',
-                    LanguageCode='en-US'
-                )
-                story_audio_base64 = base64.b64encode(audio_response['AudioStream'].read()).decode('utf-8')
-                audio_source = "aws_polly"
-            except Exception as e:
-                print(f"Polly fallback failed: {e}")
-                story_audio_base64 = None
+            audio_source = "failed"
         
         # Prepare questions (without correct_index for client)
         questions_for_client = []
@@ -2892,6 +3155,7 @@ async def submit_comprehension_test(request: ComprehensionSubmitRequest):
     
     # Dear Parent Phase 2: compute comprehension tags
     dear_parent_tags = tag_comprehension_test(results, COMPREHENSION_QUESTION_TYPES)
+    per_question_tags = tag_comprehension_per_question(results, COMPREHENSION_QUESTION_TYPES)
 
     # Save to Firebase
     test_id = db_ref.child(f"users/{user_id}/children/{request.child_id}/comprehension_tests").push().key
@@ -2907,6 +3171,7 @@ async def submit_comprehension_test(request: ComprehensionSubmitRequest):
         "status": status,
         "recommendation": recommendation,
         "dear_parent_tags": dear_parent_tags,
+        "per_question_tags": per_question_tags,
         "timestamp": datetime.utcnow().isoformat()
     }
     db_ref.child(f"users/{user_id}/children/{request.child_id}/comprehension_tests/{test_id}").set(test_data)
@@ -2927,6 +3192,7 @@ async def submit_comprehension_test(request: ComprehensionSubmitRequest):
         "recommendation": recommendation,
         "results": results,
         "dear_parent_tags": dear_parent_tags,
+        "per_question_tags": per_question_tags,
         "message": f"Test completed: {total_correct}/{max_score} correct ({percentage}%)"
     }
 
@@ -3026,6 +3292,7 @@ async def comprehension_complete_result(request: ComprehensionResultRequest):
         },
         "story_breakdown": story_breakdown,
         "dear_parent_tags": latest_test.get("dear_parent_tags", []),
+        "per_question_tags": latest_test.get("per_question_tags", []),
         "actions": [
             {"label": "Retry Test", "type": "button", "action": "retry_test"},
             {"label": "View Stories", "type": "button", "action": "view_stories"},

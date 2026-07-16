@@ -54,6 +54,8 @@ class SubmitLogicResponseRequest(BaseModel):
     attempts: int = 1
     self_corrected: bool = False
     explanation_provided: Optional[str] = None
+    post_shift_accuracy: Optional[str] = None  # "correct"/"incorrect" for sort tasks
+    rule_inferred: Optional[bool] = None  # grade 3-4 sort only
 
 
 class SubmitLogicTestRequest(BaseModel):
@@ -117,7 +119,7 @@ async def get_logic_test(request: GetLogicTestRequest):
         # Format response
         formatted_items = []
         for item in items:
-            formatted_items.append({
+            fmt = {
                 "item_id": item.item_id,
                 "item_number": item.item_number,
                 "item_type": item.item_type,
@@ -127,7 +129,21 @@ async def get_logic_test(request: GetLogicTestRequest):
                     {"index": opt.index, "text": opt.text, "image_url": opt.image_url}
                     for opt in item.options
                 ],
-            })
+            }
+            if item.sort_config:
+                fmt["sort_config"] = {
+                    "cards": item.sort_config.cards,
+                    "rounds": [
+                        {
+                            "round_number": r.round_number,
+                            "sort_rule": r.sort_rule,
+                            "num_bins": r.num_bins,
+                            "rule_shown": r.rule_shown,
+                        }
+                        for r in item.sort_config.rounds
+                    ],
+                }
+            formatted_items.append(fmt)
         
         test_id = str(uuid.uuid4())
         
@@ -273,6 +289,8 @@ async def submit_logic_test(request: SubmitLogicTestRequest):
                     attempts=resp.get("attempts", 1),
                     self_corrected=resp.get("self_corrected", False),
                     explanation_provided=resp.get("explanation_provided"),
+                    post_shift_accuracy=resp.get("post_shift_accuracy"),
+                    rule_inferred=resp.get("rule_inferred"),
                 )
             )
         
@@ -290,10 +308,18 @@ async def submit_logic_test(request: SubmitLogicTestRequest):
             "percentage": result.score_percentage,
             "level": _get_performance_level(result.score_percentage),
             "cognitive_tags": [str(tag.value) for tag in result.final_tags],
+            "tag_outputs": [
+                {"tag": str(t.tag.value), "confidence": t.confidence, "evidence": t.evidence}
+                for t in result.tag_outputs
+            ],
             "tag_breakdown": result.tag_counts,
             "reasoning_under_load_detected": result.reasoning_under_load_detected,
             "trial_and_error_detected": result.trial_and_error_detected,
             "strategy_shift_difficulty_detected": result.strategy_shift_difficulty_detected,
+            "impulsive_response_detected": result.impulsive_response_detected,
+            "self_correction_detected": result.self_correction_detected,
+            "cognitive_flexibility_intact": result.cognitive_flexibility_intact,
+            "flexible_strategy_use_detected": result.flexible_strategy_use_detected,
             "message": f"Test completed: {result.total_correct}/{result.total_items} correct ({result.score_percentage:.1f}%)",
         }
     
