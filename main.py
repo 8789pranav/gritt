@@ -2130,18 +2130,29 @@ async def get_admin_stats(request: GetDetailsRequest):
         all_users_raw = db_ref.child("users").get() or {}
         user_list = []
 
+        # === BATCH FETCH: Get all Firebase Auth users in one call ===
+        # list_users returns up to 1000 users per page — fetch all
+        auth_users_map = {}
+        try:
+            page = firebase_auth.list_users()
+            while page is not None:
+                for user in page.users:
+                    auth_users_map[user.uid] = user
+                page = page.get_next_page() if page.has_next_page else None
+        except Exception as e:
+            print(f"list_users error: {e}")
+
         for uid, data in all_users_raw.items():
             email = data.get("email", "N/A")
 
-            # === GET REAL CREATION TIME FROM FIREBASE AUTH ===
-            try:
-                auth_user = firebase_auth.get_user(uid)
-                created_at = int(auth_user.user_metadata.creation_timestamp / 1000)  # ms → sec
-            except:
-                # Fallback: use DB createdAt or estimate
+            # === GET CREATION TIME FROM BATCH MAP ===
+            auth_user = auth_users_map.get(uid)
+            if auth_user and auth_user.user_metadata.creation_timestamp:
+                created_at = int(auth_user.user_metadata.creation_timestamp / 1000)
+            else:
                 created_at = data.get("createdAt")
                 if not created_at or not isinstance(created_at, (int, float)):
-                    created_at = int(time.time()) - (30 * 24 * 3600)  # 30 days ago as fallback
+                    created_at = int(time.time()) - (30 * 24 * 3600)
 
             # Format date
             joined_date = time.strftime("%Y-%m-%d %H:%M", time.localtime(created_at))
