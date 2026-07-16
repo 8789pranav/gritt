@@ -2844,6 +2844,64 @@ async def generate_story_audio_openai(story_text: str, voice: str = "nova") -> s
     return await generate_tts_audio(story_text, voice=voice, speed=0.85)
 
 
+@app.post("/admin/pregenerate_speaking_audio/")
+async def pregenerate_speaking_audio(request: GetDetailsRequest):
+    """
+    Admin endpoint to pre-generate all speaking sentence audio and save to Firebase.
+    Call once after deploying to cache all audio so /speaking/get_all_sentences/ is instant.
+    Same pattern as /admin/pregenerate_story_audio/ and /admin/pregenerate_logic_audio/.
+    """
+    try:
+        decoded = auth.verify_id_token(request.idToken)
+        uid = decoded["uid"]
+        user_data = db_ref.child("users").child(uid).get()
+        if not user_data or not user_data.get("isAdmin", False):
+            raise HTTPException(status_code=403, detail="Admin access required")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Auth failed: {str(e)}")
+
+    results = {"generated": [], "failed": [], "skipped": []}
+
+    for grade, sentences in speaking_sentences.items():
+        # Batch check existing cache
+        existing = db_ref.child(f"speaking_audio/{grade}").get() or {}
+
+        sents_to_gen = []
+        for sent in sentences:
+            sid = sent["id"]
+            if sid in existing and existing[sid].get("audio_base64"):
+                results["skipped"].append(f"{grade}/{sid}")
+            else:
+                sents_to_gen.append(sent)
+
+        if not sents_to_gen:
+            continue
+
+        # Generate in parallel (max 8 at a time)
+        async def gen_one(sent):
+            audio = await generate_tts_audio(sent["sentence"], voice="nova", speed=0.9)
+            return sent["id"], audio
+
+        generated = await asyncio.gather(*[gen_one(s) for s in sents_to_gen])
+
+        for sid, audio_b64 in generated:
+            if audio_b64:
+                db_ref.child(f"speaking_audio/{grade}/{sid}").set({
+                    "audio_base64": audio_b64,
+                    "voice": "nova",
+                    "generated_at": datetime.utcnow().isoformat(),
+                })
+                results["generated"].append(f"{grade}/{sid}")
+            else:
+                results["failed"].append(f"{grade}/{sid}")
+
+    return {
+        "success": True,
+        "message": "Speaking audio pre-generation complete",
+        "results": results
+    }
+
+
 @app.post("/admin/pregenerate_story_audio/")
 async def pregenerate_story_audio(request: GetDetailsRequest):
     """
