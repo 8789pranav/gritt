@@ -223,9 +223,15 @@ Transcribes audio using Whisper and analyzes speech using GPT-4o.
 
 **Endpoint:** `POST /speaking/submit/`
 
-Transcribes, analyzes, and saves results to Firebase.
+Transcribes, analyzes, and saves results to Firebase. Supports **single** or **batch** submission.
 
-#### Request
+---
+
+#### 📌 Single Submission (Original)
+
+Submit one sentence at a time.
+
+##### Request
 ```json
 {
   "idToken": "firebase_id_token",
@@ -248,7 +254,7 @@ Transcribes, analyzes, and saves results to Firebase.
 | `audio_base64` | string | ✅ | Base64 encoded audio file |
 | `audio_format` | string | ❌ | Format (default: `mp3`) |
 
-#### Response
+##### Response
 ```json
 {
   "user_id": "OUE6yVj1m5MUQ3Tx7H9mXa6SbzA3",
@@ -286,6 +292,108 @@ Transcribes, analyzes, and saves results to Firebase.
   },
   "recommendation": "Keep practicing daily!",
   "message": "Speaking test submitted successfully"
+}
+```
+
+---
+
+#### 📌 Batch Submission (New Feature)
+
+Submit multiple sentences (up to 10) in a single request. Ideal for completing a full speaking test session.
+
+##### Request
+```json
+{
+  "idToken": "firebase_id_token",
+  "child_id": "f9fee450-a1ae-4d56-b0a7-e6edb6536074",
+  "grade": "First",
+  "submissions": [
+    {
+      "sentence_id": "f1",
+      "original_sentence": "The brown dog likes to play with the ball.",
+      "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA...",
+      "audio_format": "wav"
+    },
+    {
+      "sentence_id": "f2",
+      "original_sentence": "She went to the store to buy some apples.",
+      "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA...",
+      "audio_format": "wav"
+    },
+    {
+      "sentence_id": "f3",
+      "original_sentence": "The children are playing outside in the rain.",
+      "audio_base64": "UklGRiQAAABXQVZFZm10IBAAAAABAAEA...",
+      "audio_format": "wav"
+    }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `idToken` | string | ✅ | Firebase ID token |
+| `child_id` | string | ✅ | Child's UUID |
+| `grade` | string | ✅ | Grade level |
+| `submissions` | array | ✅ | Array of submission items (max 10) |
+
+**Submission Item:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sentence_id` | string | ✅ | Sentence ID |
+| `original_sentence` | string | ✅ | The sentence to read |
+| `audio_base64` | string | ✅ | Base64 encoded audio |
+| `audio_format` | string | ❌ | Format (default: `mp3`) |
+
+##### Response
+```json
+{
+  "success": true,
+  "user_id": "OUE6yVj1m5MUQ3Tx7H9mXa6SbzA3",
+  "child_id": "f9fee450-a1ae-4d56-b0a7-e6edb6536074",
+  "grade": "First",
+  "total_submitted": 3,
+  "average_score": 88.0,
+  "results": [
+    {
+      "sentence_id": "f1",
+      "score_id": "-OnINI3u7HdT4SJ0piOh",
+      "overall_score": 85,
+      "transcribed_text": "The brown dog likes to play with the ball.",
+      "pronunciation_score": 80,
+      "fluency_score": 90,
+      "speaking_rate_score": 85,
+      "grammar_score": 100,
+      "level": "Good Speaker",
+      "recommendation": "Good job! Practice reading more."
+    },
+    {
+      "sentence_id": "f2",
+      "score_id": "-OnINI4v8IeU5TK1qjPi",
+      "overall_score": 92,
+      "transcribed_text": "She went to the store to buy some apples.",
+      "pronunciation_score": 90,
+      "fluency_score": 95,
+      "speaking_rate_score": 90,
+      "grammar_score": 100,
+      "level": "Excellent Speaker",
+      "recommendation": "Excellent reading!"
+    },
+    {
+      "sentence_id": "f3",
+      "score_id": "-OnINI5w9JfV6UL2rkQj",
+      "overall_score": 87,
+      "transcribed_text": "The children are playing outside in the rain.",
+      "pronunciation_score": 85,
+      "fluency_score": 88,
+      "speaking_rate_score": 88,
+      "grammar_score": 100,
+      "level": "Good Speaker",
+      "recommendation": "Keep practicing!"
+    }
+  ],
+  "message": "Batch submission completed: 3 sentences processed"
 }
 ```
 
@@ -463,6 +571,7 @@ Each grade has 8 sentences with varying difficulty:
 
 ## Flow Diagram
 
+### Single Submission Flow
 ```
 ┌─────────────────┐
 │  1. Get Sentence │
@@ -500,6 +609,54 @@ Each grade has 8 sentences with varying difficulty:
                │  5. Results     │
                │  /complete_result/│
                └─────────────────┘
+```
+
+### Batch Submission Flow (New)
+```
+┌──────────────────────┐
+│  1. Get All Sentences │
+│  /get_all_sentences/  │
+└──────────┬───────────┘
+           │ Returns 8 sentences + TTS audio for each
+           ▼
+┌──────────────────────┐
+│  2. Child Reads All  │
+│  Records 8 Audios    │
+│  (one per sentence)  │
+└──────────┬───────────┘
+           │ Array of {sentence_id, audio_base64}
+           ▼
+┌──────────────────────┐
+│  3. Batch Submit     │
+│  /submit/            │
+│  with submissions[]  │
+└──────────┬───────────┘
+           │
+           ▼
+    ┌──────────────────────────────────────┐
+    │     For each submission (1-10):      │
+    │  ┌─────────────┐    ┌─────────────┐  │
+    │  │   Whisper   │───▶│   GPT-4o    │  │
+    │  │ Transcribe  │    │  Analyze    │  │
+    │  └─────────────┘    └─────────────┘  │
+    │              │                       │
+    │              ▼                       │
+    │     Save to Firebase                 │
+    └──────────────────────────────────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Response includes:  │
+│  • total_submitted   │
+│  • average_score     │
+│  • results[] array   │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  4. Get Results      │
+│  /complete_result/   │
+└──────────────────────┘
 ```
 
 ---

@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "test": "comprehension",
+  "test_key": "story_explorer",
+  "display_name": "Story Explorer (Comprehension)",
+  "description": "Cognitive tag definitions for the Story Explorer reading comprehension assessment.",
+  "derived_signals": [
+    "literal_accuracy",
+    "inferential_accuracy",
+    "vocabulary_accuracy",
+    "overall_accuracy",
+    "literal_inferential_gap"
+  ],
+  "question_type_mapping": {
+    "literal": "Questions about explicit story details (who, what, where, when)",
+    "inferential": "Questions requiring reasoning beyond stated text (why, how, theme)",
+    "vocabulary": "Questions about word meaning in context"
+  },
+  "tags": [
+    {
+      "id": "literal_comprehension_strong",
+      "trigger": "literal_accuracy >= 0.8",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child recalls and identifies stated facts from the text accurately."
+    },
+    {
+      "id": "inferential_comprehension_strong",
+      "trigger": "inferential_accuracy >= 0.8",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child draws valid conclusions and inferences beyond the literal text."
+    },
+    {
+      "id": "inferential_comprehension_emerging",
+      "trigger": "inferential_accuracy < 0.6 AND literal_inferential_gap >= 0.3",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Child understands literal content but struggles to infer meaning."
+    },
+    {
+      "id": "vocabulary_in_context_strong",
+      "trigger": "vocabulary_accuracy >= 0.8",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child determines word meanings from surrounding context effectively."
+    },
+    {
+      "id": "vocabulary_in_context_emerging",
+      "trigger": "vocabulary_accuracy < 0.6",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Child has difficulty determining word meaning from context."
+    },
+    {
+      "id": "listening_comprehension_strong",
+      "trigger": "overall_accuracy >= 0.75",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child demonstrates strong understanding of audio-narrated stories."
+    }
+  ]
+}

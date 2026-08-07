@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "test": "comprehension",
+  "grade": "First",
+  "count": 2,
+  "stories": [
+    {
+      "story_id": "f_story1",
+      "title": "The Lost Kitten",
+      "story_text": "One rainy afternoon, drip drop drip drop, little Emma heard a tiny sound outside her window.\n\"Meow... meow...\" What was that?\nShe looked outside and saw... oh no! A small gray kitten, all alone under a bush!\nThe poor little thing was wet and shivering. Brrr!\nEmma's heart went out to the kitty. \"I have to help!\" she said.\nShe quickly grabbed an umbrella and ran outside. Splash, splash through the puddles!\nVery gently, she picked up the scared little kitten. \"It's okay, little one. I've got you.\"\nShe brought the kitten inside where it was warm and dry.\nHer mother helped her wrap the kitten in a soft, fluffy towel. So cozy!\nThey gave the kitten some warm milk in a tiny bowl. Lap, lap, lap!\nThe kitten started to purr. Purrrr, purrrr! That meant it was happy!\nEmma made a cozy little bed from her old blanket.\nThe next day, they put up signs everywhere. \"Found: One adorable gray kitten!\"\nThey waited... and waited... a whole week went by!\nBut nobody came to claim the sweet little kitten.\nEmma's parents looked at each other and smiled. \"Emma, would you like to keep her?\"\n\"Really?! Oh, thank you, thank you, THANK YOU!\" Emma was SO happy!\nShe named the kitten Misty, because she found her on that misty, rainy day.\nAnd Emma and Misty became the very best of friends!\nThe End.",
+      "duration_estimate": "75 seconds",
+      "questions": [
+        {
+          "question_id": "f1_q1",
+          "question": "What was the weather like when Emma found the kitten?",
+          "options": [
+            "Sunny",
+            "Snowy",
+            "Rainy",
+            "Windy"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "f1_q2",
+          "question": "What color was the kitten?",
+          "options": [
+            "White",
+            "Gray",
+            "Orange",
+            "Black"
+          ],
+          "correct_index": 1,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "f1_q3",
+          "question": "What did they give the kitten to drink?",
+          "options": [
+            "Water",
+            "Juice",
+            "Warm milk",
+            "Tea"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "f1_q4",
+          "question": "Why did Emma name the kitten Misty?",
+          "options": [
+            "Because it was gray",
+            "Because of the rainy, misty day",
+            "Because it had misty eyes",
+            "Because her mom chose the name"
+          ],
+          "correct_index": 1,
+          "question_type": "inferential"
+        }
+      ]
+    },
+    {
+      "story_id": "f_story2",
+      "title": "The Birthday Surprise",
+      "story_text": "Jake was SO excited! He was turning seven years old!\nAnd he wanted something more than anything else in the whole wide world... a BICYCLE!\nHis old tricycle was way too small for him now. He was a big kid!\nOn his birthday morning, Jake woke up super early. His eyes popped open!\nHe jumped out of bed and ran downstairs as fast as he could. Thump, thump, thump!\nThe living room was AMAZING! Balloons everywhere! Red ones, blue ones, green ones floating in the air!\nHis mom and dad were smiling big smiles. \"Happy Birthday, Jake!\"\nBut wait... Jake looked around. Where was the bicycle? \nHe didn't see one anywhere. Oh no...\nHe tried SO hard not to look sad. He put on a brave smile.\nThen his dad said with a twinkle in his eye, \"Jake... look in the garage!\"\nJake's heart started beating fast. He ran to the garage and threw open the door!\nAnd THERE IT WAS! \nA shiny, sparkly BLUE bicycle with silver handlebars! It was BEAUTIFUL!\n\"WOOOHOOO!\" Jake jumped up and down like a bouncy ball!\nHe hugged his mom and dad super tight. \"Thank you, thank you, THANK YOU!\"\nThat afternoon, Dad taught Jake how to ride.\nWobble, wobble... CRASH! Jake fell down. Ouch!\nBut did he give up? NO WAY!\nHe got back up and tried again. Fall number two. Then fall number three!\nBut Jake never, ever gave up.\nAnd by sunset, guess what? Jake could ride his bicycle ALL BY HIMSELF!\nWhat a perfect birthday!\nThe End.",
+      "duration_estimate": "80 seconds",
+      "questions": [
+        {
+          "question_id": "f2_q1",
+          "question": "How old was Jake turning?",
+          "options": [
+            "Five",
+            "Six",
+            "Seven",
+            "Eight"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "f2_q2",
+          "question": "What color was Jake's new bicycle?",
+          "options": [
+            "Red",
+            "Green",
+            "Blue",
+            "Yellow"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "f2_q3",
+          "question": "Where was the bicycle hidden?",
+          "options": [
+            "In his bedroom",
+            "In the backyard",
+            "In the garage",
+            "In the basement"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "f2_q4",
+          "question": "How many times did Jake fall while learning to ride?",
+          "options": [
+            "One time",
+            "Two times",
+            "Three times",
+            "Four times"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        }
+      ]
+    }
+  ],
+  "total_questions": 8
+}

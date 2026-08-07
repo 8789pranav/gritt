@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "test": "speaking",
+  "grade": "Second",
+  "count": 8,
+  "sentences": [
+    {
+      "sentence_id": "s1",
+      "sentence": "The beautiful butterfly landed on the colorful flower.",
+      "word_count": 8,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "s2",
+      "sentence": "Yesterday we went to the zoo and saw elephants.",
+      "word_count": 9,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "s3",
+      "sentence": "My grandmother bakes delicious cookies every weekend.",
+      "word_count": 7,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "s4",
+      "sentence": "The excited children ran quickly to the playground.",
+      "word_count": 8,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "s5",
+      "sentence": "We learned about different animals in science class.",
+      "word_count": 8,
+      "difficulty": "hard"
+    },
+    {
+      "sentence_id": "s6",
+      "sentence": "The thunder was loud but the lightning was bright.",
+      "word_count": 9,
+      "difficulty": "hard"
+    },
+    {
+      "sentence_id": "s7",
+      "sentence": "She carefully placed the fragile glass on the table.",
+      "word_count": 9,
+      "difficulty": "hard"
+    },
+    {
+      "sentence_id": "s8",
+      "sentence": "The astronaut floated in space looking at Earth.",
+      "word_count": 8,
+      "difficulty": "hard"
+    }
+  ],
+  "max_score_per_sentence": 100
+}

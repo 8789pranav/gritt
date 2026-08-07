@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "test": "speaking",
+  "grade": "Third",
+  "count": 8,
+  "sentences": [
+    {
+      "sentence_id": "t1",
+      "sentence": "The magnificent castle stood proudly on top of the mountain.",
+      "word_count": 10,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "t2",
+      "sentence": "Scientists discovered an unusual species of fish in the ocean.",
+      "word_count": 10,
+      "difficulty": "hard"
+    },
+    {
+      "sentence_id": "t3",
+      "sentence": "The determined athlete practiced every morning before school started.",
+      "word_count": 8,
+      "difficulty": "hard"
+    },
+    {
+      "sentence_id": "t4",
+      "sentence": "My favorite subject is mathematics because I enjoy solving problems.",
+      "word_count": 9,
+      "difficulty": "hard"
+    },
+    {
+      "sentence_id": "t5",
+      "sentence": "The ancient Egyptian pyramids are thousands of years old.",
+      "word_count": 8,
+      "difficulty": "hard"
+    },
+    {
+      "sentence_id": "t6",
+      "sentence": "We celebrated my sister's birthday with a spectacular surprise party.",
+      "word_count": 9,
+      "difficulty": "hard"
+    },
+    {
+      "sentence_id": "t7",
+      "sentence": "The courageous firefighter rescued the kitten from the tall tree.",
+      "word_count": 10,
+      "difficulty": "hard"
+    },
+    {
+      "sentence_id": "t8",
+      "sentence": "Reading comprehension improves when you practice regularly every day.",
+      "word_count": 8,
+      "difficulty": "hard"
+    }
+  ],
+  "max_score_per_sentence": 100
+}

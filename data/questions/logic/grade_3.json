@@ -1,0 +1,271 @@
+{
+  "schema_version": "1.0",
+  "test": "logic",
+  "grade": "3-4",
+  "count": 8,
+  "items": [
+    {
+      "item_id": "logic_3_1",
+      "item_number": "3-1",
+      "item_type": "pattern",
+      "question_text": "Look at this pattern: 2, 6, 18, 54, ___",
+      "options": [
+        {
+          "index": 0,
+          "text": "72",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "108",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "162",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "60",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "pattern_detection_strong",
+      "difficulty": "hard",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_3_2",
+      "item_number": "3-2",
+      "item_type": "transitive_reasoning",
+      "question_text": "Maya is older than Kai. Kai is older than Priya. Priya is older than Jude. Who is the second youngest?",
+      "options": [
+        {
+          "index": 0,
+          "text": "Maya",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "Kai",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Priya",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Jude",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "reasoning_under_load_emerging",
+      "difficulty": "hard",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_3_3",
+      "item_number": "3-3",
+      "item_type": "syllogism",
+      "question_text": "Every blooper is a floop. Every floop is a zang. Is every blooper a zang?",
+      "options": [
+        {
+          "index": 0,
+          "text": "Yes, definitely",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "No, never",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Only some bloopers",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Not enough information",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 0,
+      "primary_tag": "relational_reasoning_present",
+      "difficulty": "hard",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_3_4",
+      "item_number": "3-4",
+      "item_type": "dual_rule_arithmetic",
+      "question_text": "In a game, you earn a star for every 3 correct answers. You lose a star for every 2 wrong answers. You got 9 right and 4 wrong. How many stars do you have?",
+      "options": [
+        {
+          "index": 0,
+          "text": "1",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "2",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "3",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "5",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 0,
+      "primary_tag": "systematic_problem_solving",
+      "difficulty": "hard",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_3_5",
+      "item_number": "3-5",
+      "item_type": "meta_categorization",
+      "question_text": "Each group follows a rule. Which group breaks its own rule?",
+      "options": [
+        {
+          "index": 0,
+          "text": "Cat, Dog, Hamster (pets)",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "Rose, Daisy, Sunflower (flowers)",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Red, Blue, Banana (colours)",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Guitar, Drums, Piano (instruments)",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "pattern_detection_strong",
+      "difficulty": "hard",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_3_6",
+      "item_number": "3-6",
+      "item_type": "strategic_search",
+      "question_text": "You're trying to find a word in a dictionary. You open to page 200 and see 'monkey.' Your word is 'planet.' What should you do?",
+      "options": [
+        {
+          "index": 0,
+          "text": "Go forward a lot of pages",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "Go back a few pages",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Start from the beginning",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Close the dictionary",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 0,
+      "primary_tag": "systematic_problem_solving",
+      "difficulty": "hard",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_3_7",
+      "item_number": "3-7",
+      "item_type": "dual_condition",
+      "question_text": "A rule says: 'If it rains, bring an umbrella. If it's cold, wear a jacket.' Today it's raining and cold. What do you do?",
+      "options": [
+        {
+          "index": 0,
+          "text": "Bring an umbrella only",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "Wear a jacket only",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Bring an umbrella and wear a jacket",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Stay home",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "flexible_strategy_use",
+      "difficulty": "hard",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_3_8",
+      "item_number": "3-8",
+      "item_type": "meta_strategy",
+      "question_text": "Aisha tried to solve a puzzle one way and got stuck. She tried a second way and also got stuck. Her friend says 'try combining both ways.' What should Aisha do?",
+      "options": [
+        {
+          "index": 0,
+          "text": "Give up",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "Try her first way again more carefully",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Use parts of both approaches together",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Ask someone else to do it",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "flexible_strategy_use",
+      "difficulty": "hard",
+      "expected_latency_seconds": 30
+    }
+  ],
+  "tag_coverage": {
+    "flexible_strategy_use": 2,
+    "pattern_detection_strong": 2,
+    "reasoning_under_load_emerging": 1,
+    "relational_reasoning_present": 1,
+    "systematic_problem_solving": 2
+  }
+}

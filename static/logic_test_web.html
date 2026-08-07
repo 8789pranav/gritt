@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cognitive Logic Assessment (K-4)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        /* Auth Section */
+        .auth-section {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            border: 2px solid #e2e8f0;
+        }
+
+        .auth-section h3 {
+            margin-top: 0;
+            color: #4a5568;
+        }
+
+        label {
+            display: block;
+            margin-top: 12px;
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.9em;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin-top: 4px;
+            border-radius: 8px;
+            border: 2px solid #e2e8f0;
+            font-size: 1em;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .login-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .login-row input {
+            flex: 1;
+        }
+
+        .login-row button {
+            width: auto;
+            margin-top: 0;
+            padding: 12px 20px;
+        }
+
+        .grade-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .grade-btn {
+            padding: 15px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .grade-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .grade-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .test-container {
+            display: none;
+        }
+
+        .test-container.active {
+            display: block;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            height: 8px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .item-number {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .question {
+            font-size: 1.4em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .options {
+            display: grid;
+            gap: 12px;
+        }
+
+        .option {
+            padding: 15px 20px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.05em;
+        }
+
+        .option:hover {
+            border-color: #667eea;
+            background: #f7f9ff;
+        }
+
+        .option.selected {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .option.correct {
+            border-color: #4caf50;
+            background: #4caf50;
+            color: white;
+        }
+
+        .option.incorrect {
+            border-color: #f44336;
+            background: #f44336;
+            color: white;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 30px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 30px;
+            font-size: 1.05em;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: #e0e0e0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #d0d0d0;
+        }
+
+        .btn-success {
+            background: #4caf50;
+            color: white;
+        }
+
+        .results {
+            display: none;
+            text-align: center;
+        }
+
+        .results.active {
+            display: block;
+        }
+
+        .results-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+
+        .score-circle {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 3em;
+            font-weight: bold;
+        }
+
+        .cognitive-tags {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .tag {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 12px 15px;
+            border-radius: 6px;
+            border-left: 4px solid rgba(255, 255, 255, 0.5);
+            text-align: left;
+        }
+
+        .tag strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .tag-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .recommendation {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: left;
+            color: #333;
+        }
+
+        .recommendation h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .recommendation ul {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+
+        .recommendation li {
+            margin-bottom: 8px;
+        }
+
+        .feedback {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: 500;
+        }
+
+        .feedback.correct {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .feedback.incorrect {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+
+        .timer {
+            text-align: right;
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+        }
+
+        .difficulty-indicator {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .difficulty-easy {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .difficulty-medium {
+            background: #fff9c4;
+            color: #f57f17;
+        }
+
+        .difficulty-hard {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+
+        /* Message */
+        .message {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .message.error {
+            background: #fed7d7;
+            color: #c53030;
+            display: block;
+        }
+
+        .message.success {
+            background: #c6f6d5;
+            color: #276749;
+            display: block;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Item-by-item breakdown */
+        .item-breakdown {
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .item-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .item-row:last-child {
+            border-bottom: none;
+        }
+
+        .item-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .item-icon.correct-icon {
+            background: #4caf50;
+            color: white;
+        }
+
+        .item-icon.incorrect-icon {
+            background: #f44336;
+            color: white;
+        }
+
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .question {
+                font-size: 1.1em;
+            }
+
+            .score-circle {
+                width: 120px;
+                height: 120px;
+                font-size: 2.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Logic Assessment</h1>
+            <p>Test your logical reasoning, pattern recognition, and problem-solving skills</p>
+        </div>
+
+        <div class="content">
+            <!-- Auth Section -->
+            <div id="authSection" class="auth-section">
+                <h3>🔐 Authentication</h3>
+                
+                <!-- Quick Login -->
+                <div style="background:#e8f4fd; padding:16px; border-radius:8px; margin-bottom:16px;">
+                    <strong>Quick Login:</strong>
+                    <div class="login-row" style="margin-top:8px;">
+                        <input type="email" id="loginEmail" placeholder="Email">
+                        <input type="password" id="loginPassword" placeholder="Password">
+                        <button id="loginBtn" style="width:auto; margin-top:0; padding:12px 20px;">Login</button>
+                    </div>
+                </div>
+                
+                <label>Firebase ID Token</label>
+                <input type="password" id="idToken" placeholder="Or paste your Firebase idToken">
+                <label>Child ID</label>
+                <input type="text" id="childId" placeholder="Enter child ID">
+                <button id="loadChildrenBtn" style="width:auto; display:inline-block; margin-right:8px;">Load Children</button>
+                <select id="childSelect" style="display:none; width:auto; margin-top:8px;"></select>
+            </div>
+
+            <!-- Message -->
+            <div class="message" id="message"></div>
+
+            <!-- Loading -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Loading test items...</p>
+            </div>
+
+            <!-- Grade Selection -->
+            <div id="gradeSelection">
+                <h2 style="margin-bottom: 20px; color: #333;">Select Your Grade Level:</h2>
+                <div class="grade-selector">
+                    <button class="grade-btn" onclick="startTest('K-1')">K-1</button>
+                    <button class="grade-btn" onclick="startTest('1-2')">Grade 1-2</button>
+                    <button class="grade-btn" onclick="startTest('2-3')">Grade 2-3</button>
+                    <button class="grade-btn" onclick="startTest('3-4')">Grade 3-4</button>
+                </div>
+            </div>
+
+            <!-- Test Content -->
+            <div id="testContent" class="test-container">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 id="gradeName" style="color: #333;"></h2>
+                    <div id="timer" class="timer"></div>
+                </div>
+
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+                </div>
+
+                <div id="itemContainer">
+                    <div class="item-number" id="itemNumber"></div>
+                    <div class="question" id="questionText"></div>
+                    <div class="options" id="optionsContainer"></div>
+                    <div id="feedback" class="feedback" style="display: none;"></div>
+                    <div class="button-group">
+                        <button class="btn-primary" id="submitBtn" onclick="submitResponse()">Submit Answer</button>
+                        <button class="btn-secondary" onclick="skipItem()">Skip</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div id="resultsContainer" class="results">
+                <div class="results-card">
+                    <h2>Your Results</h2>
+                    <div class="score-circle" id="scoreCircle"></div>
+                    <p id="performanceLevel" style="font-size: 1.3em; font-weight: 600;"></p>
+                </div>
+
+                <div id="cognitiveTags" class="cognitive-tags"></div>
+
+                <div class="item-breakdown" id="itemBreakdown"></div>
+
+                <div class="recommendation">
+                    <h3>Recommendations</h3>
+                    <ul id="recommendationsList"></ul>
+                </div>
+
+                <div class="button-group" style="margin-top: 30px;">
+                    <button class="btn-primary" onclick="restartTest()">Take Test Again</button>
+                    <button class="btn-secondary" onclick="location.reload()">Home</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        let currentGrade = null;
+        let currentItemIndex = 0;
+        let testItems = [];
+        let responses = [];
+        let testStartTime = null;
+        let itemStartTime = null;
+        
+
+        // Elements
+        const messageEl = document.getElementById('message');
+        const loadingEl = document.getElementById('loading');
+
+        function showMessage(text, type = 'info') {
+            messageEl.className = `message ${type}`;
+            messageEl.textContent = text;
+            messageEl.style.display = 'block';
+            setTimeout(() => messageEl.style.display = 'none', 8000);
+        }
+
+        // Clean token (remove b'...' wrapper if present)
+        function cleanToken(token) {
+            if (token.startsWith("b'") && token.endsWith("'")) {
+                return token.slice(2, -1);
+            }
+            if (token.startsWith('b"') && token.endsWith('"')) {
+                return token.slice(2, -1);
+            }
+            return token;
+        }
+
+        // Login functionality
+        document.getElementById('loginBtn').onclick = async function() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            
+            if (!email || !password) {
+                showMessage('Please enter email and password', 'error');
+                return;
+            }
+            
+            try {
+                const resp = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                if (resp.ok) {
+                    const data = await resp.json();
+                    document.getElementById('idToken').value = data.id_token;
+                    showMessage('Login successful! Token loaded.', 'success');
+                } else {
+                    const err = await resp.json();
+                    showMessage('Login failed: ' + (err.detail || 'Unknown error'), 'error');
+                }
+            } catch (e) {
+                showMessage('Network error: ' + e.message, 'error');
+            }
+        };
+
+        // Load children
+        document.getElementById('loadChildrenBtn').onclick = async function() {
+            let idToken = document.getElementById('idToken').value.trim();
+            idToken = cleanToken(idToken);
+            if (!idToken) {
+                showMessage('Please login or enter token first', 'error');
+                return;
+            }
+            
+            try {
+                const resp = await fetch(`${API_BASE}/get_children/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idToken })
+                });
+                
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const children = data.children || [];
+                    const select = document.getElementById('childSelect');
+                    select.innerHTML = children.map(c => 
+                        `<option value="${c.child_id}">${c.name} (${c.grade})</option>`
+                    ).join('');
+                    select.style.display = 'inline-block';
+                    select.onchange = () => {
+                        document.getElementById('childId').value = select.value;
+                    };
+                    if (children.length > 0) {
+                        document.getElementById('childId').value = children[0].child_id;
+                    }
+                    showMessage(`Found ${children.length} children`, 'success');
+                } else {
+                    showMessage('Failed to load children', 'error');
+                }
+            } catch (e) {
+                showMessage('Network error: ' + e.message, 'error');
+            }
+        };
+
+        async function startTest(grade) {
+            let idToken = document.getElementById('idToken').value.trim();
+            idToken = cleanToken(idToken);
+            const childId = document.getElementById('childId').value.trim();
+            
+            if (!idToken || !childId) {
+                showMessage('Please login and select a child first', 'error');
+                return;
+            }
+
+            currentGrade = grade;
+            currentItemIndex = 0;
+            responses = [];
+            testStartTime = new Date();
+            
+
+            loadingEl.classList.add('active');
+            document.getElementById('gradeSelection').style.display = 'none';
+
+            try {
+                const resp = await fetch(`${API_BASE}/logic/get_test/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idToken, child_id: childId, grade })
+                });
+                
+                if (resp.ok) {
+                    const data = await resp.json();
+                    testItems = data.items;
+
+
+                    document.getElementById('testContent').classList.add('active');
+                    document.getElementById('gradeName').textContent = `Grade ${grade} Logic Assessment`;
+                    loadItem(0);
+                } else {
+                    const err = await resp.json();
+                    showMessage(err.detail || 'Failed to load test items', 'error');
+                    document.getElementById('gradeSelection').style.display = 'block';
+                }
+            } catch (e) {
+                showMessage('Network error: ' + e.message, 'error');
+                document.getElementById('gradeSelection').style.display = 'block';
+            }
+            
+            loadingEl.classList.remove('active');
+        }
+
+        function loadItem(index) {
+            if (index >= testItems.length) {
+                submitAllResponses();
+                return;
+            }
+
+            currentItemIndex = index;
+            itemStartTime = new Date();
+
+            const item = testItems[index];
+            document.getElementById('itemNumber').textContent = `Item ${index + 1} of ${testItems.length}`;
+            document.getElementById('questionText').innerHTML = `
+                ${item.question_text}
+                <span class="difficulty-indicator difficulty-${item.difficulty}">${item.difficulty}</span>
+            `;
+
+            const optionsContainer = document.getElementById('optionsContainer');
+            optionsContainer.innerHTML = '';
+
+            item.options.forEach((option, idx) => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'option';
+                optionDiv.textContent = option.text;
+                optionDiv.onclick = () => selectOption(idx, item, optionDiv);
+                optionsContainer.appendChild(optionDiv);
+            });
+
+            document.getElementById('feedback').style.display = 'none';
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').textContent = 'Submit Answer';
+            document.getElementById('submitBtn').onclick = submitResponse;
+
+            updateProgress();
+            updateTimer();
+        }
+
+        function selectOption(index, item, element) {
+            document.querySelectorAll('.option').forEach(opt => opt.classList.remove('selected'));
+            element.classList.add('selected');
+            responses[currentItemIndex] = {
+                item_id: item.item_id,
+                selected_answer_index: index,
+                response_time_seconds: Math.round((new Date() - itemStartTime) / 1000),
+                attempts: 1,
+                self_corrected: false
+            };
+        }
+
+        function submitResponse() {
+            if (responses[currentItemIndex] === undefined) {
+                alert('Please select an answer before submitting.');
+                return;
+            }
+
+            const item = testItems[currentItemIndex];
+            const response = responses[currentItemIndex];
+            const isCorrect = response.selected_answer_index === item.correct_answer_index;
+
+            // Show feedback
+            const feedbackEl = document.getElementById('feedback');
+            feedbackEl.className = isCorrect ? 'feedback correct' : 'feedback incorrect';
+            feedbackEl.textContent = isCorrect ? '✓ Correct!' : '✗ Incorrect';
+            feedbackEl.style.display = 'block';
+
+            // Highlight correct answer
+            const options = document.querySelectorAll('.option');
+            options.forEach((opt, idx) => {
+                opt.classList.remove('selected');
+                if (idx === item.correct_answer_index) {
+                    opt.classList.add(isCorrect ? 'selected' : 'correct');
+                } else if (idx === response.selected_answer_index && !isCorrect) {
+                    opt.classList.add('incorrect');
+                }
+            });
+
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').textContent = 'Next';
+            document.getElementById('submitBtn').onclick = nextItem;
+        }
+
+        function nextItem() {
+            if (currentItemIndex < testItems.length - 1) {
+                loadItem(currentItemIndex + 1);
+            } else {
+                submitAllResponses();
+            }
+        }
+
+        function skipItem() {
+            responses[currentItemIndex] = {
+                item_id: testItems[currentItemIndex].item_id,
+                selected_answer_index: 0,
+                response_time_seconds: Math.round((new Date() - itemStartTime) / 1000),
+                attempts: 0,
+                self_corrected: false
+            };
+            nextItem();
+        }
+
+        function updateProgress() {
+            const percentage = ((currentItemIndex) / testItems.length) * 100;
+            document.getElementById('progressFill').style.width = percentage + '%';
+        }
+
+        function updateTimer() {
+            const elapsed = Math.floor((new Date() - testStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('timer').textContent = `Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            setTimeout(updateTimer, 1000);
+        }
+
+        async function submitAllResponses() {
+            let idToken = document.getElementById('idToken').value.trim();
+            idToken = cleanToken(idToken);
+            const childId = document.getElementById('childId').value.trim();
+
+            loadingEl.classList.add('active');
+            document.getElementById('testContent').classList.remove('active');
+
+            try {
+                // Submit all responses to backend
+                const submitResp = await fetch(`${API_BASE}/logic/submit_test/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        idToken,
+                        child_id: childId,
+                        grade: currentGrade,
+                        responses: responses.filter(r => r !== undefined)
+                    })
+                });
+
+                let submitResult = {};
+                if (submitResp.ok) {
+                    submitResult = await submitResp.json();
+                }
+
+                // Fetch complete result from backend
+                const resultResp = await fetch(`${API_BASE}/logic/complete_result/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        idToken,
+                        child_id: childId,
+                        grade: currentGrade
+                    })
+                });
+
+                let fullResult = submitResult;
+                if (resultResp.ok) {
+                    fullResult = await resultResp.json();
+                }
+
+                showResults(fullResult);
+            } catch (e) {
+                // Fallback: compute locally if API calls fail
+                console.error('API error, computing locally:', e);
+                showResultsLocal();
+            }
+            
+            loadingEl.classList.remove('active');
+        }
+
+        function showResults(result) {
+            document.getElementById('testContent').classList.remove('active');
+            document.getElementById('resultsContainer').classList.add('active');
+
+            const summary = result.summary || {};
+            const parentSummary = result.parent_summary || {};
+
+            const correctCount = summary.correct_answers || result.correct_answers || 0;
+            const totalCount = summary.total_items || result.total_items || testItems.length;
+            const percentage = summary.percentage || result.percentage || 0;
+            const level = summary.level || result.level || 'Emerging Logical Thinker';
+
+            document.getElementById('scoreCircle').textContent = `${correctCount}/${totalCount}`;
+            document.getElementById('performanceLevel').textContent = level;
+
+            // Show item-by-item breakdown
+            const breakdownEl = document.getElementById('itemBreakdown');
+            let breakdownHTML = '<h3 style="color:#333; margin-bottom:10px;">Item Breakdown</h3>';
+            const storedResponses = result.responses || responses;
+            testItems.forEach((item, i) => {
+                const resp = storedResponses[i];
+                if (!resp || resp.skipped) return;
+                const isCorrect = resp.selected_answer_index === item.correct_answer_index;
+                breakdownHTML += `
+                    <div class="item-row">
+                        <span>${item.question_text.substring(0, 50)}${item.question_text.length > 50 ? '...' : ''}</span>
+                        <span class="item-icon ${isCorrect ? 'correct-icon' : 'incorrect-icon'}">${isCorrect ? '✓' : '✗'}</span>
+                    </div>
+                `;
+            });
+            breakdownEl.innerHTML = breakdownHTML;
+
+            // Show cognitive tags
+            const cognitiveTags = summary.cognitive_tags || result.cognitive_tags || [];
+            const tagDescriptions = {
+                'pattern_detection_strong': { name: 'Pattern Recognition', desc: 'Strong' },
+                'pattern_detection_emerging': { name: 'Pattern Recognition', desc: 'Emerging' },
+                'relational_reasoning_present': { name: 'Relational Reasoning', desc: 'Present' },
+                'systematic_problem_solving': { name: 'Problem Solving', desc: 'Systematic' },
+                'flexible_strategy_use': { name: 'Strategy Use', desc: 'Flexible' },
+                'cognitive_flexibility_intact': { name: 'Cognitive Flexibility', desc: 'Intact' },
+                'trial_and_error_strategy': { name: 'Strategy', desc: 'Trial & Error' },
+                'strategy_shift_difficulty': { name: 'Strategy Shifting', desc: 'Needs Practice' },
+                'reasoning_under_load_emerging': { name: 'Reasoning Under Load', desc: 'Developing' },
+            };
+
+            const tagsContainer = document.getElementById('cognitiveTags');
+            if (cognitiveTags.length > 0) {
+                tagsContainer.innerHTML = cognitiveTags.map(tag => {
+                    const info = tagDescriptions[tag] || { name: tag.replace(/_/g, ' '), desc: '' };
+                    return `
+                        <div class="tag">
+                            <strong>${info.name}</strong>
+                            <span class="tag-label">${info.desc}</span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                tagsContainer.innerHTML = '<p style="color:#666;">No cognitive tags assigned</p>';
+            }
+
+            // Show recommendations
+            const strengths = parentSummary.strengths || [];
+            const areasToDevelop = parentSummary.areas_to_develop || [];
+            const recommendation = parentSummary.recommendation || 'Continue practicing logic puzzles.';
+
+            const recList = document.getElementById('recommendationsList');
+            let recHTML = '';
+            if (strengths.length > 0) {
+                recHTML += `<li><strong>Strengths:</strong> ${strengths.join(', ')}</li>`;
+            }
+            if (areasToDevelop.length > 0) {
+                recHTML += `<li><strong>Areas to develop:</strong> ${areasToDevelop.join(', ')}</li>`;
+            }
+            recHTML += `<li>${recommendation}</li>`;
+            recHTML += `<li><em>${parentSummary.note || 'This assessment is instructional and not a clinical diagnosis.'}</em></li>`;
+            recList.innerHTML = recHTML;
+        }
+
+        function showResultsLocal() {
+            const correctCount = responses.filter((r, i) => r && !r.skipped && r.selected_answer_index === testItems[i].correct_answer_index).length;
+            const totalCount = responses.filter(r => r && !r.skipped).length;
+            const percentage = Math.round((correctCount / totalCount) * 100);
+
+            let level = 'Emerging Logical Thinker';
+            if (percentage >= 90) level = 'Exceptional Logical Thinker';
+            else if (percentage >= 80) level = 'Advanced Logical Thinker';
+            else if (percentage >= 70) level = 'Good Logical Thinker';
+            else if (percentage >= 60) level = 'Developing Logical Thinker';
+
+            showResults({
+                summary: { total_items: totalCount, correct_answers: correctCount, percentage, level, cognitive_tags: [] },
+                parent_summary: {
+                    recommendation: 'Continue practicing logic puzzles.',
+                    strengths: [],
+                    areas_to_develop: [],
+                    note: 'Results computed locally (API unavailable).'
+                },
+                responses: responses
+            });
+        }
+
+        function restartTest() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>

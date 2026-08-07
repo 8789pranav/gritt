@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "test": "comprehension",
+  "grade": "Kindergarten",
+  "count": 2,
+  "stories": [
+    {
+      "story_id": "k_story1",
+      "title": "The Friendly Dog",
+      "story_text": "Once upon a time, there was a small brown dog named Max. \nHe lived in a cozy red house with a little boy named Tom.\nEvery morning, Max would wake up early and stretch his legs. Yaaawn!\nHe loved to run around in the yard. Zoom, zoom, zoom!\nTom would throw a bright yellow ball, and Max would catch it. Good boy, Max!\nMax had a soft, fluffy bed near the window. It was his favorite spot.\nHe loved to sleep there after playing. Zzzzz...\nOne sunny day, Max found a new friend! Oh, how exciting!\nIt was a fluffy white cat named Fluffy. Meow!\nThey played together all day long. Chase, chase, chase!\nMax was SO happy! He wagged his tail super fast and barked with joy. Woof woof!\nTom smiled and gave them both yummy treats. Munch, munch!\nAnd from that day on, Max and Fluffy became the very best of friends. Forever and ever!\nThe End.",
+      "duration_estimate": "60 seconds",
+      "questions": [
+        {
+          "question_id": "k1_q1",
+          "question": "What color was Max the dog?",
+          "options": [
+            "White",
+            "Brown",
+            "Black",
+            "Yellow"
+          ],
+          "correct_index": 1,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "k1_q2",
+          "question": "What did Tom throw for Max?",
+          "options": [
+            "A stick",
+            "A bone",
+            "A yellow ball",
+            "A toy"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "k1_q3",
+          "question": "What was the cat's name?",
+          "options": [
+            "Fluffy",
+            "Snowball",
+            "Kitty",
+            "Max"
+          ],
+          "correct_index": 0,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "k1_q4",
+          "question": "Where did Max like to sleep?",
+          "options": [
+            "On the floor",
+            "In Tom's bed",
+            "Near the window",
+            "Outside"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        }
+      ]
+    },
+    {
+      "story_id": "k_story2",
+      "title": "The Magic Garden",
+      "story_text": "Once upon a time, a little girl named Lily had a tiny garden behind her house.\nShe planted teeny-tiny seeds in the soft brown dirt. Pat, pat, pat!\nEvery single day, she gave them water from her special blue watering can. Splish, splash!\nShe talked sweetly to her plants and sang them little songs. La la la!\nThen one sunny morning... Lily saw something AMAZING!\nA tiny green leaf popped right up from the ground! Pop!\nLily was SO excited! She jumped up and down!\n\"Mommy, Mommy! Come see!\" she called.\nMore and more leaves grew each day. Growing, growing, growing!\nThen... WOW! Beautiful flowers bloomed everywhere!\nThere were red ones, pretty pink ones, and lovely purple ones too!\nOne day, a beautiful butterfly came to visit. Flutter, flutter!\nIt landed gently on the biggest red flower.\nLily smiled the biggest smile and clapped her happy hands. Clap, clap, clap!\nHer garden was the most magical place in the whole wide world!\nThe End.",
+      "duration_estimate": "65 seconds",
+      "questions": [
+        {
+          "question_id": "k2_q1",
+          "question": "What color was Lily's watering can?",
+          "options": [
+            "Red",
+            "Green",
+            "Blue",
+            "Yellow"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "k2_q2",
+          "question": "What came to visit Lily's garden?",
+          "options": [
+            "A bird",
+            "A butterfly",
+            "A bee",
+            "A ladybug"
+          ],
+          "correct_index": 1,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "k2_q3",
+          "question": "What did Lily do to help her plants grow?",
+          "options": [
+            "She read to them",
+            "She gave them water",
+            "She painted them",
+            "She played music"
+          ],
+          "correct_index": 1,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "k2_q4",
+          "question": "What color was NOT mentioned for the flowers?",
+          "options": [
+            "Red",
+            "Pink",
+            "Orange",
+            "Purple"
+          ],
+          "correct_index": 2,
+          "question_type": "inferential"
+        }
+      ]
+    }
+  ],
+  "total_questions": 8
+}

@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "test": "speaking",
+  "grade": "First",
+  "count": 8,
+  "sentences": [
+    {
+      "sentence_id": "f1",
+      "sentence": "The brown dog likes to play with the ball.",
+      "word_count": 9,
+      "difficulty": "easy"
+    },
+    {
+      "sentence_id": "f2",
+      "sentence": "She went to the store to buy some apples.",
+      "word_count": 9,
+      "difficulty": "easy"
+    },
+    {
+      "sentence_id": "f3",
+      "sentence": "The children are playing outside in the rain.",
+      "word_count": 8,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "f4",
+      "sentence": "My friend has a pretty yellow flower.",
+      "word_count": 7,
+      "difficulty": "easy"
+    },
+    {
+      "sentence_id": "f5",
+      "sentence": "We like to read books before bedtime.",
+      "word_count": 7,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "f6",
+      "sentence": "The rabbit jumped over the small fence.",
+      "word_count": 7,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "f7",
+      "sentence": "I can see the bright stars at night.",
+      "word_count": 8,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "f8",
+      "sentence": "The teacher told us a funny story today.",
+      "word_count": 8,
+      "difficulty": "medium"
+    }
+  ],
+  "max_score_per_sentence": 100
+}

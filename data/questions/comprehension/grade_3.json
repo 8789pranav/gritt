@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "test": "comprehension",
+  "grade": "Third",
+  "count": 2,
+  "stories": [
+    {
+      "story_id": "t_story1",
+      "title": "The Mysterious Letter",
+      "story_text": "On a chilly October morning, twelve-year-old Aria discovered an unusual letter in her mailbox. It had no return address, just her name written in elegant cursive. Inside, she found a riddle that read: Where books sleep and knowledge grows, find the clue where the wise owl shows. Aria thought carefully about the riddle. The school library had an owl statue near the entrance! After school, she rushed to the library and searched around the owl. Behind a loose brick, she found another envelope. This riddle mentioned the place where stories come alive on stage. That meant the auditorium! She found the third clue taped under seat number forty-two. The final riddle led her to the old oak tree in the schoolyard. There, she discovered a small wooden box containing a beautiful journal and a note from her grandmother. The note explained that her grandmother had created this treasure hunt when she attended the same school fifty years ago. She wanted Aria to have her special journal filled with stories and poems. Aria realized her grandmother was sharing a piece of her childhood through this magical adventure.",
+      "duration_estimate": "70 seconds",
+      "questions": [
+        {
+          "question_id": "t1_q1",
+          "question": "What time of year did Aria find the mysterious letter?",
+          "options": [
+            "Spring",
+            "Summer",
+            "Fall/October",
+            "Winter"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "t1_q2",
+          "question": "Where did Aria find the first clue?",
+          "options": [
+            "In the auditorium",
+            "Behind the owl statue at the library",
+            "Under a tree",
+            "In her classroom"
+          ],
+          "correct_index": 1,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "t1_q3",
+          "question": "What seat number had the third clue?",
+          "options": [
+            "Seat twenty-four",
+            "Seat thirty-two",
+            "Seat forty-two",
+            "Seat fifty-two"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "t1_q4",
+          "question": "Who created the treasure hunt and when?",
+          "options": [
+            "Her mother, ten years ago",
+            "Her grandmother, fifty years ago",
+            "Her teacher, last year",
+            "Her father, twenty years ago"
+          ],
+          "correct_index": 1,
+          "question_type": "inferential"
+        }
+      ]
+    },
+    {
+      "story_id": "t_story2",
+      "title": "The Courage to Try",
+      "story_text": "Daniel had always been terrified of water. While his friends enjoyed swimming at the community pool, he sat on the sidelines watching. His fear began when he fell into a pond as a young child. His parents encouraged him to take swimming lessons, but he always refused. One summer, his family planned a trip to the beach. Daniel felt anxious for weeks. His older sister, Maya, noticed his worry and offered to help him. They started slowly at the shallow end of their neighbor's pool. Maya taught him to put his face in the water and blow bubbles. Each day, Daniel became a little braver. He learned to float on his back, then to kick his feet. By the end of three weeks, Daniel could swim across the pool. When the beach trip finally arrived, something amazing happened. Daniel walked into the ocean waves without fear. He splashed and played with his family for the first time. That evening, as the sun set over the water, Daniel realized that facing his fear had given him something wonderful, the confidence to try new things.",
+      "duration_estimate": "68 seconds",
+      "questions": [
+        {
+          "question_id": "t2_q1",
+          "question": "Why was Daniel afraid of water?",
+          "options": [
+            "He saw a scary movie",
+            "He fell into a pond as a child",
+            "His friend got hurt swimming",
+            "He never learned to swim"
+          ],
+          "correct_index": 1,
+          "question_type": "inferential"
+        },
+        {
+          "question_id": "t2_q2",
+          "question": "Who helped Daniel overcome his fear?",
+          "options": [
+            "His parents",
+            "A swimming coach",
+            "His older sister Maya",
+            "His best friend"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "t2_q3",
+          "question": "How long did it take Daniel to learn to swim across the pool?",
+          "options": [
+            "One week",
+            "Two weeks",
+            "Three weeks",
+            "One month"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "t2_q4",
+          "question": "What important lesson did Daniel learn?",
+          "options": [
+            "Swimming is easy",
+            "The ocean is safe",
+            "Facing fears gives confidence",
+            "Sisters are helpful"
+          ],
+          "correct_index": 2,
+          "question_type": "inferential"
+        }
+      ]
+    }
+  ],
+  "total_questions": 8
+}

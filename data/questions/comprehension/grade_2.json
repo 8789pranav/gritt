@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "test": "comprehension",
+  "grade": "Second",
+  "count": 2,
+  "stories": [
+    {
+      "story_id": "s_story1",
+      "title": "The Treasure Map",
+      "story_text": "Sophie found an old piece of paper in her grandmother's attic. It looked like a treasure map with an X marked in red. The map showed her grandmother's backyard with trees and a small pond. Sophie decided to follow the map carefully. She walked past the old oak tree and turned left at the rose bushes. Then she counted ten steps toward the vegetable garden. The X was right next to the tomato plants. Sophie started digging with her small shovel. After a few minutes, she hit something hard. It was a metal box covered in rust. Her heart was beating fast with excitement. Inside the box, she found her grandmother's childhood treasures. There were old coins, pretty marbles, a silver locket with a photograph, and a letter. Her grandmother smiled when Sophie showed her. She told Sophie stories about each treasure. Sophie learned that the real treasure was the memories and stories from long ago.",
+      "duration_estimate": "65 seconds",
+      "questions": [
+        {
+          "question_id": "s1_q1",
+          "question": "Where did Sophie find the treasure map?",
+          "options": [
+            "In the basement",
+            "In the attic",
+            "In the kitchen",
+            "In the garden"
+          ],
+          "correct_index": 1,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "s1_q2",
+          "question": "What was the X marked next to?",
+          "options": [
+            "The oak tree",
+            "The rose bushes",
+            "The tomato plants",
+            "The pond"
+          ],
+          "correct_index": 2,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "s1_q3",
+          "question": "What was inside the metal box?",
+          "options": [
+            "Gold and diamonds",
+            "Old coins, marbles, a locket, and a letter",
+            "Toys and games",
+            "Money and jewelry"
+          ],
+          "correct_index": 1,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "s1_q4",
+          "question": "According to the story, what was the real treasure?",
+          "options": [
+            "The old coins",
+            "The silver locket",
+            "The memories and stories",
+            "The metal box"
+          ],
+          "correct_index": 2,
+          "question_type": "inferential"
+        }
+      ]
+    },
+    {
+      "story_id": "s_story2",
+      "title": "The Science Fair Project",
+      "story_text": "Marcus had two weeks to prepare for the school science fair. He decided to create a volcano that would actually erupt. His father helped him build a mountain shape using cardboard and paper. They painted it brown and gray to look like real rocks. Marcus researched how volcanoes work. He learned about magma deep inside the Earth. For the eruption, he would use baking soda and vinegar. On the day of the science fair, Marcus was nervous. Many students had impressive projects. Some made robots, others had plant experiments. When it was his turn, Marcus explained how volcanoes form. Then he poured the vinegar into the volcano. Red foam bubbled up and flowed down the sides like real lava. Everyone clapped and cheered. The judges were very impressed. Marcus won second place and received a blue ribbon. He felt proud of all his hard work and learning.",
+      "duration_estimate": "62 seconds",
+      "questions": [
+        {
+          "question_id": "s2_q1",
+          "question": "How much time did Marcus have to prepare?",
+          "options": [
+            "One week",
+            "Two weeks",
+            "Three weeks",
+            "One month"
+          ],
+          "correct_index": 1,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "s2_q2",
+          "question": "What materials did Marcus use to make the volcano erupt?",
+          "options": [
+            "Water and soap",
+            "Baking soda and vinegar",
+            "Oil and food coloring",
+            "Salt and lemon juice"
+          ],
+          "correct_index": 1,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "s2_q3",
+          "question": "What place did Marcus win at the science fair?",
+          "options": [
+            "First place",
+            "Second place",
+            "Third place",
+            "He did not win"
+          ],
+          "correct_index": 1,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "s2_q4",
+          "question": "What color ribbon did Marcus receive?",
+          "options": [
+            "Red",
+            "Blue",
+            "Yellow",
+            "Green"
+          ],
+          "correct_index": 1,
+          "question_type": "vocabulary"
+        }
+      ]
+    }
+  ],
+  "total_questions": 8
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "test": "speaking",
+  "test_key": "voice_challenge",
+  "display_name": "Voice Challenge (Speaking)",
+  "description": "Cognitive tag definitions for the Voice Challenge speaking assessment.",
+  "derived_signals": [
+    "avg_fluency",
+    "avg_pronunciation",
+    "avg_prosody",
+    "flat_delivery",
+    "hard_band_avg"
+  ],
+  "tags": [
+    {
+      "id": "expressive_fluency_strong",
+      "trigger": "avg_fluency >= 0.8",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child reads aloud with smooth, natural-sounding fluency."
+    },
+    {
+      "id": "expressive_fluency_emerging",
+      "trigger": "avg_fluency >= 0.6 AND avg_fluency < 0.8",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Child's fluency is developing but not yet consistently smooth."
+    },
+    {
+      "id": "pronunciation_accurate",
+      "trigger": "avg_pronunciation >= 0.85",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child pronounces words accurately and clearly."
+    },
+    {
+      "id": "pronunciation_developing",
+      "trigger": "avg_pronunciation < 0.7",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Child has notable pronunciation gaps that affect intelligibility."
+    },
+    {
+      "id": "prosody_strong",
+      "trigger": "avg_prosody >= 0.8",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child uses appropriate intonation, stress, and rhythm."
+    },
+    {
+      "id": "prosody_emerging",
+      "trigger": "flat_delivery == true",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Child reads in a flat, monotone manner without natural expression."
+    },
+    {
+      "id": "complex_syntax_confident",
+      "trigger": "hard_band_avg >= 0.8",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child handles complex sentence structures with confidence."
+    }
+  ]
+}

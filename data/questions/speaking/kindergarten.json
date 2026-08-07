@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "test": "speaking",
+  "grade": "Kindergarten",
+  "count": 8,
+  "sentences": [
+    {
+      "sentence_id": "k1",
+      "sentence": "The cat sat on the mat.",
+      "word_count": 6,
+      "difficulty": "easy"
+    },
+    {
+      "sentence_id": "k2",
+      "sentence": "I see a big red dog.",
+      "word_count": 6,
+      "difficulty": "easy"
+    },
+    {
+      "sentence_id": "k3",
+      "sentence": "The sun is very hot.",
+      "word_count": 5,
+      "difficulty": "easy"
+    },
+    {
+      "sentence_id": "k4",
+      "sentence": "My mom has a blue cup.",
+      "word_count": 6,
+      "difficulty": "easy"
+    },
+    {
+      "sentence_id": "k5",
+      "sentence": "The fish can swim fast.",
+      "word_count": 5,
+      "difficulty": "easy"
+    },
+    {
+      "sentence_id": "k6",
+      "sentence": "I like to run and hop.",
+      "word_count": 6,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "k7",
+      "sentence": "The little bug is on the leaf.",
+      "word_count": 7,
+      "difficulty": "medium"
+    },
+    {
+      "sentence_id": "k8",
+      "sentence": "Dad and I play in the park.",
+      "word_count": 7,
+      "difficulty": "medium"
+    }
+  ],
+  "max_score_per_sentence": 100
+}

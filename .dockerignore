@@ -1,9 +1,11 @@
 # Ignore Python virtual environments
 venv/
+.venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.pytest_cache/
 
 # Ignore git files
 .git
@@ -15,3 +17,7 @@ __pycache__/
 # Ignore Docker files (optional)
 Dockerfile
 .dockerignore
+
+# Ignore legacy tests and archived docs
+tests/legacy/
+docs/archive/

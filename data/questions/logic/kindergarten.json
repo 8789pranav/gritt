@@ -1,0 +1,270 @@
+{
+  "schema_version": "1.0",
+  "test": "logic",
+  "grade": "K-1",
+  "count": 8,
+  "items": [
+    {
+      "item_id": "logic_k_1",
+      "item_number": "K-1",
+      "item_type": "categorization",
+      "question_text": "Which one does NOT belong? Dog, Cat, Fish, Chair",
+      "options": [
+        {
+          "index": 0,
+          "text": "Dog",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "Cat",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Fish",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Chair",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 3,
+      "primary_tag": "pattern_detection_strong",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_2",
+      "item_number": "K-2",
+      "item_type": "pattern",
+      "question_text": "What comes next? Circle, Square, Circle, Square, Circle, ___",
+      "options": [
+        {
+          "index": 0,
+          "text": "Triangle",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "Square",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Circle",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Star",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 1,
+      "primary_tag": "pattern_detection_strong",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_3",
+      "item_number": "K-3",
+      "item_type": "analogy",
+      "question_text": "A hat goes on your head. A shoe goes on your foot. Where does a glove go?",
+      "options": [
+        {
+          "index": 0,
+          "text": "Your ear",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "Your hand",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Your knee",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Your elbow",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 1,
+      "primary_tag": "relational_reasoning_present",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_4",
+      "item_number": "K-4",
+      "item_type": "combining",
+      "question_text": "Ravi has 3 red blocks and 2 blue blocks. How many blocks does Ravi have in total?",
+      "options": [
+        {
+          "index": 0,
+          "text": "3",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "4",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "5",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "6",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "systematic_problem_solving",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_5",
+      "item_number": "K-5",
+      "item_type": "categorization",
+      "question_text": "What is the odd one out? Apple, Banana, Carrot, Grapes?",
+      "options": [
+        {
+          "index": 0,
+          "text": "Apple",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "Banana",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Carrot",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Grapes",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "pattern_detection_strong",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_6",
+      "item_number": "K-6",
+      "item_type": "analogy",
+      "question_text": "A bird can fly. A fish can swim. What can a frog do?",
+      "options": [
+        {
+          "index": 0,
+          "text": "Fly",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "Read",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "Jump",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "Drive",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "relational_reasoning_present",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_7",
+      "item_number": "K-7",
+      "item_type": "comparison",
+      "question_text": "Which one is the biggest? Ant, dog, horse, cat?",
+      "options": [
+        {
+          "index": 0,
+          "text": "An ant",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "A dog",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "A horse",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "A cat",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "reasoning_under_load_emerging",
+      "difficulty": "medium",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_8",
+      "item_number": "K-8",
+      "item_type": "conditional_logic",
+      "question_text": "If today is sunny, you wear sunglasses. If today is rainy, you wear a raincoat. Today is rainy. What do you wear?",
+      "options": [
+        {
+          "index": 0,
+          "text": "Sunglasses",
+          "image_url": null
+        },
+        {
+          "index": 1,
+          "text": "A raincoat",
+          "image_url": null
+        },
+        {
+          "index": 2,
+          "text": "A swimsuit",
+          "image_url": null
+        },
+        {
+          "index": 3,
+          "text": "A scarf",
+          "image_url": null
+        }
+      ],
+      "correct_answer_index": 1,
+      "primary_tag": "systematic_problem_solving",
+      "difficulty": "medium",
+      "expected_latency_seconds": 30
+    }
+  ],
+  "tag_coverage": {
+    "pattern_detection_strong": 3,
+    "reasoning_under_load_emerging": 1,
+    "relational_reasoning_present": 2,
+    "systematic_problem_solving": 2
+  }
+}

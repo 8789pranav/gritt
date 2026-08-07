@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "description": "Cross-test thresholds and tag synthesis rules shared by every assessment engine.",
+  "thresholds": {
+    "latency_multiplier_for_over_time": 1.5,
+    "fast_response_ratio_for_impulsive": 0.5,
+    "borderline_score_low": 0.55,
+    "borderline_score_high": 0.65,
+    "min_sentences_for_speaking_tag": 3
+  },
+  "synthesis_rules": {
+    "low_confidence_weight": 0.3,
+    "high_confidence_weight": 1.0,
+    "min_tags_for_headline": 2,
+    "never_standalone_if_low_confidence": true
+  },
+  "confidence_weights": {
+    "high": 1.0,
+    "medium": 0.6,
+    "low": 0.3
+  }
+}

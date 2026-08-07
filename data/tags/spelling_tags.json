@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "test": "spelling",
+  "test_key": "word_wizard",
+  "display_name": "Word Wizard (Spelling)",
+  "description": "Cognitive tag definitions for the Word Wizard spelling assessment.",
+  "derived_signals": [
+    "beginning_accuracy",
+    "final_accuracy",
+    "vowel_accuracy",
+    "vowel_error_count",
+    "digraph_accuracy",
+    "blend_accuracy",
+    "digraph_error_count",
+    "sight_word_accuracy",
+    "regular_word_accuracy",
+    "improved_with_audio",
+    "hard_words_attempted_ratio",
+    "fast_slips"
+  ],
+  "tags": [
+    {
+      "id": "phonetic_strategy_strong",
+      "trigger": "beginning_accuracy >= 0.8 AND final_accuracy >= 0.8 AND vowel_accuracy >= 0.7",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child decodes words using solid phonetic knowledge across all positions."
+    },
+    {
+      "id": "vowel_accuracy_strong",
+      "trigger": "vowel_error_count == 0",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child demonstrates mastery of short and long vowel patterns."
+    },
+    {
+      "id": "vowel_difficulty_emerging",
+      "trigger": "vowel_error_count >= 2",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Child shows emerging difficulty with vowel patterns."
+    },
+    {
+      "id": "digraph_blend_competent",
+      "trigger": "digraph_accuracy >= 0.7 AND blend_accuracy >= 0.7",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child handles consonant digraphs and blends competently."
+    },
+    {
+      "id": "digraph_difficulty_emerging",
+      "trigger": "digraph_error_count >= 2",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Child struggles with consonant digraph or blend patterns."
+    },
+    {
+      "id": "sight_word_recognition_strong",
+      "trigger": "sight_word_accuracy >= 0.8",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child recognizes high-frequency sight words reliably."
+    },
+    {
+      "id": "sight_word_emerging",
+      "trigger": "sight_word_accuracy < regular_word_accuracy AND sight_word_accuracy < 0.7",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Child finds sight words harder than phonetically regular words."
+    },
+    {
+      "id": "audio_support_benefit",
+      "trigger": "improved_with_audio == true",
+      "confidence": "high",
+      "polarity": "neutral",
+      "description": "Child performed better after hearing the word spoken aloud."
+    },
+    {
+      "id": "confident_attempt",
+      "trigger": "hard_words_attempted_ratio >= 0.8",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child attempts challenging words without giving up."
+    },
+    {
+      "id": "rushed_spelling",
+      "trigger": "fast_slips >= 2",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Child makes careless errors on words they likely know due to speed."
+    }
+  ]
+}

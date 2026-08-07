@@ -1,0 +1,137 @@
+{
+  "schema_version": "1.0",
+  "test": "spelling",
+  "grade": "First",
+  "count": 15,
+  "words": [
+    {
+      "word": "yet",
+      "type": "regular",
+      "sentence": "I haven't finished my homework yet.",
+      "features": {
+        "beginning": "y",
+        "final": "t",
+        "short_vowels": "e"
+      }
+    },
+    {
+      "word": "chap",
+      "type": "regular",
+      "sentence": "The old book has a new chap.",
+      "features": {
+        "beginning": "ch",
+        "final": "p",
+        "short_vowels": "a",
+        "consonant_digraphs": "ch"
+      }
+    },
+    {
+      "word": "bed",
+      "type": "regular",
+      "sentence": "I sleep in a cozy bed.",
+      "features": {
+        "beginning": "b",
+        "final": "d",
+        "short_vowels": "e"
+      }
+    },
+    {
+      "word": "she",
+      "type": "regular",
+      "sentence": "She runs very fast.",
+      "features": {
+        "beginning": "sh",
+        "short_vowels": "e",
+        "consonant_digraphs": "sh"
+      }
+    },
+    {
+      "word": "ran",
+      "type": "regular",
+      "sentence": "He ran to catch the bus.",
+      "features": {
+        "beginning": "r",
+        "final": "n",
+        "short_vowels": "a"
+      }
+    },
+    {
+      "word": "hi",
+      "type": "regular",
+      "sentence": "She waved and said hi.",
+      "features": {
+        "beginning": "h",
+        "short_vowels": "i",
+        "long_vowel_patterns": "i"
+      }
+    },
+    {
+      "word": "go",
+      "type": "regular",
+      "sentence": "Let's go to the park.",
+      "features": {
+        "beginning": "g",
+        "short_vowels": "o",
+        "long_vowel_patterns": "o"
+      }
+    },
+    {
+      "word": "quit",
+      "type": "regular",
+      "sentence": "Don't quit the game now.",
+      "features": {
+        "beginning": "qu",
+        "final": "t",
+        "short_vowels": "i",
+        "consonant_blends": "qu"
+      }
+    },
+    {
+      "word": "cup",
+      "type": "regular",
+      "sentence": "I drink from a red cup.",
+      "features": {
+        "beginning": "c",
+        "final": "p",
+        "short_vowels": "u"
+      }
+    },
+    {
+      "word": "with",
+      "type": "regular",
+      "sentence": "Come with me to the store.",
+      "features": {
+        "beginning": "w",
+        "final": "th",
+        "short_vowels": "i",
+        "consonant_digraphs": "th"
+      }
+    },
+    {
+      "word": "is",
+      "type": "sight",
+      "sentence": "The cat is sleeping on the mat."
+    },
+    {
+      "word": "the",
+      "type": "sight",
+      "sentence": "The dog chased the ball."
+    },
+    {
+      "word": "my",
+      "type": "sight",
+      "sentence": "This is my favorite book."
+    },
+    {
+      "word": "of",
+      "type": "sight",
+      "sentence": "She ate a piece of cake."
+    },
+    {
+      "word": "and",
+      "type": "sight",
+      "sentence": "I like to read and write."
+    }
+  ],
+  "max_points": 38
+}

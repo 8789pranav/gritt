@@ -1,0 +1,269 @@
+{
+  "schema_version": "1.0",
+  "test": "spelling",
+  "grade": "Kindergarten",
+  "count": 31,
+  "words": [
+    {
+      "word": "cat",
+      "type": "regular",
+      "sentence": "The cat chased the mouse.",
+      "features": {
+        "beginning": "c",
+        "final": "t",
+        "short_vowels": "a"
+      }
+    },
+    {
+      "word": "mat",
+      "type": "regular",
+      "sentence": "Sit on the mat.",
+      "features": {
+        "beginning": "m",
+        "final": "t",
+        "short_vowels": "a"
+      }
+    },
+    {
+      "word": "tap",
+      "type": "regular",
+      "sentence": "Tap the drum loudly.",
+      "features": {
+        "beginning": "t",
+        "final": "p",
+        "short_vowels": "a"
+      }
+    },
+    {
+      "word": "bat",
+      "type": "regular",
+      "sentence": "He hit the ball with a bat.",
+      "features": {
+        "beginning": "b",
+        "final": "t",
+        "short_vowels": "a"
+      }
+    },
+    {
+      "word": "fan",
+      "type": "regular",
+      "sentence": "The fan keeps me cool.",
+      "features": {
+        "beginning": "f",
+        "final": "n",
+        "short_vowels": "a"
+      }
+    },
+    {
+      "word": "top",
+      "type": "regular",
+      "sentence": "The top spins fast.",
+      "features": {
+        "beginning": "t",
+        "final": "p",
+        "short_vowels": "o"
+      }
+    },
+    {
+      "word": "pen",
+      "type": "regular",
+      "sentence": "Write with a pen.",
+      "features": {
+        "beginning": "p",
+        "final": "n",
+        "short_vowels": "e"
+      }
+    },
+    {
+      "word": "bed",
+      "type": "regular",
+      "sentence": "I sleep in my bed.",
+      "features": {
+        "beginning": "b",
+        "final": "d",
+        "short_vowels": "e"
+      }
+    },
+    {
+      "word": "net",
+      "type": "regular",
+      "sentence": "Catch fish in a net.",
+      "features": {
+        "beginning": "n",
+        "final": "t",
+        "short_vowels": "e"
+      }
+    },
+    {
+      "word": "sit",
+      "type": "regular",
+      "sentence": "Sit on the chair.",
+      "features": {
+        "beginning": "s",
+        "final": "t",
+        "short_vowels": "i"
+      }
+    },
+    {
+      "word": "fin",
+      "type": "regular",
+      "sentence": "The fish has a fin.",
+      "features": {
+        "beginning": "f",
+        "final": "n",
+        "short_vowels": "i"
+      }
+    },
+    {
+      "word": "pig",
+      "type": "regular",
+      "sentence": "The pig is pink.",
+      "features": {
+        "beginning": "p",
+        "final": "g",
+        "short_vowels": "i"
+      }
+    },
+    {
+      "word": "pot",
+      "type": "regular",
+      "sentence": "Cook soup in a pot.",
+      "features": {
+        "beginning": "p",
+        "final": "t",
+        "short_vowels": "o"
+      }
+    },
+    {
+      "word": "dog",
+      "type": "regular",
+      "sentence": "The dog barks loudly.",
+      "features": {
+        "beginning": "d",
+        "final": "g",
+        "short_vowels": "o"
+      }
+    },
+    {
+      "word": "hop",
+      "type": "regular",
+      "sentence": "The bunny can hop.",
+      "features": {
+        "beginning": "h",
+        "final": "p",
+        "short_vowels": "o"
+      }
+    },
+    {
+      "word": "cup",
+      "type": "regular",
+      "sentence": "Drink from a cup.",
+      "features": {
+        "beginning": "c",
+        "final": "p",
+        "short_vowels": "u"
+      }
+    },
+    {
+      "word": "sun",
+      "type": "regular",
+      "sentence": "The sun is bright.",
+      "features": {
+        "beginning": "s",
+        "final": "n",
+        "short_vowels": "u"
+      }
+    },
+    {
+      "word": "bug",
+      "type": "regular",
+      "sentence": "A bug crawled on the leaf.",
+      "features": {
+        "beginning": "b",
+        "final": "g",
+        "short_vowels": "u"
+      }
+    },
+    {
+      "word": "cab",
+      "type": "regular",
+      "sentence": "The cab stopped at the light.",
+      "features": {
+        "beginning": "c",
+        "final": "b",
+        "short_vowels": "a"
+      }
+    },
+    {
+      "word": "rug",
+      "type": "regular",
+      "sentence": "The rug is soft.",
+      "features": {
+        "beginning": "r",
+        "final": "g",
+        "short_vowels": "u"
+      }
+    },
+    {
+      "word": "lip",
+      "type": "regular",
+      "sentence": "She put balm on her lip.",
+      "features": {
+        "beginning": "l",
+        "final": "p",
+        "short_vowels": "i"
+      }
+    },
+    {
+      "word": "to",
+      "type": "sight",
+      "sentence": "I go to school."
+    },
+    {
+      "word": "me",
+      "type": "sight",
+      "sentence": "Give the ball to me."
+    },
+    {
+      "word": "he",
+      "type": "sight",
+      "sentence": "He runs very fast."
+    },
+    {
+      "word": "see",
+      "type": "sight",
+      "sentence": "I see a big dog."
+    },
+    {
+      "word": "go",
+      "type": "sight",
+      "sentence": "Let’s go to the park."
+    },
+    {
+      "word": "no",
+      "type": "sight",
+      "sentence": "No, I don’t want that."
+    },
+    {
+      "word": "a",
+      "type": "sight",
+      "sentence": "I have a red apple."
+    },
+    {
+      "word": "it",
+      "type": "sight",
+      "sentence": "Look at it!"
+    },
+    {
+      "word": "in",
+      "type": "sight",
+      "sentence": "The cat is in the box."
+    },
+    {
+      "word": "on",
+      "type": "sight",
+      "sentence": "The book is on the table."
+    }
+  ],
+  "max_points": 73
+}

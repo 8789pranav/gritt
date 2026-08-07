@@ -1,0 +1,149 @@
+{
+  "schema_version": "1.0",
+  "test": "spelling",
+  "grade": "Third",
+  "count": 15,
+  "words": [
+    {
+      "word": "shower",
+      "type": "regular",
+      "sentence": "The shower refreshed us after the hike.",
+      "features": {
+        "beginning_consonant": "sh",
+        "final_consonant": "r",
+        "short_vowels": "o",
+        "consonant_digraphs": "sh",
+        "other_vowel_patterns": "ow"
+      }
+    },
+    {
+      "word": "outline",
+      "type": "regular",
+      "sentence": "She drew an outline of the map.",
+      "features": {
+        "final_consonant": "n",
+        "long_vowel_patterns": "i-e",
+        "other_vowel_patterns": "ou"
+      }
+    },
+    {
+      "word": "candle",
+      "type": "regular",
+      "sentence": "The candle lit the dark room.",
+      "features": {
+        "beginning_consonant": "c",
+        "final_consonant": "l, e",
+        "short_vowels": "a",
+        "consonant_blends": "nd",
+        "other_vowel_patterns": "le"
+      }
+    },
+    {
+      "word": "perplex",
+      "type": "regular",
+      "sentence": "The puzzle began to perplex him.",
+      "features": {
+        "beginning_consonant": "p",
+        "final_consonant": "x",
+        "short_vowels": "e, e",
+        "consonant_blends": "pr, pl"
+      }
+    },
+    {
+      "word": "hamburger",
+      "type": "regular",
+      "sentence": "We ate a juicy hamburger for lunch.",
+      "features": {
+        "beginning_consonant": "h",
+        "final_consonant": "r",
+        "short_vowels": "a, u, e",
+        "consonant_blends": "mb, rg"
+      }
+    },
+    {
+      "word": "turnstile",
+      "type": "regular",
+      "sentence": "He passed through the turnstile.",
+      "features": {
+        "beginning_consonant": "t",
+        "final_consonant": "l, e",
+        "short_vowels": "u, i",
+        "consonant_blends": "rn, st"
+      }
+    },
+    {
+      "word": "amputate",
+      "type": "regular",
+      "sentence": "The doctor had to amputate the leg.",
+      "features": {
+        "beginning_consonant": "a (vowel start)",
+        "final_consonant": "t, e",
+        "short_vowels": "a, u",
+        "consonant_blends": "mp, t",
+        "long_vowel_patterns": "a-e"
+      }
+    },
+    {
+      "word": "sixteen",
+      "type": "regular",
+      "sentence": "She turned sixteen last month.",
+      "features": {
+        "beginning_consonant": "s",
+        "final_consonant": "n",
+        "short_vowels": "i, e",
+        "consonant_blends": "xt",
+        "long_vowel_patterns": "ee"
+      }
+    },
+    {
+      "word": "entertain",
+      "type": "regular",
+      "sentence": "The clown will entertain the children.",
+      "features": {
+        "beginning_consonant": "e (vowel start)",
+        "final_consonant": "n",
+        "short_vowels": "e, a",
+        "consonant_blends": "nt, rt",
+        "long_vowel_patterns": "ai"
+      }
+    },
+    {
+      "word": "puzzle",
+      "type": "regular",
+      "sentence": "The puzzle took hours to solve.",
+      "features": {
+        "beginning_consonant": "p",
+        "final_consonant": "z, l, e",
+        "short_vowels": "u",
+        "consonant_digraphs": "zz",
+        "other_vowel_patterns": "le"
+      }
+    },
+    {
+      "word": "there",
+      "type": "sight",
+      "sentence": "There is a bird in the tree."
+    },
+    {
+      "word": "which",
+      "type": "sight",
+      "sentence": "Which book do you like best?"
+    },
+    {
+      "word": "although",
+      "type": "sight",
+      "sentence": "Although it was raining, we went outside."
+    },
+    {
+      "word": "people",
+      "type": "sight",
+      "sentence": "Many people came to the party."
+    },
+    {
+      "word": "could",
+      "type": "sight",
+      "sentence": "I could hear the music from far away."
+    }
+  ],
+  "max_points": 50
+}

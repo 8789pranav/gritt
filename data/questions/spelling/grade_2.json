@@ -1,0 +1,146 @@
+{
+  "schema_version": "1.0",
+  "test": "spelling",
+  "grade": "Second",
+  "count": 15,
+  "words": [
+    {
+      "word": "quaint",
+      "type": "regular",
+      "sentence": "The quaint village was peaceful.",
+      "features": {
+        "beginning": "qu",
+        "final": "nt",
+        "blend": "nt",
+        "long_vowel": "ai"
+      }
+    },
+    {
+      "word": "clunk",
+      "type": "regular",
+      "sentence": "The old car made a clunk sound.",
+      "features": {
+        "beginning": "cl",
+        "final": "nk",
+        "short_vowel": "u",
+        "blend": "cl, nk"
+      }
+    },
+    {
+      "word": "coast",
+      "type": "regular",
+      "sentence": "We walked along the coast.",
+      "features": {
+        "beginning": "c",
+        "final": "st",
+        "blend": "st",
+        "long_vowel": "oa"
+      }
+    },
+    {
+      "word": "standstill",
+      "type": "regular",
+      "sentence": "Traffic came to a standstill.",
+      "features": {
+        "beginning": "st",
+        "final": "ll",
+        "short_vowel": "a, i",
+        "blend": "st, nd, st"
+      }
+    },
+    {
+      "word": "climax",
+      "type": "regular",
+      "sentence": "The story reached its climax.",
+      "features": {
+        "beginning": "cl",
+        "final": "x",
+        "short_vowel": "i, a",
+        "blend": "cl"
+      }
+    },
+    {
+      "word": "bombastic",
+      "type": "regular",
+      "sentence": "His speech was bombastic.",
+      "features": {
+        "beginning": "b",
+        "final": "c",
+        "short_vowel": "o, a, i",
+        "blend": "st"
+      }
+    },
+    {
+      "word": "strand",
+      "type": "regular",
+      "sentence": "We found a strand of hair.",
+      "features": {
+        "beginning": "str",
+        "final": "nd",
+        "short_vowel": "a",
+        "blend": "str, nd"
+      }
+    },
+    {
+      "word": "graph",
+      "type": "regular",
+      "sentence": "She drew a graph for class.",
+      "features": {
+        "beginning": "gr",
+        "final": "ph",
+        "short_vowel": "a",
+        "digraph": "ph",
+        "blend": "gr"
+      }
+    },
+    {
+      "word": "hunted",
+      "type": "regular",
+      "sentence": "They hunted for treasure.",
+      "features": {
+        "beginning": "h",
+        "final": "d",
+        "short_vowel": "u, e",
+        "blend": "nt",
+        "inflected": "ed"
+      }
+    },
+    {
+      "word": "phone",
+      "type": "regular",
+      "sentence": "She answered the phone.",
+      "features": {
+        "beginning": "ph",
+        "final": "n",
+        "digraph": "ph",
+        "long_vowel": "o-e"
+      }
+    },
+    {
+      "word": "from",
+      "type": "sight",
+      "sentence": "I got a letter from my friend."
+    },
+    {
+      "word": "does",
+      "type": "sight",
+      "sentence": "What does the sign say?"
+    },
+    {
+      "word": "they",
+      "type": "sight",
+      "sentence": "They played soccer in the park."
+    },
+    {
+      "word": "said",
+      "type": "sight",
+      "sentence": "She said hello to everyone."
+    },
+    {
+      "word": "what",
+      "type": "sight",
+      "sentence": "What time is the party?"
+    }
+  ],
+  "max_points": 47
+}

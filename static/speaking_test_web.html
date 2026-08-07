@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎤 Speaking & Reading Tests</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      font-family: 'Segoe UI', Arial, sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      margin: 0; 
+      padding: 20px; 
+    }
+    .container { 
+      max-width: 700px; 
+      margin: 0 auto; 
+      background: #fff; 
+      border-radius: 16px; 
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2); 
+      padding: 32px; 
+    }
+    h1 { text-align: center; color: #2a3a5e; margin-bottom: 8px; }
+    .subtitle { text-align: center; color: #718096; margin-bottom: 24px; }
+    
+    /* Tab Navigation */
+    .tab-nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      background: #f7fafc;
+      padding: 8px;
+      border-radius: 12px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+      background: transparent;
+      color: #4a5568;
+    }
+    .tab-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .tab-btn:hover:not(.active) {
+      background: #edf2f7;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    label { display: block; margin-top: 16px; font-weight: bold; color: #4a5568; }
+    input, select, button { 
+      width: 100%; 
+      padding: 12px; 
+      margin-top: 4px; 
+      border-radius: 8px; 
+      border: 2px solid #e2e8f0; 
+      font-size: 1em;
+    }
+    input:focus, select:focus { outline: none; border-color: #667eea; }
+    button { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff; 
+      font-weight: bold; 
+      cursor: pointer; 
+      margin-top: 16px; 
+      border: none;
+      transition: transform 0.2s;
+    }
+    button:hover:not(:disabled) { transform: translateY(-2px); }
+    button:disabled { background: #cbd5e0; }
+    .btn-green { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }
+    .btn-orange { background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); }
+    
+    .sentence-block { 
+      margin: 24px 0; 
+      padding: 20px; 
+      background: linear-gradient(135deg, #f6f9fc 0%, #edf2f7 100%);
+      border-radius: 12px; 
+      border: 2px solid #e2e8f0;
+    }
+    .audio-controls { margin: 16px 0; display: flex; gap: 8px; }
+    .audio-controls button { flex: 1; }
+    .result-block { 
+      background: #e8ffe8; 
+      border: 2px solid #48bb78; 
+      border-radius: 12px; 
+      padding: 16px; 
+      margin-top: 16px; 
+    }
+    .error { color: #c53030; background: #fed7d7; padding: 12px; border-radius: 8px; margin-top: 8px; }
+    .success { color: #276749; background: #c6f6d5; padding: 12px; border-radius: 8px; margin-top: 8px; }
+    .info { color: #2b6cb0; background: #bee3f8; padding: 12px; border-radius: 8px; margin-top: 8px; }
+    .nav-btns { display: flex; justify-content: space-between; margin-top: 16px; gap: 8px; }
+    .nav-btns button { flex: 1; }
+    pre { background: #f4f4f4; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 0.85em; }
+    
+    /* Recording indicator */
+    .recording { animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    /* Link to other test */
+    .test-link {
+      display: block;
+      text-align: center;
+      margin-top: 24px;
+      padding: 16px;
+      background: #f7fafc;
+      border-radius: 12px;
+      color: #667eea;
+      text-decoration: none;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    .test-link:hover {
+      background: #edf2f7;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎤 Speaking & 📖 Reading Tests</h1>
+    <p class="subtitle">Test speaking skills or reading comprehension with AI</p>
+    
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab('speaking')">🎤 Speaking Test</button>
+      <button class="tab-btn" onclick="switchTab('comprehension')">📖 Comprehension Test</button>
+    </div>
+    
+    <!-- Speaking Tab -->
+    <div id="speakingTab" class="tab-content active">
+    <label>Firebase idToken</label>
+    <input type="password" id="idToken" placeholder="Paste your idToken here">
+    <label>Child ID</label>
+    <input type="text" id="childId" placeholder="Enter child ID">
+    <label>Grade</label>
+    <select id="grade">
+      <option>Kindergarten</option>
+      <option>First</option>
+      <option>Second</option>
+      <option>Third</option>
+    </select>
+    <button id="fetchBtn">Fetch Sentences</button>
+    <div id="sentencesBlock"></div>
+    <button id="submitAllBtn" style="display:none; margin-top:16px;">Submit All</button>
+    <button id="showResultsBtn" style="display:none; margin-left:8px;">Show Results</button>
+    <div id="resultBlock"></div>
+    <div id="fullResults"></div>
+    </div>
+    
+    <!-- Comprehension Tab -->
+    <div id="comprehensionTab" class="tab-content">
+      <div style="text-align:center; padding: 40px 20px;">
+        <h2>📖 Reading Comprehension Test</h2>
+        <p style="color:#718096; margin-bottom:24px;">
+          Listen to stories narrated with expressive AI voice and answer questions
+        </p>
+        <a href="comprehension_test_web.html" class="test-link" style="display:inline-block; padding:16px 32px;">
+          🎧 Open Comprehension Test →
+        </a>
+        <div style="margin-top:32px; padding:20px; background:#f7fafc; border-radius:12px; text-align:left;">
+          <h3 style="color:#4a5568; margin-top:0;">✨ Features:</h3>
+          <ul style="color:#718096; line-height:2;">
+            <li>🗣️ <strong>OpenAI TTS</strong> - Expressive storytelling voice</li>
+            <li>📖 <strong>2 Stories per grade</strong> - Age-appropriate content</li>
+            <li>❓ <strong>4 MCQ questions per story</strong> - Test comprehension</li>
+            <li>📊 <strong>Instant results</strong> - See score and recommendations</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Tab switching function
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(tabName + 'Tab').classList.add('active');
+      event.target.classList.add('active');
+    }
+  </script>
+  <script>
+    const API_BASE = 'http://localhost:8000';
+    let sentences = [];
+    let current = 0;
+    let audioBlob = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let results = [];
+    let recordings = {}; // {sentence_id: base64audio}
+
+    document.getElementById('fetchBtn').onclick = async function() {
+      const idToken = document.getElementById('idToken').value.trim();
+      const childId = document.getElementById('childId').value.trim();
+      const grade = document.getElementById('grade').value;
+      if (!idToken || !childId || !grade) {
+        showError('Please fill all fields.');
+        return;
+      }
+      showInfo('Fetching sentences...');
+      const resp = await fetch(`${API_BASE}/speaking/get_all_sentences/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken, child_id: childId, grade })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        sentences = data.sentences;
+        current = 0;
+        results = [];
+        showSentences();
+      } else {
+        showError('Failed to fetch sentences.');
+      }
+    };
+
+    function showSentences() {
+      const block = document.getElementById('sentencesBlock');
+      block.innerHTML = '';
+      if (!sentences.length) return;
+      const sent = sentences[current];
+      block.innerHTML = `
+        <div class="sentence-block">
+          <b>Sentence ${current+1} of ${sentences.length}:</b><br>
+          <span>${sent.sentence}</span><br>
+          <small>Difficulty: ${sent.difficulty}, Words: ${sent.word_count}</small><br>
+          ${sent.audio_base64 ? `<audio controls src="data:audio/mp3;base64,${sent.audio_base64}"></audio>` : '<i>No audio available</i>'}
+        </div>
+        <div class="audio-controls">
+          <button id="recBtn">🎤 Record</button>
+          <button id="stopBtn" disabled>⏹️ Stop</button>
+          <audio id="playback" controls style="display:none;"></audio>
+        </div>
+        <button id="saveRecordingBtn" disabled>Save Recording for This Sentence</button>
+        <div class="nav-btns">
+          <button id="prevBtn" ${current===0?'disabled':''}>Previous</button>
+          <button id="nextBtn" ${current===sentences.length-1?'disabled':''}>Next</button>
+        </div>
+      `;
+      document.getElementById('recBtn').onclick = startRecording;
+      document.getElementById('stopBtn').onclick = stopRecording;
+      document.getElementById('saveRecordingBtn').onclick = saveRecordingForSentence;
+      document.getElementById('prevBtn').onclick = () => { if(current>0){current--; showSentences();} };
+      document.getElementById('nextBtn').onclick = () => { if(current<sentences.length-1){current++; showSentences();} };
+      // Show submit/results buttons
+      document.getElementById('submitAllBtn').style.display = 'inline-block';
+      document.getElementById('showResultsBtn').style.display = 'inline-block';
+    }
+
+    function showError(msg) {
+      document.getElementById('resultBlock').innerHTML = `<div class="error">${msg}</div>`;
+    }
+    function showInfo(msg) {
+      document.getElementById('resultBlock').innerHTML = `<div class="success">${msg}</div>`;
+    }
+    function showResult(data) {
+      document.getElementById('resultBlock').innerHTML = `<div class="result-block"><b>Analysis Result:</b><pre>${JSON.stringify(data, null, 2)}</pre></div>`;
+    }
+    function showFullResults(data) {
+      document.getElementById('fullResults').innerHTML = `<div class="result-block"><b>Complete Results:</b><pre>${JSON.stringify(data, null, 2)}</pre></div>`;
+    }
+
+
+    // --- Audio Recording ---
+    async function startRecording() {
+      audioChunks = [];
+      audioBlob = null;
+      const recBtn = document.getElementById('recBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      recBtn.disabled = true;
+      stopBtn.disabled = false;
+      document.getElementById('saveRecordingBtn').disabled = true;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const url = URL.createObjectURL(audioBlob);
+        const playback = document.getElementById('playback');
+        playback.src = url;
+        playback.style.display = 'block';
+        document.getElementById('saveRecordingBtn').disabled = false;
+      };
+      mediaRecorder.start();
+    }
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        document.getElementById('recBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+      }
+    }
+    async function saveRecordingForSentence() {
+      if (!audioBlob) { showError('Please record your voice first.'); return; }
+      const sent = sentences[current];
+      const base64 = await blobToBase64(audioBlob);
+      recordings[sent.sentence_id] = base64;
+      showInfo('Recording saved for this sentence.');
+    }
+
+    // --- Analyze ---
+    async function analyzeSentence() {
+      if (!audioBlob) { showError('Please record your voice first.'); return; }
+      showInfo('Analyzing...');
+      const idToken = document.getElementById('idToken').value.trim();
+      const childId = document.getElementById('childId').value.trim();
+      const grade = document.getElementById('grade').value;
+      const sent = sentences[current];
+      // Convert audioBlob to base64
+      const audioBase64 = await blobToBase64(audioBlob);
+      const resp = await fetch(`${API_BASE}/speaking/analyze/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken,
+          child_id: childId,
+          grade,
+          sentence_id: sent.sentence_id,
+          original_sentence: sent.sentence,
+          audio_base64: audioBase64,
+          audio_format: 'wav'
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        results.push(data);
+        showResult(data);
+      } else {
+        showError('Analysis failed.');
+      }
+    }
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    // --- Submit All ---
+    document.getElementById('submitAllBtn').onclick = async function() {
+        showInfo('Submitting all answers...'); // Update to batch submission
+        const idToken = document.getElementById('idToken').value.trim();
+        const childId = document.getElementById('childId').value.trim();
+        const grade = document.getElementById('grade').value;
+        // Prepare submissions array for all sentences
+        const submissions = sentences.map((s) => {
+            const audioBase64 = recordings[s.sentence_id] || '';
+            return {
+                sentence_id: s.sentence_id,
+                original_sentence: s.sentence,
+                audio_base64: audioBase64,
+                audio_format: audioBase64 ? 'wav' : ''
+            };
+        });
+        const resp = await fetch(`${API_BASE}/speaking/submit/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken, child_id: childId, grade, submissions })
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            showResult(data);
+            // Optionally, fetch and show the complete result immediately
+            await showResults();
+        } else {
+            showError('Failed to submit answers.');
+        }
+    };
+
+    // --- Show Results ---
+    document.getElementById('showResultsBtn').onclick = async function() {
+      showInfo('Fetching complete results...');
+      const idToken = document.getElementById('idToken').value.trim();
+      const childId = document.getElementById('childId').value.trim();
+      const grade = document.getElementById('grade').value;
+      const resp = await fetch(`${API_BASE}/speaking/complete_result/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken, child_id: childId, grade })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        showFullResults(data);
+      } else {
+        showError('Failed to fetch complete results.');
+      }
+    };
+  </script>
+</body>
+</html>
