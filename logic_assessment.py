@@ -912,10 +912,78 @@ LOGIC_ITEMS_3_4 = [
 
 
 # ============================================================================
-# All Items Combined
+# LOGIC QUEST ITEM BANK - KINDERGARTEN THROUGH 3RD GRADE (8 ITEMS EACH)
 # ============================================================================
 
-ALL_LOGIC_ITEMS = LOGIC_ITEMS_K1 + LOGIC_ITEMS_1_2 + LOGIC_ITEMS_2_3 + LOGIC_ITEMS_3_4
+
+def _logic_quest_item(
+    item_id: str,
+    grade_level: GradeLevel,
+    item_number: str,
+    item_type: str,
+    question_text: str,
+    option_texts: List[str],
+    correct_answer_index: int,
+    primary_tag: CognitiveTag,
+    difficulty: str,
+    expected_latency_seconds: int = 30,
+) -> LogicItem:
+    return LogicItem(
+        item_id=item_id,
+        grade_level=grade_level,
+        item_number=item_number,
+        item_type=item_type,
+        question_text=question_text,
+        options=[LogicOption(index=index, text=text) for index, text in enumerate(option_texts)],
+        correct_answer_index=correct_answer_index,
+        expected_latency_seconds=expected_latency_seconds,
+        primary_tag=primary_tag,
+        difficulty=difficulty,
+    )
+
+
+LOGIC_QUEST_ITEMS = [
+    _logic_quest_item("logic_k_1", GradeLevel.KINDERGARTEN_1, "K-1", "categorization", "Which one does NOT belong? Dog, Cat, Fish, Chair", ["Dog", "Cat", "Fish", "Chair"], 3, CognitiveTag.PATTERN_DETECTION_STRONG, "easy"),
+    _logic_quest_item("logic_k_2", GradeLevel.KINDERGARTEN_1, "K-2", "pattern", "What comes next? Circle, Square, Circle, Square, Circle, ___", ["Triangle", "Square", "Circle", "Star"], 1, CognitiveTag.PATTERN_DETECTION_STRONG, "easy"),
+    _logic_quest_item("logic_k_3", GradeLevel.KINDERGARTEN_1, "K-3", "analogy", "A hat goes on your head. A shoe goes on your foot. Where does a glove go?", ["Your ear", "Your hand", "Your knee", "Your elbow"], 1, CognitiveTag.RELATIONAL_REASONING_PRESENT, "easy"),
+    _logic_quest_item("logic_k_4", GradeLevel.KINDERGARTEN_1, "K-4", "combining", "Ravi has 3 red blocks and 2 blue blocks. How many blocks does Ravi have in total?", ["3", "4", "5", "6"], 2, CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING, "easy"),
+    _logic_quest_item("logic_k_5", GradeLevel.KINDERGARTEN_1, "K-5", "categorization", "What is the odd one out? Apple, Banana, Carrot, Grapes?", ["Apple", "Banana", "Carrot", "Grapes"], 2, CognitiveTag.PATTERN_DETECTION_STRONG, "easy"),
+    _logic_quest_item("logic_k_6", GradeLevel.KINDERGARTEN_1, "K-6", "analogy", "A bird can fly. A fish can swim. What can a frog do?", ["Fly", "Read", "Jump", "Drive"], 2, CognitiveTag.RELATIONAL_REASONING_PRESENT, "easy"),
+    _logic_quest_item("logic_k_7", GradeLevel.KINDERGARTEN_1, "K-7", "comparison", "Which one is the biggest? Ant, dog, horse, cat?", ["An ant", "A dog", "A horse", "A cat"], 2, CognitiveTag.REASONING_UNDER_LOAD_EMERGING, "medium"),
+    _logic_quest_item("logic_k_8", GradeLevel.KINDERGARTEN_1, "K-8", "conditional_logic", "If today is sunny, you wear sunglasses. If today is rainy, you wear a raincoat. Today is rainy. What do you wear?", ["Sunglasses", "A raincoat", "A swimsuit", "A scarf"], 1, CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING, "medium"),
+
+    _logic_quest_item("logic_1_1", GradeLevel.GRADE_1_2, "1-1", "pattern", "What comes next? 2, 4, 6, 8, ___", ["9", "10", "11", "12"], 1, CognitiveTag.PATTERN_DETECTION_STRONG, "easy"),
+    _logic_quest_item("logic_1_2", GradeLevel.GRADE_1_2, "1-2", "analogy", "Hot is to cold as big is to ___", ["Tall", "Small", "Fast", "Heavy"], 1, CognitiveTag.RELATIONAL_REASONING_PRESENT, "easy"),
+    _logic_quest_item("logic_1_3", GradeLevel.GRADE_1_2, "1-3", "categorization", "Mia sorted her toys into two groups. Group 1: ball, marble, orange. Group 2: book, box, block. What rule did Mia use?", ["Color", "Size", "Shape (round vs not round)", "Weight"], 2, CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING, "medium"),
+    _logic_quest_item("logic_1_4", GradeLevel.GRADE_1_2, "1-4", "pattern", "What comes next? Triangle, Triangle, Circle, Triangle, Triangle, Circle, ___", ["Circle", "Square", "Triangle", "Star"], 2, CognitiveTag.PATTERN_DETECTION_STRONG, "medium"),
+    _logic_quest_item("logic_1_5", GradeLevel.GRADE_1_2, "1-5", "analogy", "A puppy grows into a dog. A kitten grows into a cat. A calf grows into a ___", ["Horse", "Cow", "Sheep", "Pig"], 1, CognitiveTag.RELATIONAL_REASONING_PRESENT, "medium"),
+    _logic_quest_item("logic_1_6", GradeLevel.GRADE_1_2, "1-6", "strategy", "Leo tried to build a tower with round balls. It kept falling. What should he try instead?", ["Use more balls", "Use flat blocks", "Stack them faster", "Use smaller balls"], 1, CognitiveTag.FLEXIBLE_STRATEGY_USE, "medium"),
+    _logic_quest_item("logic_1_7", GradeLevel.GRADE_1_2, "1-7", "two_step", "There are 3 birds on a fence. 2 more birds land. Then 1 flies away. How many birds are on the fence?", ["3", "4", "5", "6"], 1, CognitiveTag.REASONING_UNDER_LOAD_EMERGING, "medium"),
+    _logic_quest_item("logic_1_8", GradeLevel.GRADE_1_2, "1-8", "rule_application", "Every animal with wings in this game can fly. A penguin has wings. Can the penguin fly in this game?", ["Yes, because it has wings", "No, because penguins can't really fly", "Only if it wants to", "No, because it's too heavy"], 0, CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING, "medium"),
+
+    _logic_quest_item("logic_2_1", GradeLevel.GRADE_2_3, "2-1", "pattern", "What number comes next? 3, 6, 9, 12, ___", ["13", "14", "15", "16"], 2, CognitiveTag.PATTERN_DETECTION_STRONG, "medium"),
+    _logic_quest_item("logic_2_2", GradeLevel.GRADE_2_3, "2-2", "double_analogy", "Shoe is to foot as glove is to ___. Now: hat is to head as belt is to ___", ["Hand, Waist", "Finger, Neck", "Arm, Leg", "Hand, Leg"], 0, CognitiveTag.RELATIONAL_REASONING_PRESENT, "medium"),
+    _logic_quest_item("logic_2_3", GradeLevel.GRADE_2_3, "2-3", "transitive_reasoning", "Priya is taller than Sam. Sam is taller than Leo. Who is the shortest?", ["Priya", "Sam", "Leo", "They're all the same height"], 2, CognitiveTag.REASONING_UNDER_LOAD_EMERGING, "hard"),
+    _logic_quest_item("logic_2_4", GradeLevel.GRADE_2_3, "2-4", "rule_boundary", "A farmer puts animals in pens using this rule: animals with 4 legs go in the red pen, animals with 2 legs go in the blue pen. The spider has 8 legs. What happens?", ["It goes in the red pen", "It goes in the blue pen", "It goes in both pens", "It doesn't fit either pen"], 3, CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING, "hard"),
+    _logic_quest_item("logic_2_5", GradeLevel.GRADE_2_3, "2-5", "pattern", "Look at this pattern: AB, CD, EF, GH, ___", ["HI", "IJ", "GH", "JK"], 1, CognitiveTag.PATTERN_DETECTION_STRONG, "medium"),
+    _logic_quest_item("logic_2_6", GradeLevel.GRADE_2_3, "2-6", "strategy", "Zara tried to cross a stream by jumping. She couldn't reach. What should she try next?", ["Jump harder", "Look for stepping stones or a log", "Close her eyes and try again", "Jump backwards"], 1, CognitiveTag.FLEXIBLE_STRATEGY_USE, "medium"),
+    _logic_quest_item("logic_2_7", GradeLevel.GRADE_2_3, "2-7", "multi_step_quantity", "In a game, red shapes are worth 2 points and blue shapes are worth 3 points. You pick 2 red shapes and 1 blue shape. How many points do you have?", ["5", "6", "7", "8"], 2, CognitiveTag.REASONING_UNDER_LOAD_EMERGING, "hard"),
+    _logic_quest_item("logic_2_8", GradeLevel.GRADE_2_3, "2-8", "dual_rule", "Tom's rule: 'If it has wheels, it goes in the garage. If it has wings, it goes in the hangar.' A toy plane has both wheels and wings. Where does it go?", ["The garage", "The hangar", "Both places", "Neither place"], 2, CognitiveTag.FLEXIBLE_STRATEGY_USE, "hard"),
+
+    _logic_quest_item("logic_3_1", GradeLevel.GRADE_3_4, "3-1", "pattern", "Look at this pattern: 2, 6, 18, 54, ___", ["72", "108", "162", "60"], 2, CognitiveTag.PATTERN_DETECTION_STRONG, "hard"),
+    _logic_quest_item("logic_3_2", GradeLevel.GRADE_3_4, "3-2", "transitive_reasoning", "Maya is older than Kai. Kai is older than Priya. Priya is older than Jude. Who is the second youngest?", ["Maya", "Kai", "Priya", "Jude"], 2, CognitiveTag.REASONING_UNDER_LOAD_EMERGING, "hard"),
+    _logic_quest_item("logic_3_3", GradeLevel.GRADE_3_4, "3-3", "syllogism", "Every blooper is a floop. Every floop is a zang. Is every blooper a zang?", ["Yes, definitely", "No, never", "Only some bloopers", "Not enough information"], 0, CognitiveTag.RELATIONAL_REASONING_PRESENT, "hard"),
+    _logic_quest_item("logic_3_4", GradeLevel.GRADE_3_4, "3-4", "dual_rule_arithmetic", "In a game, you earn a star for every 3 correct answers. You lose a star for every 2 wrong answers. You got 9 right and 4 wrong. How many stars do you have?", ["1", "2", "3", "5"], 0, CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING, "hard"),
+    _logic_quest_item("logic_3_5", GradeLevel.GRADE_3_4, "3-5", "meta_categorization", "Each group follows a rule. Which group breaks its own rule?", ["Cat, Dog, Hamster (pets)", "Rose, Daisy, Sunflower (flowers)", "Red, Blue, Banana (colours)", "Guitar, Drums, Piano (instruments)"], 2, CognitiveTag.PATTERN_DETECTION_STRONG, "hard"),
+    _logic_quest_item("logic_3_6", GradeLevel.GRADE_3_4, "3-6", "strategic_search", "You're trying to find a word in a dictionary. You open to page 200 and see 'monkey.' Your word is 'planet.' What should you do?", ["Go forward a lot of pages", "Go back a few pages", "Start from the beginning", "Close the dictionary"], 0, CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING, "hard"),
+    _logic_quest_item("logic_3_7", GradeLevel.GRADE_3_4, "3-7", "dual_condition", "A rule says: 'If it rains, bring an umbrella. If it's cold, wear a jacket.' Today it's raining and cold. What do you do?", ["Bring an umbrella only", "Wear a jacket only", "Bring an umbrella and wear a jacket", "Stay home"], 2, CognitiveTag.FLEXIBLE_STRATEGY_USE, "hard"),
+    _logic_quest_item("logic_3_8", GradeLevel.GRADE_3_4, "3-8", "meta_strategy", "Aisha tried to solve a puzzle one way and got stuck. She tried a second way and also got stuck. Her friend says 'try combining both ways.' What should Aisha do?", ["Give up", "Try her first way again more carefully", "Use parts of both approaches together", "Ask someone else to do it"], 2, CognitiveTag.FLEXIBLE_STRATEGY_USE, "hard"),
+]
+
+
+# The original K-4 bank remains above for historical compatibility; this is the
+# active bank served by the Logic Quest endpoints.
+ALL_LOGIC_ITEMS = LOGIC_QUEST_ITEMS
 
 
 def get_items_by_grade(grade_level: GradeLevel) -> List[LogicItem]:
