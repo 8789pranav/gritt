@@ -255,10 +255,13 @@ class TestLogicPerItemTags:
         items = engine.get_items(grade)
         result = engine.evaluate("child", grade, [])
 
+        items_by_id = {item.item_id: item for item in items}
         for pit in result.per_item_tags:
             assert pit.answered is False
             assert pit.is_correct is None
-            assert pit.tags == []
+            item = items_by_id.get(pit.item_id)
+            expected_tag = f"{item.primary_tag.value}_missed"
+            assert pit.tags == [expected_tag], f"{pit.item_id}: expected [{expected_tag}], got {pit.tags}"
 
     @pytest.mark.parametrize("grade", list(Grade))
     def test_per_item_tags_trial_and_error(self, grade: Grade):
@@ -435,11 +438,13 @@ class TestSpellingPerItemTags:
         if not regular_items:
             return
 
+        # Use realistic misspellings (drop last 1-2 chars) so they're
+        # classified as genuine misspellings, not unrelated_attempt.
         responses = [
             SpellingResponse(
                 item_id=item.item_id,
                 word=item.word,
-                user_input="zzqq",
+                user_input=item.word[:-1] if len(item.word) > 2 else item.word + "x",
                 word_type=item.word_type,
                 response_time_seconds=6.0,
             )

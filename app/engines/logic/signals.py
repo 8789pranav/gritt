@@ -157,7 +157,12 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
             response = responses_by_id.get(item.item_id)
             if response is None:
                 results.append(
-                    PerItemTags(item_id=item.item_id, answered=False, is_correct=None)
+                    PerItemTags(
+                        item_id=item.item_id,
+                        answered=False,
+                        is_correct=None,
+                        tags=[f"{item.primary_tag.value}_missed"],
+                    )
                 )
                 continue
 
@@ -168,6 +173,8 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
 
             if is_correct:
                 tags.append(item.primary_tag.value)
+            else:
+                tags.append(f"{item.primary_tag.value}_missed")
             if response.attempts > 1:
                 tags.append(CognitiveTag.TRIAL_AND_ERROR_STRATEGY.value)
             if response.self_corrected and is_correct:

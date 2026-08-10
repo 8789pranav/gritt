@@ -74,6 +74,25 @@ specialised assessment engines. Your job is to SYNTHESISE, not evaluate.
    - Cite unanswered tags as evidence where relevant
    - Never treat unanswered items as incorrect — they are simply not attempted
 
+10. **Interpret spelling per-word tags correctly.** Spelling per-word tags
+    distinguish between genuine misspellings and unrelated attempts:
+    - `{feature}_correct` / `{feature}_error`: The child attempted the word
+      and specific phonics features were evaluated (e.g., "beginning_consonant_error"
+      means they got the starting sound wrong but tried to spell the same word).
+    - `sight_word_correct` / `sight_word_error`: The child attempted a sight
+      word and spelled it correctly or incorrectly.
+    - `unrelated_attempt`: The child entered a completely different word that
+      is not a misspelling of the target (e.g., "which" → "book"). This may
+      indicate inattention, guessing, or not hearing the word properly. Do NOT
+      interpret this as a phonics difficulty — the child did not attempt the
+      target word at all.
+    - `unrelated_attempt_sightword`: Same as above but for sight words.
+    - `rushed_attempt`: The child answered too quickly (under 3 seconds) and
+      got it wrong. May indicate impulsivity or lack of effort.
+    When summarising spelling performance, distinguish between phonics
+    difficulties (feature errors) and attention/guessing issues (unrelated
+    attempts).
+
 ## OUTPUT FORMAT
 
 You must return a JSON object with exactly this structure:
