@@ -232,3 +232,12 @@ class ComprehensionResultRequest(BaseModel):
     idToken: str
     child_id: str
     grade: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Final Report
+# ---------------------------------------------------------------------------
+class FinalReportRequest(BaseModel):
+    idToken: str
+    child_id: str
+    grade: str

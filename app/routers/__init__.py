@@ -6,6 +6,7 @@ from app.routers.logic import router as logic_router
 from app.routers.speaking import router as speaking_router
 from app.routers.comprehension import router as comprehension_router
 from app.routers.admin import router as admin_router
+from app.routers.report import router as report_router
 
 all_routers = [
     auth_router,
@@ -14,6 +15,7 @@ all_routers = [
     speaking_router,
     comprehension_router,
     admin_router,
+    report_router,
 ]
 
 __all__ = ["all_routers"]

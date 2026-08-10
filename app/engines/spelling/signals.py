@@ -153,7 +153,16 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
         items: Sequence[SpellingWord],
         responses: Sequence[SpellingResponse],
     ) -> List[PerItemTags]:
-        """Attribute the specific feature errors made on each word."""
+        """Attribute per-feature tags (both correct and error) for each word.
+
+        For regular (phonetic) words, every phonics feature is tagged as
+        either ``{feature}_correct`` or ``{feature}_error``.
+
+        For sight words, ``sight_word_correct`` or ``sight_word_error``.
+
+        Additionally, ``rushed_attempt`` is added when a wrong answer is
+        given in under ``FAST_RESPONSE_SECONDS``.
+        """
         responses_by_word = {r.word.strip().lower(): r for r in responses}
         results: List[PerItemTags] = []
 
@@ -171,12 +180,16 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
 
             if item.word_type is WordType.REGULAR:
                 for expectation in parse_expectations(item.features):
-                    if not expectation.matches(attempt):
+                    if expectation.matches(attempt):
+                        tags.append(f"{expectation.feature.value}_correct")
+                    else:
                         tags.append(f"{expectation.feature.value}_error")
-                is_correct = attempt == target or not tags
+                is_correct = attempt == target
             else:
                 is_correct = attempt == target
-                if not is_correct:
+                if is_correct:
+                    tags.append(f"{item.word_type.value}_word_correct")
+                else:
                     tags.append(f"{item.word_type.value}_word_error")
 
             if not is_correct and 0 < response.response_time_seconds < FAST_RESPONSE_SECONDS:
