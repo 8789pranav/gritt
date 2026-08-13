@@ -166,26 +166,23 @@ def mock_tts():
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def mock_speech():
-    """Patch SpeechProvider.transcribe and analyze."""
-    transcribe_result = {
+    """Patch HybridSpeechProvider.analyze_with_audio."""
+    analysis_result = {
         "success": True,
+        "analysis": {
+            "pronunciation": {"score": 85, "feedback": "Good pronunciation."},
+            "speaking_rate": {"score": 80, "wpm": 120, "status": "Perfect", "feedback": "Good pace."},
+            "fluency": {"score": 75, "long_pauses_count": 0, "feedback": "Smooth delivery."},
+            "prosody": {"score": 70, "monotony_score": 0.6, "feedback": "Good expression."},
+            "grammar": {"score": 90, "issues": [], "feedback": "No grammar issues."},
+            "overall": {"score": 82, "status": "At", "level": "Good Speaker", "recommendation": "Keep practicing!", "parent_tip": "Read aloud daily.", "strengths": ["Pronunciation"], "areas_to_improve": ["Fluency"]},
+        },
         "transcribed_text": "The cat sat on the mat.",
         "word_timestamps": [{"word": "The", "start": 0.0, "end": 0.3}],
         "duration": 3.5,
     }
-    analysis_result = {
-        "success": True,
-        "analysis": {
-            "pronunciation": {"score": 85, "status": "Good", "level": "Good"},
-            "speaking_rate": {"score": 80, "status": "Good", "level": "Good", "wpm": 120},
-            "fluency": {"score": 75, "status": "Good", "level": "Good"},
-            "grammar": {"score": 90, "status": "Good", "level": "Good"},
-            "overall": {"score": 82, "status": "Good", "level": "Good", "recommendation": "Keep practicing!", "parent_tip": "Read aloud daily."},
-        },
-    }
 
-    with patch("app.infrastructure.speech.SpeechProvider.transcribe", new_callable=AsyncMock, return_value=transcribe_result), \
-         patch("app.infrastructure.speech.SpeechProvider.analyze", new_callable=AsyncMock, return_value=analysis_result):
+    with patch("app.infrastructure.hybrid_speech.HybridSpeechProvider.analyze_with_audio", new_callable=AsyncMock, return_value=analysis_result):
         yield
 
 

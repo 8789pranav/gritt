@@ -151,6 +151,7 @@
   .word-correct { background: #064e3b; color: #34d399; }
   .word-mispronounced { background: #7c2d12; color: #fb923c; }
   .word-omitted { background: #450a0a; color: #fca5a5; }
+  .word-pause { background: #1e1b4b; color: #818cf8; font-size: 0.75rem; }
 
   .feedback-section {
     background: #0f172a;
@@ -385,17 +386,23 @@ async function startRecording() {
       stream.getTracks().forEach(t => t.stop());
       audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
 
-      // Convert to WAV for better GPT-audio compatibility
-      audioBase64 = await blobToWavBase64(audioBlob);
-
       const url = URL.createObjectURL(audioBlob);
       const player = document.getElementById('audioPlayer');
       player.src = url;
       player.style.display = 'block';
-
       document.getElementById('playBtn').disabled = false;
-      document.getElementById('analyzeBtn').disabled = false;
-      setStatus(`Recording complete (${(audioBlob.size / 1024).toFixed(1)} KB). Click Analyze.`, 'success');
+
+      setStatus(`Converting to WAV (${(audioBlob.size / 1024).toFixed(1)} KB)...`, 'loading');
+
+      try {
+        audioBase64 = await blobToWavBase64(audioBlob);
+        document.getElementById('analyzeBtn').disabled = false;
+        setStatus(`Recording ready (${(audioBlob.size / 1024).toFixed(1)} KB). Click Analyze.`, 'success');
+      } catch (err) {
+        console.error('WAV conversion failed:', err);
+        audioBase64 = null;
+        setStatus(`Conversion failed: ${err.message}. Try recording again.`, 'error');
+      }
     };
 
     mediaRecorder.start();
@@ -441,12 +448,13 @@ async function blobToWavBase64(blob) {
   const audioContext = new (window.AudioContext || window.webkitAudioContext)();
   const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-  // Convert to WAV
-  const wavBuffer = audioBufferToWav(audioBuffer);
+  // Convert to WAV (this returns a Promise)
+  const wavBuffer = await audioBufferToWav(audioBuffer);
   const bytes = new Uint8Array(wavBuffer);
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
   }
   return btoa(binary);
 }
@@ -589,8 +597,12 @@ function displayResults(data) {
   // Fluency
   const fluency = data.fluency || {};
   setScoreCard('fluencyCard', fluency.score, fluency.feedback || '');
-  document.getElementById('fluencyDetail').textContent =
-    `${fluency.long_pauses_count || 0} long pauses, ratio: ${fluency.pause_ratio || 0}`;
+  const fluDetail = [];
+  fluDetail.push(`${fluency.total_pauses || 0} pauses (${fluency.long_pauses_count || 0} long)`);
+  if (fluency.total_pause_duration) fluDetail.push(`${fluency.total_pause_duration}s paused`);
+  if (fluency.hesitation_count) fluDetail.push(`${fluency.hesitation_count} hesitations`);
+  if (fluency.repetition_count) fluDetail.push(`${fluency.repetition_count} repetitions`);
+  document.getElementById('fluencyDetail').textContent = fluDetail.join(', ');
 
   // Prosody
   const prosody = data.prosody || {};
@@ -620,11 +632,27 @@ function displayResults(data) {
   document.getElementById('rawTranscription').textContent =
     pron.raw_transcription || data.transcribed_text || '—';
 
-  // Per-word
+  // Per-word with timing
   const perWordEl = document.getElementById('perWord');
   perWordEl.innerHTML = '';
-  if (pron.per_word && pron.per_word.length > 0) {
-    pron.per_word.forEach(w => {
+  const wordTiming = fluency.per_word_timing || pron.per_word || [];
+  if (wordTiming.length > 0) {
+    wordTiming.forEach((w, i) => {
+      // Show pause before this word (if not first)
+      if (i > 0) {
+        const prevEnd = wordTiming[i - 1].end_time;
+        const currStart = w.start_time;
+        if (prevEnd != null && currStart != null) {
+          const gap = (currStart - prevEnd).toFixed(2);
+          if (gap > 0.15) {
+            const pauseTag = document.createElement('span');
+            pauseTag.className = 'word-tag word-pause';
+            pauseTag.textContent = `⏸ ${gap}s`;
+            perWordEl.appendChild(pauseTag);
+          }
+        }
+      }
+
       const tag = document.createElement('span');
       const status = w.status || 'unknown';
       tag.className = 'word-tag ' +
@@ -632,6 +660,9 @@ function displayResults(data) {
          status === 'mispronounced' ? 'word-mispronounced' :
          status === 'omitted' ? 'word-omitted' : 'word-omitted');
       let text = w.word || '?';
+      if (w.start_time != null && w.end_time != null) {
+        text += ` [${w.start_time}-${w.end_time}s]`;
+      }
       if (w.note) text += ` (${w.note})`;
       tag.textContent = text;
       perWordEl.appendChild(tag);

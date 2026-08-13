@@ -438,40 +438,29 @@ class AssessmentService:
                                original_sentence: str, audio_base64: str,
                                audio_format: str = "mp3") -> Dict[str, Any]:
         verify_child(id_token, child_id)
-        from app.infrastructure.speech import get_speech_provider
+        from app.infrastructure.hybrid_speech import HybridSpeechProvider
 
-        speech = get_speech_provider()
+        speech = HybridSpeechProvider()
 
-        transcription_result = await speech.transcribe(audio_base64, audio_format)
-        if not transcription_result["success"]:
-            from app.core.exceptions import TranscriptionError
-
-            raise TranscriptionError(
-                transcription_result.get("error", "Unknown error")
-            )
-
-        transcribed = transcription_result["transcribed_text"]
-        word_timestamps = transcription_result["word_timestamps"]
-        duration = transcription_result.get("duration", 0)
-
-        ai_result = await speech.analyze(
-            original_sentence, transcribed, word_timestamps, duration, grade
+        result = await speech.analyze_with_audio(
+            audio_base64, audio_format, original_sentence, grade
         )
-        if not ai_result["success"] or not ai_result["analysis"]:
+        if not result["success"] or not result["analysis"]:
             from app.core.exceptions import AnalysisError
 
-            raise AnalysisError(ai_result.get("error", "Analysis failed"))
+            raise AnalysisError(result.get("error", "Analysis failed"))
 
-        analysis = ai_result["analysis"]
+        analysis = result["analysis"]
         return {
             "original_sentence": original_sentence,
-            "transcribed_text": transcribed,
-            "duration_seconds": duration,
-            "word_timestamps": word_timestamps,
-            "analysis_method": "openai_gpt4",
+            "transcribed_text": result.get("transcribed_text", ""),
+            "duration_seconds": result.get("duration", 0),
+            "word_timestamps": result.get("word_timestamps", []),
+            "analysis_method": "hybrid_wav2vec2_gpt4",
             "pronunciation": analysis.get("pronunciation", {}),
             "speaking_rate": analysis.get("speaking_rate", {}),
             "fluency": analysis.get("fluency", {}),
+            "prosody": analysis.get("prosody", {}),
             "grammar": analysis.get("grammar", {}),
             "overall": analysis.get("overall", {}),
             "recommendation": analysis.get("overall", {}).get("recommendation", ""),
@@ -488,9 +477,9 @@ class AssessmentService:
         grade_enum = _parse_grade(grade)
         engine = speaking_engine()
 
-        from app.infrastructure.speech import get_speech_provider
+        from app.infrastructure.hybrid_speech import HybridSpeechProvider
 
-        speech = get_speech_provider()
+        speech = HybridSpeechProvider()
 
         all_sentences = engine.get_items(grade_enum)
         sentence_map = {s.sentence_id: s for s in all_sentences}
@@ -545,29 +534,8 @@ class AssessmentService:
             audio_b64 = item.get("audio_base64", "") if isinstance(item, dict) else getattr(item, "audio_base64", "")
             audio_fmt = item.get("audio_format", "mp3") if isinstance(item, dict) else getattr(item, "audio_format", "mp3")
 
-            transcription_result = await speech.transcribe(audio_b64, audio_fmt)
-            if not transcription_result["success"]:
-                results.append({
-                    "sentence_id": sid,
-                    "original_sentence": sent.sentence,
-                    "transcription_error": transcription_result.get("error", "Unknown"),
-                    "transcribed_text": "",
-                    "analysis": None,
-                    "status": "Error",
-                })
-                domain_responses.append(SpeakingResponse(
-                    item_id=sid,
-                    sentence_id=sid,
-                    original_sentence=sent.sentence,
-                ))
-                continue
-
-            transcribed = transcription_result["transcribed_text"]
-            word_timestamps = transcription_result["word_timestamps"]
-            duration = transcription_result.get("duration", 0)
-
-            ai_result = await speech.analyze(
-                sent.sentence, transcribed, word_timestamps, duration, grade
+            ai_result = await speech.analyze_with_audio(
+                audio_b64, audio_fmt, sent.sentence, grade
             )
 
             if ai_result["success"] and ai_result["analysis"]:
@@ -585,15 +553,16 @@ class AssessmentService:
                 results.append({
                     "sentence_id": sid,
                     "original_sentence": sent.sentence,
-                    "transcribed_text": transcribed,
-                    "duration_seconds": duration,
+                    "transcribed_text": ai_result.get("transcribed_text", ""),
+                    "duration_seconds": ai_result.get("duration", 0),
                     "pronunciation": analysis.get("pronunciation", {}),
                     "speaking_rate": analysis.get("speaking_rate", {}),
                     "fluency": analysis.get("fluency", {}),
+                    "prosody": analysis.get("prosody", {}),
                     "grammar": analysis.get("grammar", {}),
                     "overall": overall,
                     "recommendation": overall.get("recommendation", "Keep practicing!"),
-                    "analysis_method": "openai_gpt4",
+                    "analysis_method": "hybrid_wav2vec2_gpt4",
                     "status": "Answered",
                 })
                 domain_responses.append(SpeakingResponse(
@@ -607,7 +576,7 @@ class AssessmentService:
                 results.append({
                     "sentence_id": sid,
                     "original_sentence": sent.sentence,
-                    "transcribed_text": transcribed,
+                    "transcribed_text": ai_result.get("transcribed_text", ""),
                     "analysis": None,
                     "status": "Analysis Error",
                 })

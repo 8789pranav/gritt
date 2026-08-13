@@ -347,20 +347,22 @@ class TestSpeakingScores:
         grade_enum = Grade.parse(grade)
         sentences = engine.get_items(grade_enum)
 
-        # Patch the speech provider to return high-quality analysis
+        # Patch the hybrid speech provider to return high-quality analysis
         strong_analysis = {
             "success": True,
             "analysis": {
-                "pronunciation": {"score": 95, "status": "Good", "level": "Good"},
-                "speaking_rate": {"score": 90, "status": "Good", "level": "Good", "wpm": 120},
-                "fluency": {"score": 92, "status": "Good", "level": "Good"},
-                "grammar": {"score": 95, "status": "Good", "level": "Good"},
-                "overall": {"score": 93, "status": "Good", "level": "Good", "recommendation": "Excellent!", "parent_tip": "Keep it up!"},
+                "pronunciation": {"score": 95, "feedback": "Great!"},
+                "speaking_rate": {"score": 90, "wpm": 120, "status": "Perfect", "feedback": "Good pace."},
+                "fluency": {"score": 92, "long_pauses_count": 0, "feedback": "Smooth."},
+                "prosody": {"score": 88, "monotony_score": 0.7, "feedback": "Good expression."},
+                "grammar": {"score": 95, "issues": [], "feedback": "No issues."},
+                "overall": {"score": 93, "status": "Above", "level": "Excellent Speaker", "recommendation": "Excellent!", "parent_tip": "Keep it up!", "strengths": ["Pronunciation"], "areas_to_improve": []},
             },
+            "transcribed_text": "test",
+            "word_timestamps": [{"word": "test", "start": 0.0, "end": 0.5}],
+            "duration": 3.0,
         }
-        with patch("app.infrastructure.speech.SpeechProvider.transcribe", new_callable=AsyncMock,
-                   return_value={"success": True, "transcribed_text": "test", "word_timestamps": [{"word": "test", "start": 0.0, "end": 0.5}], "duration": 3.0}), \
-             patch("app.infrastructure.speech.SpeechProvider.analyze", new_callable=AsyncMock,
+        with patch("app.infrastructure.hybrid_speech.HybridSpeechProvider.analyze_with_audio", new_callable=AsyncMock,
                    return_value=strong_analysis):
             submissions = [
                 {
@@ -398,16 +400,18 @@ class TestSpeakingScores:
         weak_analysis = {
             "success": True,
             "analysis": {
-                "pronunciation": {"score": 30, "status": "Needs Work", "level": "Developing"},
-                "speaking_rate": {"score": 35, "status": "Needs Work", "level": "Developing", "wpm": 60},
-                "fluency": {"score": 32, "status": "Needs Work", "level": "Developing"},
-                "grammar": {"score": 28, "status": "Needs Work", "level": "Developing"},
-                "overall": {"score": 31, "status": "Needs Work", "level": "Developing", "recommendation": "Practice more.", "parent_tip": "Read daily."},
+                "pronunciation": {"score": 30, "feedback": "Needs work."},
+                "speaking_rate": {"score": 35, "wpm": 60, "status": "Too Slow", "feedback": "Too slow."},
+                "fluency": {"score": 32, "long_pauses_count": 3, "feedback": "Many pauses."},
+                "prosody": {"score": 25, "monotony_score": 0.1, "feedback": "Monotone."},
+                "grammar": {"score": 28, "issues": [{"type": "missing_word", "detail": "Missing word"}], "feedback": "Issues found."},
+                "overall": {"score": 31, "status": "Well Below", "level": "Needs Improvement", "recommendation": "Practice more.", "parent_tip": "Read daily.", "strengths": [], "areas_to_improve": ["Pronunciation", "Fluency"]},
             },
+            "transcribed_text": "test",
+            "word_timestamps": [{"word": "test", "start": 0.0, "end": 0.5}],
+            "duration": 3.0,
         }
-        with patch("app.infrastructure.speech.SpeechProvider.transcribe", new_callable=AsyncMock,
-                   return_value={"success": True, "transcribed_text": "test", "word_timestamps": [{"word": "test", "start": 0.0, "end": 0.5}], "duration": 3.0}), \
-             patch("app.infrastructure.speech.SpeechProvider.analyze", new_callable=AsyncMock,
+        with patch("app.infrastructure.hybrid_speech.HybridSpeechProvider.analyze_with_audio", new_callable=AsyncMock,
                    return_value=weak_analysis):
             submissions = [
                 {

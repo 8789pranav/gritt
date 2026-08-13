@@ -66,7 +66,7 @@ async def test_speaking_analyze(client, mock_firebase_auth, seed_user, mock_spee
 
 @pytest.mark.asyncio
 async def test_speaking_analyze_transcription_failure(client, mock_firebase_auth, seed_user):
-    with patch("app.infrastructure.speech.SpeechProvider.transcribe", new_callable=AsyncMock,
+    with patch("app.infrastructure.hybrid_speech.HybridSpeechProvider.analyze_with_audio", new_callable=AsyncMock,
                return_value={"success": False, "error": "Audio too short"}):
         resp = await client.post("/speaking/analyze/", json={
             "idToken": "test-token",
