@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speaking Test — GPT-Audio</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .container { max-width: 800px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 20px; color: #38bdf8; }
+  h2 { font-size: 1.1rem; margin: 20px 0 10px; color: #94a3b8; }
+
+  .card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    border: 1px solid #334155;
+  }
+
+  label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 6px; }
+  input, select, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    outline: none;
+  }
+  input:focus, select:focus { border-color: #38bdf8; }
+  .row { display: flex; gap: 12px; margin-bottom: 12px; }
+  .row > div { flex: 1; }
+
+  .sentence-box {
+    background: #0f172a;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 1.2rem;
+    text-align: center;
+    margin-bottom: 16px;
+    color: #f1f5f9;
+  }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin: 16px 0;
+  }
+
+  button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button:hover:not(:disabled) { transform: translateY(-1px); }
+
+  .btn-record { background: #ef4444; color: white; }
+  .btn-record.recording { background: #dc2626; animation: pulse 1.5s infinite; }
+  .btn-stop { background: #f59e0b; color: #0f172a; }
+  .btn-analyze { background: #38bdf8; color: #0f172a; }
+  .btn-play { background: #8b5cf6; color: white; }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  }
+
+  .status {
+    text-align: center;
+    padding: 8px;
+    font-size: 0.85rem;
+    color: #94a3b8;
+    min-height: 24px;
+  }
+  .status.error { color: #ef4444; }
+  .status.success { color: #22c55e; }
+  .status.loading { color: #38bdf8; }
+
+  .recording-time {
+    text-align: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #ef4444;
+    min-height: 30px;
+  }
+
+  audio { width: 100%; margin-top: 12px; }
+
+  .results { display: none; }
+  .results.show { display: block; }
+
+  .score-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .score-card {
+    background: #0f172a;
+    border-radius: 8px;
+    padding: 14px;
+    border: 1px solid #334155;
+  }
+  .score-card .label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; }
+  .score-card .value { font-size: 1.8rem; font-weight: 700; margin-top: 4px; }
+  .score-card .detail { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+  .score-high .value { color: #22c55e; }
+  .score-mid .value { color: #f59e0b; }
+  .score-low .value { color: #ef4444; }
+
+  .overall-card {
+    background: linear-gradient(135deg, #1e293b, #334155);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 16px;
+    border: 1px solid #475569;
+  }
+  .overall-card .score { font-size: 3rem; font-weight: 800; }
+  .overall-card .level { font-size: 1.1rem; margin-top: 4px; }
+  .overall-card .status-text { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
+
+  .per-word {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .word-tag {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  .word-correct { background: #064e3b; color: #34d399; }
+  .word-mispronounced { background: #7c2d12; color: #fb923c; }
+  .word-omitted { background: #450a0a; color: #fca5a5; }
+
+  .feedback-section {
+    background: #0f172a;
+    border-radius: 8px;
+    padding: 14px;
+    margin-top: 12px;
+    border: 1px solid #334155;
+  }
+  .feedback-section h3 { font-size: 0.9rem; color: #38bdf8; margin-bottom: 8px; }
+  .feedback-section p { font-size: 0.85rem; color: #cbd5e1; line-height: 1.5; }
+  .feedback-section ul { list-style: none; padding-left: 0; }
+  .feedback-section li { font-size: 0.85rem; color: #cbd5e1; padding: 2px 0; }
+  .feedback-section li::before { content: "• "; color: #38bdf8; }
+
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid #334155;
+    border-top-color: #38bdf8;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎤 Speaking Test — GPT-Audio</h1>
+
+  <!-- Config -->
+  <div class="card">
+    <h2>Configuration</h2>
+    <div class="row">
+      <div>
+        <label>API Base URL</label>
+        <input type="text" id="apiUrl" value="http://localhost:8000" placeholder="http://localhost:8000">
+      </div>
+      <div>
+        <label>Grade</label>
+        <select id="grade">
+          <option value="Kindergarten">Kindergarten</option>
+          <option value="First">First</option>
+          <option value="Second">Second</option>
+          <option value="Third">Third</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>ID Token (Firebase)</label>
+        <input type="text" id="idToken" placeholder="Firebase ID token">
+      </div>
+      <div>
+        <label>Child ID</label>
+        <input type="text" id="childId" placeholder="child-1">
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn-analyze" onclick="fetchSentence()" id="fetchBtn">📋 Get Sentence</button>
+    </div>
+  </div>
+
+  <!-- Sentence -->
+  <div class="card" id="sentenceCard" style="display:none">
+    <h2>Read Aloud</h2>
+    <div class="sentence-box" id="sentenceText">—</div>
+    <div class="controls">
+      <button class="btn-record" id="recordBtn" onclick="toggleRecording()">🔴 Start Recording</button>
+      <button class="btn-stop" id="stopBtn" onclick="stopRecording()" disabled>⏹ Stop</button>
+      <button class="btn-play" id="playBtn" onclick="playRecording()" disabled>▶ Play</button>
+      <button class="btn-analyze" id="analyzeBtn" onclick="analyzeAudio()" disabled>📊 Analyze</button>
+    </div>
+    <div class="recording-time" id="recTime"></div>
+    <div class="status" id="status"></div>
+    <audio id="audioPlayer" controls style="display:none"></audio>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="overall-card" id="overallCard">
+      <div class="score" id="overallScore">—</div>
+      <div class="level" id="overallLevel">—</div>
+      <div class="status-text" id="overallStatus">—</div>
+    </div>
+
+    <div class="score-grid">
+      <div class="score-card" id="pronCard">
+        <div class="label">Pronunciation</div>
+        <div class="value">—</div>
+        <div class="detail" id="pronDetail"></div>
+      </div>
+      <div class="score-card" id="fluencyCard">
+        <div class="label">Fluency</div>
+        <div class="value">—</div>
+        <div class="detail" id="fluencyDetail"></div>
+      </div>
+      <div class="score-card" id="prosodyCard">
+        <div class="label">Prosody</div>
+        <div class="value">—</div>
+        <div class="detail" id="prosodyDetail"></div>
+      </div>
+      <div class="score-card" id="grammarCard">
+        <div class="label">Grammar</div>
+        <div class="value">—</div>
+        <div class="detail" id="grammarDetail"></div>
+      </div>
+      <div class="score-card" id="rateCard">
+        <div class="label">Speaking Rate</div>
+        <div class="value">—</div>
+        <div class="detail" id="rateDetail"></div>
+      </div>
+      <div class="score-card" id="completenessCard">
+        <div class="label">Completeness</div>
+        <div class="value">—</div>
+        <div class="detail" id="completenessDetail"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Raw Transcription (what child actually said)</h2>
+      <div class="sentence-box" id="rawTranscription" style="font-size:1rem">—</div>
+      <h2>Per-Word Analysis</h2>
+      <div class="per-word" id="perWord"></div>
+    </div>
+
+    <div class="card">
+      <h2>Feedback</h2>
+      <div class="feedback-section">
+        <h3>Strengths</h3>
+        <ul id="strengths"></ul>
+      </div>
+      <div class="feedback-section">
+        <h3>Areas to Improve</h3>
+        <ul id="improvements"></ul>
+      </div>
+      <div class="feedback-section">
+        <h3>Recommendation</h3>
+        <p id="recommendation"></p>
+      </div>
+      <div class="feedback-section">
+        <h3>Parent Tip</h3>
+        <p id="parentTip"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let mediaRecorder = null;
+let audioChunks = [];
+let audioBlob = null;
+let audioBase64 = null;
+let recordingTimer = null;
+let recordStart = 0;
+let currentSentence = '';
+let currentSentenceId = '';
+
+function setStatus(msg, type = '') {
+  const el = document.getElementById('status');
+  el.className = 'status ' + type;
+  el.innerHTML = msg;
+}
+
+function getApiUrl() {
+  return document.getElementById('apiUrl').value.replace(/\/+$/, '');
+}
+
+async function fetchSentence() {
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Loading...';
+  setStatus('Fetching sentence...', 'loading');
+
+  try {
+    const resp = await fetch(`${getApiUrl()}/speaking/get_sentence/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        idToken: document.getElementById('idToken').value,
+        child_id: document.getElementById('childId').value,
+        grade: document.getElementById('grade').value,
+      }),
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+
+    const data = await resp.json();
+    currentSentence = data.sentence;
+    currentSentenceId = data.sentence_id;
+
+    document.getElementById('sentenceText').textContent = currentSentence;
+    document.getElementById('sentenceCard').style.display = 'block';
+    document.getElementById('results').classList.remove('show');
+    setStatus('Sentence loaded! Ready to record.', 'success');
+
+    // Play reference audio
+    if (data.audio_base64) {
+      const audio = new Audio('data:audio/mp3;base64,' + data.audio_base64);
+      audio.play().catch(() => {});
+    }
+  } catch (err) {
+    setStatus(`Error: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📋 Get Sentence';
+  }
+}
+
+function toggleRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    audioBase64 = null;
+    audioBlob = null;
+
+    // Use audio/webm as default, will convert to wav for API
+    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop());
+      audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+
+      // Convert to WAV for better GPT-audio compatibility
+      audioBase64 = await blobToWavBase64(audioBlob);
+
+      const url = URL.createObjectURL(audioBlob);
+      const player = document.getElementById('audioPlayer');
+      player.src = url;
+      player.style.display = 'block';
+
+      document.getElementById('playBtn').disabled = false;
+      document.getElementById('analyzeBtn').disabled = false;
+      setStatus(`Recording complete (${(audioBlob.size / 1024).toFixed(1)} KB). Click Analyze.`, 'success');
+    };
+
+    mediaRecorder.start();
+    recordStart = Date.now();
+
+    const btn = document.getElementById('recordBtn');
+    btn.textContent = '🔴 Recording...';
+    btn.classList.add('recording');
+    document.getElementById('stopBtn').disabled = false;
+    document.getElementById('analyzeBtn').disabled = true;
+    setStatus('Recording... click Stop when done.', 'loading');
+
+    recordingTimer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - recordStart) / 1000);
+      document.getElementById('recTime').textContent = `${elapsed}s`;
+    }, 200);
+
+  } catch (err) {
+    setStatus(`Microphone error: ${err.message}`, 'error');
+  }
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+  }
+  clearInterval(recordingTimer);
+
+  const btn = document.getElementById('recordBtn');
+  btn.textContent = '🔴 Start Recording';
+  btn.classList.remove('recording');
+  document.getElementById('stopBtn').disabled = true;
+}
+
+function playRecording() {
+  const player = document.getElementById('audioPlayer');
+  player.play();
+}
+
+// Convert webm blob to WAV base64 using AudioContext
+async function blobToWavBase64(blob) {
+  const arrayBuffer = await blob.arrayBuffer();
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+  // Convert to WAV
+  const wavBuffer = audioBufferToWav(audioBuffer);
+  const bytes = new Uint8Array(wavBuffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Convert AudioBuffer to WAV ArrayBuffer
+function audioBufferToWav(buffer) {
+  const numChannels = 1; // mono
+  const sampleRate = 16000; // 16kHz is enough for speech
+  const bitsPerSample = 16;
+  const bytesPerSample = bitsPerSample / 8;
+  const blockAlign = numChannels * bytesPerSample;
+
+  // Resample to 16kHz mono
+  const offlineCtx = new OfflineAudioContext(numChannels, Math.ceil(buffer.duration * sampleRate), sampleRate);
+  const source = offlineCtx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(offlineCtx.destination);
+  source.start(0);
+
+  return offlineCtx.startRendering().then(renderedBuffer => {
+    const samples = renderedBuffer.getChannelData(0);
+    const dataLength = samples.length * bytesPerSample;
+    const headerLength = 44;
+    const totalLength = headerLength + dataLength;
+
+    const arrayBuffer = new ArrayBuffer(totalLength);
+    const view = new DataView(arrayBuffer);
+
+    // WAV header
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, totalLength - 8, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitsPerSample, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataLength, true);
+
+    // Write samples
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+
+    return arrayBuffer;
+  });
+}
+
+function writeString(view, offset, str) {
+  for (let i = 0; i < str.length; i++) {
+    view.setUint8(offset + i, str.charCodeAt(i));
+  }
+}
+
+async function analyzeAudio() {
+  if (!audioBase64) {
+    // If conversion to base64 WAV failed earlier, try converting now from the raw blob.
+    if (audioBlob) {
+      setStatus('Converting recording to WAV for analysis...', 'loading');
+      try {
+        audioBase64 = await blobToWavBase64(audioBlob);
+      } catch (err) {
+        console.error('blobToWavBase64 conversion failed:', err);
+        setStatus('Recording conversion failed. Please record again.', 'error');
+        return;
+      }
+    } else {
+      setStatus('No recording found. Record first.', 'error');
+      return;
+    }
+  }
+
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Analyzing...';
+  setStatus('Sending to GPT-audio for analysis...', 'loading');
+
+  try {
+    const resp = await fetch(`${getApiUrl()}/speaking/analyze/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        idToken: document.getElementById('idToken').value,
+        child_id: document.getElementById('childId').value,
+        grade: document.getElementById('grade').value,
+        original_sentence: currentSentence,
+        audio_base64: audioBase64,
+        audio_format: 'wav',
+      }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`HTTP ${resp.status}: ${errText}`);
+    }
+
+    const data = await resp.json();
+    displayResults(data);
+    setStatus('Analysis complete!', 'success');
+
+  } catch (err) {
+    setStatus(`Error: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📊 Analyze';
+  }
+}
+
+function scoreClass(score) {
+  if (score >= 75) return 'score-high';
+  if (score >= 50) return 'score-mid';
+  return 'score-low';
+}
+
+function displayResults(data) {
+  const results = document.getElementById('results');
+  results.classList.add('show');
+
+  // Overall
+  const overall = data.overall || {};
+  document.getElementById('overallScore').textContent = overall.score ?? '—';
+  document.getElementById('overallLevel').textContent = overall.level || '—';
+  document.getElementById('overallStatus').textContent = overall.status || '—';
+  const overallCard = document.getElementById('overallCard');
+  overallCard.className = 'overall-card ' + scoreClass(overall.score || 0);
+
+  // Pronunciation
+  const pron = data.pronunciation || {};
+  setScoreCard('pronCard', pron.score, pron.feedback || '');
+  document.getElementById('pronDetail').textContent =
+    `${pron.correct_phonemes || 0}/${pron.total_phonemes || 0} correct, ${pron.mispronounced || 0} mispronounced, ${pron.omitted || 0} omitted`;
+
+  // Fluency
+  const fluency = data.fluency || {};
+  setScoreCard('fluencyCard', fluency.score, fluency.feedback || '');
+  document.getElementById('fluencyDetail').textContent =
+    `${fluency.long_pauses_count || 0} long pauses, ratio: ${fluency.pause_ratio || 0}`;
+
+  // Prosody
+  const prosody = data.prosody || {};
+  setScoreCard('prosodyCard', prosody.score, prosody.feedback || '');
+  document.getElementById('prosodyDetail').textContent = prosody.notes || '';
+
+  // Grammar
+  const grammar = data.grammar || {};
+  setScoreCard('grammarCard', grammar.score, grammar.feedback || '');
+  document.getElementById('grammarDetail').textContent =
+    `${(grammar.issues || []).length} issues`;
+
+  // Speaking rate
+  const rate = data.speaking_rate || {};
+  setScoreCard('rateCard', rate.score, rate.feedback || '');
+  document.getElementById('rateDetail').textContent =
+    `${rate.wpm || 0} WPM, ${rate.status || ''}`;
+
+  // Completeness
+  const completeness = data.completeness || {};
+  setScoreCard('completenessCard', completeness.score, '');
+  document.getElementById('completenessDetail').textContent =
+    `${completeness.spoken_words || 0}/${completeness.expected_words || 0} words` +
+    (completeness.missing_words?.length ? `, missing: ${completeness.missing_words.join(', ')}` : '');
+
+  // Raw transcription
+  document.getElementById('rawTranscription').textContent =
+    pron.raw_transcription || data.transcribed_text || '—';
+
+  // Per-word
+  const perWordEl = document.getElementById('perWord');
+  perWordEl.innerHTML = '';
+  if (pron.per_word && pron.per_word.length > 0) {
+    pron.per_word.forEach(w => {
+      const tag = document.createElement('span');
+      const status = w.status || 'unknown';
+      tag.className = 'word-tag ' +
+        (status === 'correct' ? 'word-correct' :
+         status === 'mispronounced' ? 'word-mispronounced' :
+         status === 'omitted' ? 'word-omitted' : 'word-omitted');
+      let text = w.word || '?';
+      if (w.note) text += ` (${w.note})`;
+      tag.textContent = text;
+      perWordEl.appendChild(tag);
+    });
+  }
+
+  // Feedback
+  const strengthsEl = document.getElementById('strengths');
+  strengthsEl.innerHTML = '';
+  (overall.strengths || []).forEach(s => {
+    const li = document.createElement('li');
+    li.textContent = s;
+    strengthsEl.appendChild(li);
+  });
+
+  const improvementsEl = document.getElementById('improvements');
+  improvementsEl.innerHTML = '';
+  (overall.areas_to_improve || []).forEach(s => {
+    const li = document.createElement('li');
+    li.textContent = s;
+    improvementsEl.appendChild(li);
+  });
+
+  document.getElementById('recommendation').textContent = overall.recommendation || '—';
+  document.getElementById('parentTip').textContent = overall.parent_tip || '—';
+}
+
+function setScoreCard(cardId, score, feedback) {
+  const card = document.getElementById(cardId);
+  card.className = 'score-card ' + scoreClass(score || 0);
+  card.querySelector('.value').textContent = score ?? '—';
+}
+</script>
+</body>
+</html>
