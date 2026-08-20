@@ -102,7 +102,11 @@ class ReportService:
         # 6. Validate — remove any evidence_tags that don't exist in the data
         ai_report = self._validate_report(ai_report, known_tags)
 
-        # 7. Assemble the final report
+        # 7. Build top-5 tags and per-test importance
+        top_5_tags = self._build_top_5_tags(context)
+        test_importance = self._build_test_importance(context, domain_summary)
+
+        # 8. Assemble the final report
         report = {
             "success": True,
             "child_id": child_id,
@@ -110,6 +114,8 @@ class ReportService:
             "grade": grade,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "domain_summary": domain_summary,
+            "top_5_tags": top_5_tags,
+            "test_importance": test_importance,
             "all_tags": {
                 "strengths": [
                     t for t in context.get("all_strength_tags", [])
@@ -132,7 +138,7 @@ class ReportService:
             ],
         }
 
-        # 8. Persist the report
+        # 9. Persist the report
         self._scores.save(
             uid, child_id, "final_reports",
             {
@@ -389,6 +395,183 @@ class ReportService:
             }
 
         return summary
+
+    # ------------------------------------------------------------------
+    # Top-5 tags — most important tags with one-sentence summaries
+    # ------------------------------------------------------------------
+    _CONFIDENCE_RANK = {"high": 3, "medium": 2, "low": 1}
+    _POLARITY_RANK = {"growth_edge": 3, "strength": 2, "neutral": 1, "unanswered": 0}
+
+    _TAG_SENTENCE_MAP: Dict[str, str] = {
+        # Logic
+        "pattern_detection_strong": "Child recognises and extends patterns with confidence.",
+        "pattern_detection_emerging": "Child is beginning to recognise patterns but needs more practice with complex ones.",
+        "relational_reasoning_present": "Child connects ideas and sees relationships between concepts.",
+        "systematic_problem_solving": "Child breaks down multi-step problems in a structured way.",
+        "cognitive_flexibility_intact": "Child adapts their thinking when rules or strategies change.",
+        "flexible_strategy_use": "Child switches strategies when the first approach doesn't work.",
+        "strategy_shift_difficulty": "Child finds it hard to change approach when a strategy stops working.",
+        "reasoning_under_load_emerging": "Child can handle simple logic but struggles with multi-step or high-load problems.",
+        "trial_and_error_strategy": "Child tends to guess rather than plan, trying options until one fits.",
+        "impulsive_response": "Child answers too quickly without thinking through the problem.",
+        "self_correction_present": "Child notices and corrects their own mistakes during the test.",
+        "rule_maintenance_difficulty": "Child loses track of the rule partway through a sequence.",
+        # Spelling
+        "confident_attempt": "Child attempts challenging words without hesitation.",
+        "phonetic_strategy_strong": "Child uses solid phonetic knowledge to spell unfamiliar words.",
+        "phonetic_strategy_developing": "Child is building phonetic awareness but makes feature errors.",
+        "sight_word_recognition_strong": "Child reliably recognises high-frequency sight words.",
+        "sight_word_recognition_developing": "Child is still memorising sight words and makes errors.",
+        "vowel_accuracy_strong": "Child spells vowels correctly across word types.",
+        "vowel_accuracy_developing": "Child struggles with vowel sounds and patterns in spelling.",
+        "beginning_consonant_strong": "Child consistently gets the starting sound of words right.",
+        "beginning_consonant_developing": "Child sometimes misses the initial consonant sound.",
+        "ending_consonant_strong": "Child hears and spells the final sound of words.",
+        "ending_consonant_developing": "Child drops or confuses ending consonants.",
+        "rushed_spelling": "Child answers too quickly in spelling, leading to avoidable errors.",
+        # Speaking
+        "pronunciation_strong": "Child pronounces words clearly and accurately.",
+        "pronunciation_needs_work": "Child mispronounces some words and would benefit from targeted practice.",
+        "fluency_strong": "Child reads smoothly with natural pace and few pauses.",
+        "fluency_developing": "Child reads with frequent pauses and hesitations.",
+        "prosody_strong": "Child reads with expression and natural intonation.",
+        "prosody_developing": "Child reads in a flat tone without much expression.",
+        "grammar_strong": "Child uses correct grammar and sentence structure when speaking.",
+        "grammar_developing": "Child makes grammatical errors that can affect clarity.",
+        "flat_delivery": "Child's speech lacks intonation, which may affect engagement.",
+        "insufficient_evidence_speaking": "Not enough speaking data to draw firm conclusions.",
+        # Comprehension
+        "literal_comprehension_strong": "Child accurately recalls facts and details from stories.",
+        "literal_comprehension_developing": "Child misses key details from stories and needs support with recall.",
+        "inferential_comprehension_strong": "Child draws insightful inferences beyond what is directly stated.",
+        "inferential_comprehension_developing": "Child finds it hard to read between the lines.",
+        "vocabulary_comprehension_strong": "Child understands word meanings in context well.",
+        "vocabulary_comprehension_developing": "Child struggles with vocabulary and context-dependent word meanings.",
+        "comprehension_gap_literal_vs_inferential": "Child recalls facts well but struggles to infer deeper meaning.",
+        "strong_all_around_comprehension": "Child shows well-rounded comprehension across all question types.",
+        "comprehension_support_needed": "Child needs guided support to understand stories at grade level.",
+    }
+
+    def _build_top_5_tags(self, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Select the 5 most important tags and add a one-sentence summary.
+
+        Ranking priority:
+          1. Growth-edge tags (most actionable for parents) — ranked by confidence
+          2. Strength tags — ranked by confidence
+          3. Neutral / unanswered — ranked by confidence
+        """
+        all_tags: List[Dict[str, Any]] = []
+        for key in ("all_growth_edge_tags", "all_strength_tags", "all_unanswered_tags"):
+            for tag in context.get(key, []):
+                tag["_rank"] = (
+                    self._POLARITY_RANK.get(tag.get("polarity", ""), 0)
+                    * 10
+                    + self._CONFIDENCE_RANK.get(tag.get("confidence", "medium"), 2)
+                )
+                all_tags.append(tag)
+
+        all_tags.sort(key=lambda t: t.pop("_rank", 0), reverse=True)
+
+        top_5 = []
+        seen = set()
+        for tag in all_tags:
+            tag_id = tag.get("tag", "")
+            if tag_id in seen:
+                continue
+            seen.add(tag_id)
+            sentence = self._TAG_SENTENCE_MAP.get(
+                tag_id,
+                tag.get("description", "") or f"Tag: {tag_id}",
+            )
+            top_5.append({
+                "tag": tag_id,
+                "polarity": tag.get("polarity", ""),
+                "confidence": tag.get("confidence", "medium"),
+                "source_assessment": tag.get("source_assessment", ""),
+                "one_sentence": sentence,
+            })
+            if len(top_5) >= 5:
+                break
+
+        return top_5
+
+    # ------------------------------------------------------------------
+    # Per-test importance — why each test matters for this child
+    # ------------------------------------------------------------------
+    _TEST_PURPOSE: Dict[str, str] = {
+        "logic": "Logic Quest measures pattern recognition, relational reasoning, and systematic problem-solving — the foundations of mathematical and scientific thinking.",
+        "spelling": "Word Wizard assesses phonetic awareness, sight-word memory, and encoding skills — critical building blocks for writing and reading fluency.",
+        "speaking": "Voice Challenge evaluates pronunciation, fluency, prosody, and grammar in spoken language — essential for communication confidence and reading aloud.",
+        "comprehension": "Story Explorer tests literal recall, inferential reasoning, and vocabulary in context — the core of reading comprehension and academic learning.",
+    }
+
+    _TEST_IMPORTANCE_LOW: Dict[str, str] = {
+        "logic": "This is a HIGH PRIORITY area — the child's logical reasoning scores indicate they need structured support with patterns and multi-step thinking.",
+        "spelling": "This is a HIGH PRIORITY area — spelling scores suggest the child needs daily phonics practice and targeted work on weak features.",
+        "speaking": "This is a HIGH PRIORITY area — speaking scores indicate the child needs regular read-aloud practice with feedback on clarity and pace.",
+        "comprehension": "This is a HIGH PRIORITY area — comprehension scores suggest the child needs guided reading with discussion to build understanding.",
+    }
+
+    _TEST_IMPORTANCE_MID: Dict[str, str] = {
+        "logic": "This is a DEVELOPING area — the child shows some reasoning skills but will benefit from more complex puzzles and pattern games.",
+        "spelling": "This is a DEVELOPING area — the child has basic phonics skills but needs practice with harder patterns and sight words.",
+        "speaking": "This is a DEVELOPING area — the child can speak clearly but needs work on fluency, expression, or pronunciation consistency.",
+        "comprehension": "This is a DEVELOPING area — the child understands basic story details but needs help with inference and vocabulary.",
+    }
+
+    _TEST_IMPORTANCE_HIGH: Dict[str, str] = {
+        "logic": "This is a STRENGTH area — the child demonstrates strong logical reasoning and is ready for advanced challenges.",
+        "spelling": "This is a STRENGTH area — the child spells accurately across features and is ready for more advanced vocabulary.",
+        "speaking": "This is a STRENGTH area — the child speaks fluently and clearly, and is ready for longer or more complex passages.",
+        "comprehension": "This is a STRENGTH area — the child comprehends well across question types and is ready for harder texts.",
+    }
+
+    def _build_test_importance(
+        self,
+        context: Dict[str, Any],
+        domain_summary: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """For each test the child has taken, explain why it matters and what the results mean."""
+        result = []
+        for test_key, summary in domain_summary.items():
+            purpose = self._TEST_PURPOSE.get(test_key, "")
+
+            if test_key == "spelling":
+                pct = summary.get("overall_accuracy", 0)
+            else:
+                pct = summary.get("percentage", 0)
+
+            if pct < 60:
+                importance = self._TEST_IMPORTANCE_LOW.get(test_key, "")
+            elif pct < 80:
+                importance = self._TEST_IMPORTANCE_MID.get(test_key, "")
+            else:
+                importance = self._TEST_IMPORTANCE_HIGH.get(test_key, "")
+
+            tag_count = summary.get("tag_count", 0)
+
+            assessment_ctx = context.get("assessments", {}).get(test_key, {})
+            dear_parent_tags = assessment_ctx.get("dear_parent_tags", []) if assessment_ctx else []
+            tag_summaries = [
+                {
+                    "tag": t.get("tag", ""),
+                    "polarity": t.get("polarity", ""),
+                    "description": t.get("description", ""),
+                }
+                for t in dear_parent_tags
+            ]
+
+            result.append({
+                "test": test_key,
+                "test_name": assessment_ctx.get("test_type", test_key.title()) if assessment_ctx else test_key.title(),
+                "why_it_matters": purpose,
+                "child_status": importance,
+                "score_summary": summary,
+                "tag_count": tag_count,
+                "dear_parent_tags": tag_summaries,
+            })
+
+        return result
 
     # ------------------------------------------------------------------
     # Validation — ensure AI only references tags that exist
