@@ -47,23 +47,66 @@ class SpellingEngine(AssessmentEngine[SpellingWord, SpellingResponse]):
 
     # -- reporting ---------------------------------------------------------
     def recommend(self, score: TestScore, tags: Sequence[TagOutput]) -> str:
-        if score.percentage >= 90:
-            return "Advance to the next level. Continue practising all phonics patterns."
-
         weak = self.focus_areas(score)
         if not weak:
+            if score.percentage >= 90:
+                return "Advance to the next level. Continue practising all phonics patterns."
             return "Keep practising regularly to consolidate these skills."
 
         return f"Continue practising: {', '.join(weak)}."
 
     def focus_areas(self, score: TestScore) -> List[str]:
-        """Feature names the child made the most errors on, worst first."""
+        """Feature names the child made the most errors on, worst first.
+
+        Only features the child has NOT mastered are listed, so a skill never
+        appears in both strengths and focus areas.
+        """
+        from collections import defaultdict
+
         errors = self.scorer.error_breakdown(score)
+        attempts: Dict[str, int] = defaultdict(int)
+        correct: Dict[str, int] = defaultdict(int)
+
+        for item in score.scored_items:
+            if item.detail.get("type") != WordType.REGULAR.value:
+                continue
+            mistakes = item.detail.get("mistakes", {})
+            if "unrelated_attempt" in mistakes:
+                continue
+            matched = set(item.detail.get("matched_features", []))
+            for feature_value in matched:
+                try:
+                    feature = PhonicsFeature(feature_value)
+                except ValueError:
+                    continue
+                attempts[feature.error_label] += 1
+                correct[feature.error_label] += 1
+            for feature_value in mistakes:
+                if feature_value in ("spelling", "unrelated_attempt"):
+                    continue
+                try:
+                    feature = PhonicsFeature(feature_value)
+                except ValueError:
+                    continue
+                attempts[feature.error_label] += 1
+
         ranked = sorted(
             ((label, count) for label, count in errors.items() if count > 0),
             key=lambda pair: -pair[1],
         )
-        return [label.replace(" error", "") for label, _ in ranked[:3]]
+
+        focus: List[str] = []
+        for label, _ in ranked:
+            attempted = attempts.get(label, 0)
+            if not attempted:
+                continue
+            accuracy = correct.get(label, 0) / attempted
+            if accuracy < MASTERY_THRESHOLD:
+                focus.append(label.replace(" error", ""))
+            if len(focus) >= 3:
+                break
+
+        return focus
 
     def strengths(self, signals: Dict[str, float]) -> List[str]:
         """Features the child reached mastery on."""

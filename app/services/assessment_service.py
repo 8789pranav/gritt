@@ -196,6 +196,11 @@ class AssessmentService:
         tag_dicts = _tag_outputs_to_dicts(result.tags)
         per_item_dicts = _per_item_tags_to_dicts(result.per_item_tags)
 
+        logic_scored_items = [s.model_dump() for s in result.score.scored_items]
+        logic_tag_map = {p["item_id"]: p.get("tags", []) for p in per_item_dicts}
+        for item in logic_scored_items:
+            item["detail"]["tags"] = logic_tag_map.get(item.get("item_id", ""), [])
+
         score_id = self._scores.save(
             uid, child_id, TestType.LOGIC.storage_key,
             {
@@ -212,7 +217,7 @@ class AssessmentService:
                 "message": result.message,
                 "timestamp": self._utc_now(),
                 "responses": sanitize_data(responses),
-                "scored_items": sanitize_data([s.model_dump() for s in result.score.scored_items]),
+                "scored_items": sanitize_data(logic_scored_items),
             },
         )
 
@@ -240,6 +245,52 @@ class AssessmentService:
         if not latest:
             raise ResultNotFoundError("logic", child_id, grade)
 
+        scored_items = latest.get("scored_items", [])
+        per_item_tags = latest.get("per_item_tags", [])
+        dear_parent_tags = latest.get("dear_parent_tags", [])
+
+        per_item_map = {
+            p.get("item_id", ""): p.get("tags", [])
+            for p in per_item_tags
+        }
+
+        def _error_type_for(item: Dict[str, Any]) -> Optional[str]:
+            if item.get("is_correct"):
+                return None
+            tags = per_item_map.get(item.get("item_id", ""), [])
+            if "impulsive_response" in tags:
+                return "Impulsive response"
+            if "reasoning_under_load_emerging" in tags:
+                return "Reasoning under load"
+            if "trial_and_error_strategy" in tags:
+                return "Trial and error"
+            for tag in tags:
+                if tag.endswith("_missed"):
+                    return tag.replace("_missed", "").replace("_", " ")
+            return "Incorrect"
+
+        table_data = [
+            {
+                "question": s.get("label", ""),
+                "selected_index": s.get("detail", {}).get("selected_index"),
+                "correct_index": s.get("detail", {}).get("correct_index"),
+                "correct": s.get("is_correct", False),
+                "error_type": _error_type_for(s),
+                "time": s.get("detail", {}).get("time", 0.0),
+                "icon": "Correct" if s.get("is_correct") else "Incorrect",
+            }
+            for s in scored_items
+        ]
+
+        strengths = [
+            t.get("tag", "") for t in dear_parent_tags
+            if t.get("polarity") == "strength"
+        ]
+        focus_areas = [
+            t.get("tag", "") for t in dear_parent_tags
+            if t.get("polarity") == "growth_edge"
+        ]
+
         return {
             "user_id": uid,
             "child_id": child_id,
@@ -249,11 +300,26 @@ class AssessmentService:
             "correct_answers": latest.get("correct_answers", 0),
             "total_items": latest.get("total_items", 0),
             "level": latest.get("level", ""),
-            "dear_parent_tags": latest.get("dear_parent_tags", []),
-            "per_item_tags": latest.get("per_item_tags", []),
+            "parent_summary": {
+                "overall_accuracy": latest.get("percentage", 0),
+                "level": latest.get("level", ""),
+                "strengths": strengths,
+                "focus_areas": focus_areas,
+                "recommendation": latest.get("recommendation", ""),
+                "note": "Assessment is instructional and not a clinical diagnosis.",
+            },
+            "dear_parent_tags": dear_parent_tags,
+            "per_item_tags": per_item_tags,
+            "teacher_admin_detail": {
+                "test_level": latest.get("grade", grade),
+                "questions": len(scored_items),
+                "correct": sum(1 for s in scored_items if s.get("is_correct")),
+                "instructional_level": latest.get("level", ""),
+                "table_data": table_data,
+            },
             "recommendation": latest.get("recommendation", ""),
             "signals": latest.get("signals", {}),
-            "scored_items": latest.get("scored_items", []),
+            "scored_items": scored_items,
             "timestamp": latest.get("timestamp", ""),
         }
 
@@ -306,6 +372,14 @@ class AssessmentService:
         error_breakdown = engine.scorer.error_breakdown(result.score)
 
         scored_items = [s.model_dump() for s in result.score.scored_items]
+
+        per_word_tag_map = {
+            p["item_id"]: p.get("tags", [])
+            for p in per_item_dicts
+        }
+        for item in scored_items:
+            item_id = item.get("item_id", "")
+            item["detail"]["tags"] = per_word_tag_map.get(item_id, [])
 
         score_id = self._scores.save(
             uid, child_id, TestType.SPELLING.storage_key,
@@ -379,21 +453,41 @@ class AssessmentService:
             sum(r["points"] for r in sight) / sum(r["max_points"] for r in sight) * 100
         ) if sight else 0
 
+        per_word_tag_map = {
+            p.get("item_id", ""): p.get("tags", [])
+            for p in latest.get("per_word_tags", [])
+        }
+
+        def _error_type_for(result: Dict[str, Any]) -> Optional[str]:
+            if result.get("is_correct"):
+                return None
+
+            tags = per_word_tag_map.get(result.get("item_id", ""), [])
+            if "unrelated_attempt" in tags:
+                return "Unrelated attempt"
+            if "unrelated_attempt_sightword" in tags:
+                return "Sight word (unrelated)"
+            if "rushed_attempt" in tags:
+                return "Rushed attempt"
+
+            if result.get("detail", {}).get("type") == WordType.SIGHT.value:
+                return "Sight word"
+
+            mistakes = result.get("detail", {}).get("mistakes", {})
+            feature_key = next(
+                (k for k in mistakes if k not in ("spelling", "unrelated_attempt")),
+                None,
+            )
+            if feature_key:
+                return feature_key.replace("_", " ").replace(" error", "")
+            return None
+
         table_data = [
             {
                 "word": r.get("label", ""),
                 "attempt": r.get("detail", {}).get("user_input", ""),
                 "correct": r.get("is_correct", False),
-                "error_type": next(
-                    (k for k, v in r.get("detail", {}).get("mistakes", {}).items()
-                     if k != "spelling"),
-                    None,
-                ) or (
-                    "Sight word"
-                    if r.get("detail", {}).get("type") == WordType.SIGHT.value
-                    and not r.get("is_correct")
-                    else None
-                ),
+                "error_type": _error_type_for(r),
                 "time": r.get("detail", {}).get("time", 0.0),
                 "hints_used": r.get("detail", {}).get("hints_used", 0),
                 "icon": "Correct" if r.get("is_correct") else "Incorrect",
@@ -591,6 +685,11 @@ class AssessmentService:
         tag_dicts = _tag_outputs_to_dicts(result.tags)
         per_item_dicts = _per_item_tags_to_dicts(result.per_item_tags)
 
+        speaking_tag_map = {p["item_id"]: p.get("tags", []) for p in per_item_dicts}
+        for r in results:
+            sid = r.get("sentence_id", "")
+            r["tags"] = speaking_tag_map.get(sid, [])
+
         max_score = len(all_sentences) * 100
         user_score = round(total_score, 1)
         percentage = round((user_score / max_score) * 100, 1) if max_score else 0
@@ -658,6 +757,55 @@ class AssessmentService:
         else:
             placement = "Below Grade Level"
 
+        all_results = latest.get("results", [])
+        per_sentence_tags = latest.get("per_sentence_tags", [])
+        dear_parent_tags = latest.get("dear_parent_tags", [])
+
+        per_sentence_map = {
+            p.get("item_id", ""): p.get("tags", [])
+            for p in per_sentence_tags
+        }
+
+        def _error_type_for(result: Dict[str, Any]) -> Optional[str]:
+            status = result.get("status", "")
+            if status == "Not Attempted":
+                return "Not attempted"
+            if status == "Analysis Error":
+                return "Analysis error"
+            overall = result.get("overall", {})
+            score = overall.get("score", 0)
+            if score >= 75:
+                return None
+            tags = per_sentence_map.get(result.get("sentence_id", ""), [])
+            for tag in tags:
+                if tag.endswith("_needs_work"):
+                    return tag.replace("_needs_work", " needs work")
+            if score < 50:
+                return "Below benchmark"
+            return "Developing"
+
+        table_data = [
+            {
+                "sentence": r.get("original_sentence", ""),
+                "sentence_id": r.get("sentence_id", ""),
+                "status": r.get("status", ""),
+                "overall_score": r.get("overall", {}).get("score", 0),
+                "level": r.get("overall", {}).get("level", ""),
+                "error_type": _error_type_for(r),
+                "icon": "Correct" if r.get("overall", {}).get("score", 0) >= 75 else "Incorrect",
+            }
+            for r in all_results
+        ]
+
+        strengths = [
+            t.get("tag", "") for t in dear_parent_tags
+            if t.get("polarity") == "strength"
+        ]
+        focus_areas = [
+            t.get("tag", "") for t in dear_parent_tags
+            if t.get("polarity") == "growth_edge"
+        ]
+
         return {
             "user_id": uid,
             "child_id": child_id,
@@ -670,13 +818,22 @@ class AssessmentService:
             "level": latest.get("level", "Developing Speaker"),
             "parent_summary": {
                 "level": latest.get("level", "Developing Speaker"),
+                "strengths": strengths,
+                "focus_areas": focus_areas,
                 "recommendation": "See detailed feedback for each sentence.",
                 "grade_placement": placement,
                 "note": "Assessment is instructional and not a clinical diagnosis.",
             },
-            "dear_parent_tags": latest.get("dear_parent_tags", []),
-            "per_sentence_tags": latest.get("per_sentence_tags", []),
-            "all_results": latest.get("results", []),
+            "dear_parent_tags": dear_parent_tags,
+            "per_sentence_tags": per_sentence_tags,
+            "teacher_admin_detail": {
+                "test_level": latest.get("grade", grade),
+                "sentences": len(all_results),
+                "answered": latest.get("answered_count", 0),
+                "instructional_level": placement,
+                "table_data": table_data,
+            },
+            "all_results": all_results,
         }
 
     # =====================================================================
@@ -706,6 +863,10 @@ class AssessmentService:
         story_breakdown = engine.story_breakdown(result.score)
 
         scored_items = [s.model_dump() for s in result.score.scored_items]
+
+        comp_tag_map = {p["item_id"]: p.get("tags", []) for p in per_item_dicts}
+        for item in scored_items:
+            item["detail"]["tags"] = comp_tag_map.get(item.get("item_id", ""), [])
 
         test_id = self._scores.save(
             uid, child_id, TestType.COMPREHENSION.storage_key,
@@ -765,6 +926,49 @@ class AssessmentService:
             placement = "Below Grade Level"
             next_step = "Practice with guided reading and comprehension activities"
 
+        story_breakdown = latest.get("results", [])
+        per_question_tags = latest.get("per_question_tags", [])
+        dear_parent_tags = latest.get("dear_parent_tags", [])
+
+        per_question_map = {
+            p.get("item_id", ""): p.get("tags", [])
+            for p in per_question_tags
+        }
+
+        scored_items = latest.get("scored_items", [])
+
+        def _error_type_for(item: Dict[str, Any]) -> Optional[str]:
+            if item.get("is_correct"):
+                return None
+            tags = per_question_map.get(item.get("item_id", ""), [])
+            for tag in tags:
+                if tag.endswith("_error"):
+                    return tag.replace("_error", " error")
+            return "Incorrect"
+
+        table_data = [
+            {
+                "question": s.get("label", ""),
+                "story_id": s.get("detail", {}).get("story_id", ""),
+                "story_title": s.get("detail", {}).get("story_title", ""),
+                "selected_index": s.get("detail", {}).get("selected_index"),
+                "correct_index": s.get("detail", {}).get("correct_index"),
+                "correct": s.get("is_correct", False),
+                "error_type": _error_type_for(s),
+                "icon": "Correct" if s.get("is_correct") else "Incorrect",
+            }
+            for s in scored_items
+        ]
+
+        strengths = [
+            t.get("tag", "") for t in dear_parent_tags
+            if t.get("polarity") == "strength"
+        ]
+        focus_areas = [
+            t.get("tag", "") for t in dear_parent_tags
+            if t.get("polarity") == "growth_edge"
+        ]
+
         return {
             "user_id": uid,
             "child_id": child_id,
@@ -781,12 +985,21 @@ class AssessmentService:
                 "overall_score": f"{latest.get('correct_answers', 0)}/{latest.get('max_score', 8)}",
                 "percentage": percentage,
                 "level": latest.get("level", "Developing Reader"),
+                "strengths": strengths,
+                "focus_areas": focus_areas,
                 "grade_placement": placement,
                 "next_step": next_step,
                 "recommendation": latest.get("recommendation", ""),
                 "note": "Assessment is instructional and not a clinical diagnosis.",
             },
-            "story_breakdown": latest.get("results", []),
-            "dear_parent_tags": latest.get("dear_parent_tags", []),
-            "per_question_tags": latest.get("per_question_tags", []),
+            "story_breakdown": story_breakdown,
+            "dear_parent_tags": dear_parent_tags,
+            "per_question_tags": per_question_tags,
+            "teacher_admin_detail": {
+                "test_level": latest.get("grade", grade),
+                "questions": len(scored_items),
+                "correct": sum(1 for s in scored_items if s.get("is_correct")),
+                "instructional_level": latest.get("level", ""),
+                "table_data": table_data,
+            },
         }

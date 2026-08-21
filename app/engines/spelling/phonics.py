@@ -195,3 +195,60 @@ def parse_expectations(features: Dict[str, str]) -> List[FeatureExpectation]:
 def empty_error_counts() -> Dict[str, int]:
     """A zeroed error tally covering every feature, in display order."""
     return {feature.error_label: 0 for feature in PhonicsFeature}
+
+
+def is_unrelated_attempt(target: str, attempt: str) -> bool:
+    """Check if the child typed a completely different word.
+
+    Returns ``True`` when the attempt is unrelated (e.g. "cup" -> "red"),
+    and ``False`` when it is a genuine misspelling of the target.
+    """
+    if not attempt or not target:
+        return True
+
+    from difflib import SequenceMatcher
+
+    ratio = SequenceMatcher(None, target, attempt).ratio()
+
+    if ratio >= 0.5:
+        return False
+
+    shared = set(target) & set(attempt)
+    shared_count = len(shared)
+
+    if shared_count == 0:
+        return True
+
+    first_match = target[0] == attempt[0]
+    last_match = target[-1] == attempt[-1]
+    t_shared = [c for c in target if c in shared]
+    a_shared = [c for c in attempt if c in shared]
+    order_match = t_shared == a_shared
+
+    lcp = 0
+    for i in range(min(len(target), len(attempt))):
+        if target[i] == attempt[i]:
+            lcp += 1
+        else:
+            break
+
+    lcs = 0
+    for i in range(1, min(len(target), len(attempt)) + 1):
+        if target[-i] == attempt[-i]:
+            lcs += 1
+        else:
+            break
+
+    if len(target) == 2:
+        return not (shared_count >= 1 and (first_match or last_match) and order_match)
+
+    if len(target) == 3:
+        return not (shared_count >= 2 and (first_match or last_match) and order_match)
+
+    if shared_count >= 2 and (first_match or last_match or lcp >= 1 or lcs >= 1):
+        return False
+
+    if ratio >= 0.4:
+        return False
+
+    return True

@@ -7,7 +7,6 @@ Produces the accuracy ratios and error counts that the rules in
 
 from __future__ import annotations
 
-from difflib import SequenceMatcher
 from typing import Any, Dict, List, Sequence
 
 from app.domain.enums import TestType, WordType
@@ -16,6 +15,7 @@ from app.engines.base import SignalDeriver
 from app.engines.spelling.phonics import (
     VOWEL_FEATURES,
     PhonicsFeature,
+    is_unrelated_attempt,
     parse_expectations,
 )
 
@@ -89,7 +89,12 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
                         sight_correct += 1
 
             # Feature-level accuracy, regular words only.
-            if item.word_type is WordType.REGULAR and attempted:
+            # Skip unrelated attempts so they don't create phantom feature errors.
+            if (
+                item.word_type is WordType.REGULAR
+                and attempted
+                and "unrelated_attempt" not in mistakes
+            ):
                 for expectation in parse_expectations(item.features):
                     tally = tallies[expectation.feature]
                     tally.attempted += 1
@@ -195,7 +200,7 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
                 else:
                     tags.append(f"{item.word_type.value}_word_correct")
             else:
-                if self._is_unrelated(target, attempt):
+                if is_unrelated_attempt(target, attempt):
                     if item.word_type is WordType.REGULAR:
                         tags.append("unrelated_attempt")
                     else:
@@ -223,81 +228,3 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
 
         return results
 
-    @staticmethod
-    def _is_unrelated(target: str, attempt: str) -> bool:
-        """Check if attempt is completely unrelated to target (not a misspelling).
-
-        Uses a combination of:
-        - Sequence similarity ratio (difflib)
-        - First/last letter match
-        - Shared letter count
-        - Sequence order of shared letters
-        - Longest common prefix/suffix
-
-        Returns True if the attempt is a completely different word,
-        False if it's a genuine misspelling.
-        """
-        if not attempt or not target:
-            return True
-
-        ratio = SequenceMatcher(None, target, attempt).ratio()
-
-        # High ratio = clearly a misspelling
-        if ratio >= 0.5:
-            return False
-
-        shared = set(target) & set(attempt)
-        shared_count = len(shared)
-
-        # No shared letters = completely different
-        if shared_count == 0:
-            return True
-
-        first_match = target[0] == attempt[0]
-        last_match = target[-1] == attempt[-1]
-
-        # Sequence order: do shared letters appear in same relative order?
-        t_shared = [c for c in target if c in shared]
-        a_shared = [c for c in attempt if c in shared]
-        order_match = t_shared == a_shared
-
-        # Longest common prefix
-        lcp = 0
-        for i in range(min(len(target), len(attempt))):
-            if target[i] == attempt[i]:
-                lcp += 1
-            else:
-                break
-
-        # Longest common suffix
-        lcs = 0
-        for i in range(1, min(len(target), len(attempt)) + 1):
-            if target[-i] == attempt[-i]:
-                lcs += 1
-            else:
-                break
-
-        # 2-letter words: need >= 1 shared letter AND
-        # (first or last letter match) AND order preserved
-        if len(target) == 2:
-            if shared_count >= 1 and (first_match or last_match) and order_match:
-                return False
-            return True
-
-        # 3-letter words: need >= 2 shared letters AND
-        # (first or last letter match) AND order preserved
-        if len(target) == 3:
-            if shared_count >= 2 and (first_match or last_match) and order_match:
-                return False
-            return True
-
-        # Longer words (4+ letters): need >= 2 shared letters AND
-        # some positional overlap (first/last/prefix/suffix)
-        if shared_count >= 2 and (first_match or last_match or lcp >= 1 or lcs >= 1):
-            return False
-
-        # Ratio >= 0.4 with some shared letters = borderline misspelling
-        if ratio >= 0.4:
-            return False
-
-        return True

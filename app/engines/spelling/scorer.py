@@ -20,8 +20,12 @@ from app.engines.spelling.phonics import (
     FeatureExpectation,
     PhonicsFeature,
     empty_error_counts,
+    is_unrelated_attempt,
     parse_expectations,
 )
+
+#: Response times above this (seconds) are capped — the child likely left.
+MAX_RESPONSE_SECONDS = 120.0
 
 #: Percentage bands, highest first.
 LEVEL_BANDS: Sequence[tuple[float, str]] = (
@@ -86,7 +90,7 @@ class SpellingScorer(Scorer[SpellingWord, SpellingResponse]):
 
             outcome.detail.update(
                 {
-                    "time": response.response_time_seconds,
+                    "time": min(response.response_time_seconds, MAX_RESPONSE_SECONDS),
                     "hints_used": response.hints_used,
                 }
             )
@@ -187,6 +191,24 @@ class SpellingScorer(Scorer[SpellingWord, SpellingResponse]):
                     "mistakes": {
                         "spelling": f"Expected {item.word!r}, got {attempt or '(blank)'!r}"
                     },
+                },
+            )
+
+        # Completely unrelated words (e.g. "cup" -> "red") should not
+        # generate phantom feature errors. They are one mistake: unrelated.
+        if is_unrelated_attempt(target, attempt):
+            return ScoredItem(
+                item_id=item.item_id,
+                label=item.word,
+                is_correct=False,
+                points=0.0,
+                max_points=max_points,
+                status=ResponseStatus.ANSWERED,
+                detail={
+                    "type": item.word_type.value,
+                    "user_input": attempt,
+                    "mistakes": {"unrelated_attempt": attempt},
+                    "matched_features": [],
                 },
             )
 
