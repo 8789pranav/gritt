@@ -113,9 +113,8 @@
       "sentence": "The puzzle took hours to solve.",
       "features": {
         "beginning_consonant": "p",
-        "final_consonant": "z, l, e",
+        "final_consonant": "l, e",
         "short_vowels": "u",
-        "consonant_digraphs": "zz",
         "other_vowel_patterns": "le"
       }
     },
@@ -145,5 +144,5 @@
       "sentence": "I could hear the music from far away."
     }
   ],
-  "max_points": 50
+  "max_points": 49
 }

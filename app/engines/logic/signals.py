@@ -18,7 +18,7 @@ they are called out explicitly:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from app.domain.enums import CognitiveTag, Difficulty, TestType
 from app.domain.models import LogicItem, LogicResponse, PerItemTags, TestScore
@@ -147,6 +147,7 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
         self,
         items: Sequence[LogicItem],
         responses: Sequence[LogicResponse],
+        score: Optional[TestScore] = None,
     ) -> List[PerItemTags]:
         """Attribute behavioural observations to individual items."""
         items_by_id = {item.item_id: item for item in items}

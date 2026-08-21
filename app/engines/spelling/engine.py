@@ -82,7 +82,7 @@ class SpellingEngine(AssessmentEngine[SpellingWord, SpellingResponse]):
                 attempts[feature.error_label] += 1
                 correct[feature.error_label] += 1
             for feature_value in mistakes:
-                if feature_value in ("spelling", "unrelated_attempt"):
+                if feature_value in ("spelling", "unrelated_attempt", "spelling_convention", "homophone_error"):
                     continue
                 try:
                     feature = PhonicsFeature(feature_value)

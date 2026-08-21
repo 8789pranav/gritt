@@ -8,7 +8,7 @@ diagnostic signal for this test.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from app.domain.enums import QuestionType, TestType
 from app.domain.models import (
@@ -81,6 +81,7 @@ class ComprehensionSignalDeriver(
         self,
         items: Sequence[ComprehensionStory],
         responses: Sequence[ComprehensionResponse],
+        score: Optional[TestScore] = None,
     ) -> List[PerItemTags]:
         """Tag each question with its type and outcome."""
         responses_by_question = {r.question_id: r for r in responses}

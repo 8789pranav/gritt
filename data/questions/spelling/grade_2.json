@@ -118,8 +118,14 @@
     },
     {
       "word": "from",
-      "type": "sight",
-      "sentence": "I got a letter from my friend."
+      "type": "regular",
+      "sentence": "I got a letter from my friend.",
+      "features": {
+        "beginning": "fr",
+        "final": "m",
+        "short_vowel": "o",
+        "blend": "fr"
+      }
     },
     {
       "word": "does",
@@ -142,5 +148,5 @@
       "sentence": "What time is the party?"
     }
   ],
-  "max_points": 47
+  "max_points": 50
 }

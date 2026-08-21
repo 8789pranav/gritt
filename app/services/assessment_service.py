@@ -469,13 +469,17 @@ class AssessmentService:
                 return "Sight word (unrelated)"
             if "rushed_attempt" in tags:
                 return "Rushed attempt"
+            if "homophone_error" in tags:
+                return "Homophone"
 
             if result.get("detail", {}).get("type") == WordType.SIGHT.value:
                 return "Sight word"
 
             mistakes = result.get("detail", {}).get("mistakes", {})
+            if "spelling_convention" in mistakes:
+                return "Spelling convention"
             feature_key = next(
-                (k for k in mistakes if k not in ("spelling", "unrelated_attempt")),
+                (k for k in mistakes if k not in ("spelling", "unrelated_attempt", "spelling_convention", "homophone_error")),
                 None,
             )
             if feature_key:

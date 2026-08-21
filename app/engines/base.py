@@ -143,6 +143,7 @@ class SignalDeriver(ABC, Generic[TItem, TResponse]):
         self,
         items: Sequence[TItem],
         responses: Sequence[TResponse],
+        score: Optional[TestScore] = None,
     ) -> List[PerItemTags]:
         """Optional per-item tagging. Defaults to no per-item tags."""
         return []
@@ -223,7 +224,7 @@ class AssessmentEngine(ABC, Generic[TItem, TResponse]):
 
         signals = self.deriver.derive(items, responses, score)
         tags = self.emit(signals)
-        per_item = self.deriver.per_item_tags(items, responses)
+        per_item = self.deriver.per_item_tags(items, responses, score=score)
 
         return AssessmentResult(
             test_type=self.test_type,

@@ -15,23 +15,23 @@
       }
     },
     {
-      "word": "chap",
+      "word": "chat",
       "type": "regular",
-      "sentence": "The old book has a new chap.",
+      "sentence": "We had a nice chat.",
       "features": {
         "beginning": "ch",
-        "final": "p",
+        "final": "t",
         "short_vowels": "a",
         "consonant_digraphs": "ch"
       }
     },
     {
-      "word": "bed",
+      "word": "leg",
       "type": "regular",
-      "sentence": "I sleep in a cozy bed.",
+      "sentence": "I hurt my leg playing.",
       "features": {
-        "beginning": "b",
-        "final": "d",
+        "beginning": "l",
+        "final": "g",
         "short_vowels": "e"
       }
     },
@@ -41,7 +41,7 @@
       "sentence": "She runs very fast.",
       "features": {
         "beginning": "sh",
-        "short_vowels": "e",
+        "long_vowel": "e",
         "consonant_digraphs": "sh"
       }
     },
@@ -61,38 +61,37 @@
       "sentence": "She waved and said hi.",
       "features": {
         "beginning": "h",
-        "short_vowels": "i",
-        "long_vowel_patterns": "i"
+        "long_vowel": "i"
       }
     },
     {
-      "word": "go",
+      "word": "home",
       "type": "regular",
-      "sentence": "Let's go to the park.",
+      "sentence": "I go home after school.",
       "features": {
-        "beginning": "g",
-        "short_vowels": "o",
-        "long_vowel_patterns": "o"
+        "beginning": "h",
+        "final": "m",
+        "long_vowel": "o-e"
       }
     },
     {
-      "word": "quit",
+      "word": "stop",
       "type": "regular",
-      "sentence": "Don't quit the game now.",
+      "sentence": "Stop at the red light.",
       "features": {
-        "beginning": "qu",
-        "final": "t",
-        "short_vowels": "i",
-        "consonant_blends": "qu"
-      }
-    },
-    {
-      "word": "cup",
-      "type": "regular",
-      "sentence": "I drink from a red cup.",
-      "features": {
-        "beginning": "c",
+        "beginning": "st",
         "final": "p",
+        "short_vowels": "o",
+        "consonant_blends": "st"
+      }
+    },
+    {
+      "word": "mud",
+      "type": "regular",
+      "sentence": "My shoes are covered in mud.",
+      "features": {
+        "beginning": "m",
+        "final": "d",
         "short_vowels": "u"
       }
     },
@@ -129,9 +128,14 @@
     },
     {
       "word": "and",
-      "type": "sight",
-      "sentence": "I like to read and write."
+      "type": "regular",
+      "sentence": "I like to read and write.",
+      "features": {
+        "beginning": "a",
+        "final": "d",
+        "short_vowels": "a"
+      }
     }
   ],
-  "max_points": 38
+  "max_points": 41
 }

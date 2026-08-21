@@ -20,8 +20,10 @@ from app.engines.spelling.phonics import (
     FeatureExpectation,
     PhonicsFeature,
     empty_error_counts,
+    is_homophone,
     is_unrelated_attempt,
     parse_expectations,
+    sounds_like,
 )
 
 #: Response times above this (seconds) are capped — the child likely left.
@@ -130,11 +132,12 @@ class SpellingScorer(Scorer[SpellingWord, SpellingResponse]):
     ) -> ScoredItem:
         """Sight and nonsense words are worth one point, all or nothing."""
         is_correct = attempt == target
-        mistakes: Dict[str, str] = (
-            {}
-            if is_correct
-            else {"spelling": f"Expected {item.word!r}, got {attempt or '(blank)'!r}"}
-        )
+        if is_correct:
+            mistakes: Dict[str, str] = {}
+        elif is_homophone(target, attempt):
+            mistakes = {"homophone_error": f"Expected {item.word!r}, got {attempt!r} — a homophone"}
+        else:
+            mistakes = {"spelling": f"Expected {item.word!r}, got {attempt or '(blank)'!r}"}
 
         return ScoredItem(
             item_id=item.item_id,
@@ -212,6 +215,25 @@ class SpellingScorer(Scorer[SpellingWord, SpellingResponse]):
                 },
             )
 
+        # Phonetically-equivalent check (friend/frend, phone/fone).
+        # The child knows all the sounds — only the spelling convention is wrong.
+        # Give credit for every phonics feature; record one spelling-convention error.
+        if sounds_like(target, attempt):
+            return ScoredItem(
+                item_id=item.item_id,
+                label=item.word,
+                is_correct=False,
+                points=max_points,
+                max_points=max_points,
+                status=ResponseStatus.ANSWERED,
+                detail={
+                    "type": item.word_type.value,
+                    "user_input": attempt,
+                    "mistakes": {"spelling_convention": f"Sounds correct, spelling convention error: {target!r} vs {attempt!r}"},
+                    "matched_features": [e.feature.value for e in expectations],
+                },
+            )
+
         points = 0.0
         mistakes: Dict[str, str] = {}
         matched: List[str] = []
@@ -223,10 +245,14 @@ class SpellingScorer(Scorer[SpellingWord, SpellingResponse]):
             else:
                 mistakes[expectation.feature.value] = expectation.raw_value
 
+        # Bug 4: is_correct must be exact-match, not points == max_points.
+        # This ensures scorer and per_item_tags agree on correctness.
+        is_correct = attempt == target
+
         return ScoredItem(
             item_id=item.item_id,
             label=item.word,
-            is_correct=points == max_points,
+            is_correct=is_correct,
             points=points,
             max_points=max_points,
             status=ResponseStatus.ANSWERED,

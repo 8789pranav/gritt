@@ -14,6 +14,7 @@ scattered through conditionals.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
@@ -40,7 +41,7 @@ class PhonicsFeature(str, Enum):
     SHORT_VOWEL = "short_vowel"
     CONSONANT_DIGRAPH = "consonant_digraph"
     CONSONANT_BLEND = "consonant_blend"
-    LONG_VOWEL_PATTERN = "long_vowel_pattern"
+    LONG_VOWEL = "long_vowel"
     OTHER_VOWEL_PATTERN = "other_vowel_pattern"
     INFLECTED_ENDING = "inflected_ending"
 
@@ -64,7 +65,7 @@ _DISPLAY_NAMES: Dict[PhonicsFeature, str] = {
     PhonicsFeature.SHORT_VOWEL: "Short vowel",
     PhonicsFeature.CONSONANT_DIGRAPH: "Consonant digraph",
     PhonicsFeature.CONSONANT_BLEND: "Consonant blend",
-    PhonicsFeature.LONG_VOWEL_PATTERN: "Long vowel pattern",
+    PhonicsFeature.LONG_VOWEL: "Long vowel",
     PhonicsFeature.OTHER_VOWEL_PATTERN: "Other vowel pattern",
     PhonicsFeature.INFLECTED_ENDING: "Inflected ending",
 }
@@ -75,7 +76,7 @@ _STRATEGIES: Dict[PhonicsFeature, MatchStrategy] = {
     PhonicsFeature.SHORT_VOWEL: MatchStrategy.CONTAINS_ANY,
     PhonicsFeature.CONSONANT_DIGRAPH: MatchStrategy.CONTAINS_ANY,
     PhonicsFeature.CONSONANT_BLEND: MatchStrategy.CONTAINS_ANY,
-    PhonicsFeature.LONG_VOWEL_PATTERN: MatchStrategy.SPLIT_PATTERN,
+    PhonicsFeature.LONG_VOWEL: MatchStrategy.SPLIT_PATTERN,
     PhonicsFeature.OTHER_VOWEL_PATTERN: MatchStrategy.CONTAINS_ANY,
     PhonicsFeature.INFLECTED_ENDING: MatchStrategy.CONTAINS_ANY,
 }
@@ -95,9 +96,9 @@ _ALIASES: Dict[str, PhonicsFeature] = {
     "blend": PhonicsFeature.CONSONANT_BLEND,
     "consonant_blend": PhonicsFeature.CONSONANT_BLEND,
     "consonant_blends": PhonicsFeature.CONSONANT_BLEND,
-    "long_vowel": PhonicsFeature.LONG_VOWEL_PATTERN,
-    "long_vowel_pattern": PhonicsFeature.LONG_VOWEL_PATTERN,
-    "long_vowel_patterns": PhonicsFeature.LONG_VOWEL_PATTERN,
+    "long_vowel": PhonicsFeature.LONG_VOWEL,
+    "long_vowel_pattern": PhonicsFeature.LONG_VOWEL,
+    "long_vowel_patterns": PhonicsFeature.LONG_VOWEL,
     "other_vowel": PhonicsFeature.OTHER_VOWEL_PATTERN,
     "other_vowel_pattern": PhonicsFeature.OTHER_VOWEL_PATTERN,
     "other_vowel_patterns": PhonicsFeature.OTHER_VOWEL_PATTERN,
@@ -113,7 +114,7 @@ _EMPTY_VALUES = {"", "-", " ", "none", "n/a"}
 VOWEL_FEATURES = frozenset(
     {
         PhonicsFeature.SHORT_VOWEL,
-        PhonicsFeature.LONG_VOWEL_PATTERN,
+        PhonicsFeature.LONG_VOWEL,
         PhonicsFeature.OTHER_VOWEL_PATTERN,
     }
 )
@@ -162,7 +163,16 @@ class FeatureExpectation:
             return bool(self.letters) and attempt.startswith(self.letters)
 
         if strategy is MatchStrategy.SUFFIX:
-            return bool(self.letters) and attempt.endswith(self.letters)
+            letters = self.letters
+            if not letters:
+                return False
+            if attempt.endswith(letters):
+                return True
+            # Silent-e: the ending consonant sits before a trailing 'e'
+            # (e.g. "outline" — 'n' is before silent 'e').
+            if attempt.endswith("e") and attempt[:-1].endswith(letters):
+                return True
+            return False
 
         if strategy is MatchStrategy.SPLIT_PATTERN and "-" in self.raw_value:
             vowel, _, ending = self.raw_value.partition("-")
@@ -184,6 +194,9 @@ def parse_expectations(features: Dict[str, str]) -> List[FeatureExpectation]:
         feature = normalise(raw_name)
         if feature is None or feature in seen or not is_scoreable(raw_value):
             continue
+        # Vowel-start words have no beginning consonant to check.
+        if feature is PhonicsFeature.BEGINNING_CONSONANT and "vowel start" in str(raw_value).lower():
+            continue
         seen.add(feature)
         expectations.append(
             FeatureExpectation(feature=feature, raw_value=str(raw_value).strip())
@@ -195,6 +208,80 @@ def parse_expectations(features: Dict[str, str]) -> List[FeatureExpectation]:
 def empty_error_counts() -> Dict[str, int]:
     """A zeroed error tally covering every feature, in display order."""
     return {feature.error_label: 0 for feature in PhonicsFeature}
+
+
+#: Known homophone groups — words that sound identical but are spelled
+#: differently and have different meanings.
+_HOMOPHONE_GROUPS: List[frozenset] = [
+    frozenset({"there", "their", "they're"}),
+    frozenset({"which", "witch"}),
+    frozenset({"to", "too", "two"}),
+    frozenset({"your", "you're"}),
+    frozenset({"were", "where"}),
+    frozenset({"hear", "here"}),
+    frozenset({"write", "right"}),
+    frozenset({"no", "know"}),
+    frozenset({"by", "buy"}),
+    frozenset({"for", "four"}),
+    frozenset({"won", "one"}),
+    frozenset({"ate", "eight"}),
+    frozenset({"see", "sea"}),
+    frozenset({"hi", "high"}),
+]
+
+_HOMOPHONE_MAP: Dict[str, frozenset] = {}
+for _group in _HOMOPHONE_GROUPS:
+    for _word in _group:
+        _HOMOPHONE_MAP[_word] = _group
+
+
+def is_homophone(target: str, attempt: str) -> bool:
+    """True when *attempt* is a different real English word that sounds like *target*."""
+    if not target or not attempt or target == attempt:
+        return False
+    group = _HOMOPHONE_MAP.get(target.strip().lower())
+    if group is None:
+        return False
+    return attempt.strip().lower() in group
+
+
+def _phonetic_key(word: str) -> str:
+    """Convert a word to a simplified phonetic representation.
+
+    Normalises spelling patterns that produce the same sound so that
+    phonetically-equivalent misspellings collapse to the same key.
+    """
+    w = word.lower().strip()
+    # ph -> f  (phone/fone, graph/graff)
+    w = w.replace("ph", "f")
+    # gh -> f  (laugh/lauf)
+    w = w.replace("gh", "f")
+    # ie -> e  (friend/frend — the i is silent before e)
+    w = w.replace("ie", "e")
+    # Reduce doubled consonants to a single letter (still/stil, puzzle/puzle)
+    w = re.sub(r"(.)\1+", r"\1", w)
+    # Remove silent 'e' at end (phone/fon, home/hom)
+    if len(w) > 2 and w.endswith("e") and w[-2] not in "aeiou":
+        w = w[:-1]
+    # Normalise final 'le' / 'el' to 'l' (candle/candel)
+    if w.endswith("el") and len(w) > 3 and w[-3] not in "aeiou":
+        w = w[:-2] + "l"
+    elif w.endswith("le") and len(w) > 3 and w[-3] not in "aeiou":
+        w = w[:-2] + "l"
+    return w
+
+
+def sounds_like(target: str, attempt: str) -> bool:
+    """Check if *attempt* sounds the same as *target* but is spelled differently.
+
+    Returns ``True`` for phonetically-equivalent misspellings such as
+    phone→fone, graph→graff, standstill→standstil, candle→candel.
+    Returns ``False`` for exact matches, unrelated attempts, or genuine
+    phonics errors (wrong vowel sound, wrong consonant, etc.).
+    """
+    if not target or not attempt or target == attempt:
+        return False
+    return _phonetic_key(target) == _phonetic_key(attempt)
 
 
 def is_unrelated_attempt(target: str, attempt: str) -> bool:

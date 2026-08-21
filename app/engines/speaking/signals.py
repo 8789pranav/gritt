@@ -10,7 +10,7 @@ conclusions from one or two clips.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from app.domain.enums import Difficulty, ResponseStatus, TestType
 from app.domain.models import PerItemTags, SpeakingResponse, SpeakingSentence, TestScore
@@ -94,6 +94,7 @@ class SpeakingSignalDeriver(SignalDeriver[SpeakingSentence, SpeakingResponse]):
         self,
         items: Sequence[SpeakingSentence],
         responses: Sequence[SpeakingResponse],
+        score: Optional[TestScore] = None,
     ) -> List[PerItemTags]:
         """Flag the weakest dimension on each attempted sentence."""
         responses_by_id = {r.sentence_id: r for r in responses}

@@ -7,7 +7,7 @@ Produces the accuracy ratios and error counts that the rules in
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from app.domain.enums import TestType, WordType
 from app.domain.models import PerItemTags, SpellingResponse, SpellingWord, TestScore
@@ -15,8 +15,10 @@ from app.engines.base import SignalDeriver
 from app.engines.spelling.phonics import (
     VOWEL_FEATURES,
     PhonicsFeature,
+    is_homophone,
     is_unrelated_attempt,
     parse_expectations,
+    sounds_like,
 )
 
 #: A word answered faster than this (seconds) is treated as rushed.
@@ -130,6 +132,8 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
             "digraph_accuracy": digraph.accuracy(),
             "blend_accuracy": blend.accuracy(),
             "digraph_error_count": digraph.errors + blend.errors,
+            "digraph_words_count": digraph.attempted,
+            "blend_words_count": blend.attempted,
             "sight_word_accuracy": self.ratio(sight_correct, sight_attempted),
             "regular_word_accuracy": self.ratio(regular_correct, regular_attempted),
             "improved_with_audio": improved_with_audio,
@@ -158,22 +162,16 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
         self,
         items: Sequence[SpellingWord],
         responses: Sequence[SpellingResponse],
+        score: Optional[TestScore] = None,
     ) -> List[PerItemTags]:
         """Attribute per-feature tags (both correct and error) for each word.
 
-        For regular (phonetic) words, every phonics feature is tagged as
-        either ``{feature}_correct`` or ``{feature}_error``.
-
-        For sight words, ``sight_word_correct`` or ``sight_word_error``.
-
-        If the attempt is completely unrelated to the target (e.g. "which" ->
-        "book"), ``unrelated_attempt`` is emitted instead of feature-specific
-        error tags.
-
-        Additionally, ``rushed_attempt`` is added when a wrong answer is
-        given in under ``FAST_RESPONSE_SECONDS``.
+        Uses the scorer's :class:`ScoredItem` results as the single source of
+        truth for correctness and mistakes, ensuring consistency between
+        ``teacher_admin_detail`` and ``per_word_tags`` (bug 4).
         """
         responses_by_word = {r.word.strip().lower(): r for r in responses}
+        scored_by_id = {s.item_id: s for s in (score.scored_items if score else [])}
         results: List[PerItemTags] = []
 
         for item in items:
@@ -186,9 +184,18 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
 
             attempt = (response.user_input or "").strip().lower()
             target = item.word.strip().lower()
+            scored = scored_by_id.get(item.item_id)
             tags: List[str] = []
 
-            is_correct = attempt == target
+            # Use scorer's result as the single source of truth (bug 4).
+            if scored is not None:
+                is_correct = scored.is_correct
+                mistakes = scored.detail.get("mistakes", {})
+                matched = scored.detail.get("matched_features", [])
+            else:
+                is_correct = attempt == target
+                mistakes = {}
+                matched = []
 
             if is_correct:
                 if item.word_type is WordType.REGULAR:
@@ -199,20 +206,29 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
                             tags.append(f"{expectation.feature.value}_error")
                 else:
                     tags.append(f"{item.word_type.value}_word_correct")
-            else:
-                if is_unrelated_attempt(target, attempt):
-                    if item.word_type is WordType.REGULAR:
-                        tags.append("unrelated_attempt")
-                    else:
-                        tags.append("unrelated_attempt_sightword")
-                elif item.word_type is WordType.REGULAR:
-                    for expectation in parse_expectations(item.features):
-                        if expectation.matches(attempt):
-                            tags.append(f"{expectation.feature.value}_correct")
-                        else:
-                            tags.append(f"{expectation.feature.value}_error")
+            elif "unrelated_attempt" in mistakes:
+                if item.word_type is WordType.REGULAR:
+                    tags.append("unrelated_attempt")
                 else:
-                    tags.append(f"{item.word_type.value}_word_error")
+                    tags.append("unrelated_attempt_sightword")
+            elif "spelling_convention" in mistakes:
+                # Phonetically correct — child knows the sounds, just not the spelling rule.
+                for expectation in parse_expectations(item.features):
+                    tags.append(f"{expectation.feature.value}_correct")
+                tags.append("spelling_convention_error")
+            elif "homophone_error" in mistakes:
+                tags.append("homophone_error")
+            elif item.word_type is WordType.REGULAR:
+                for expectation in parse_expectations(item.features):
+                    if expectation.matches(attempt):
+                        tags.append(f"{expectation.feature.value}_correct")
+                    else:
+                        tags.append(f"{expectation.feature.value}_error")
+                # Bug 5: every wrong word needs at least 1 error tag.
+                if not any(t.endswith("_error") for t in tags):
+                    tags.append("spelling_error")
+            else:
+                tags.append(f"{item.word_type.value}_word_error")
 
             if not is_correct and 0 < response.response_time_seconds < FAST_RESPONSE_SECONDS:
                 tags.append("rushed_attempt")

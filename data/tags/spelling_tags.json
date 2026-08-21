@@ -12,6 +12,8 @@
     "digraph_accuracy",
     "blend_accuracy",
     "digraph_error_count",
+    "digraph_words_count",
+    "blend_words_count",
     "sight_word_accuracy",
     "regular_word_accuracy",
     "improved_with_audio",
@@ -35,14 +37,14 @@
     },
     {
       "id": "vowel_difficulty_emerging",
-      "trigger": "vowel_error_count >= 2",
+      "trigger": "vowel_error_count >= 2 AND vowel_accuracy < 0.7",
       "confidence": "high",
       "polarity": "growth_edge",
       "description": "Child shows emerging difficulty with vowel patterns."
     },
     {
       "id": "digraph_blend_competent",
-      "trigger": "digraph_accuracy >= 0.7 AND blend_accuracy >= 0.7",
+      "trigger": "digraph_accuracy >= 0.7 AND blend_accuracy >= 0.7 AND blend_words_count >= 2 AND digraph_words_count >= 2",
       "confidence": "high",
       "polarity": "strength",
       "description": "Child handles consonant digraphs and blends competently."
@@ -87,7 +89,7 @@
       "trigger": "fast_slips >= 2",
       "confidence": "high",
       "polarity": "growth_edge",
-      "description": "Child makes careless errors on words they likely know due to speed."
+      "description": "Child answers quickly on words they have not yet mastered."
     }
   ]
 }
