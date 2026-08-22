@@ -60,7 +60,10 @@ class AudioService:
     async def generate_all_grade_audio(self, id_token: str, grade: str) -> Dict[str, Any]:
         grade_enum = _parse_grade(grade)
         engine = spelling_engine()
-        words = engine.loader.audio_targets(grade_enum)
+        if grade_enum.name == "KINDERGARTEN":
+            words = engine.build_test(grade_enum)
+        else:
+            words = engine.loader.audio_targets(grade_enum)
         if not words:
             raise NotFoundError("No words with sentences found")
 
