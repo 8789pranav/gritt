@@ -17,7 +17,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
-from app.core.security import verify_child
+from app.core.security import verify_paid_child
 from app.domain.enums import TestType
 from app.infrastructure.repositories import ScoreRepository, sanitize_data
 from app.services.ai_provider import AIProvider, get_ai_provider
@@ -66,7 +66,7 @@ class ReportService:
             - ``all_tags`` — aggregated tags grouped by polarity
             - ``metadata`` — child info, grade, timestamp
         """
-        uid, child_data = verify_child(id_token, child_id)
+        uid, child_data = verify_paid_child(id_token, child_id)
 
         # 1. Fetch latest results for each assessment type
         logic_data = self._scores.get_latest(

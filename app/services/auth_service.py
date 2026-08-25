@@ -127,10 +127,15 @@ class AuthService:
             "name": name,
             "age": age,
             "grade": grade,
+            "payment_status": "unpaid",
             "created_at": self._utc_now(),
         }
         self._children.add(uid, child_id, child_data)
-        return {"child_id": child_id, "message": "Child added successfully"}
+        return {
+            "child_id": child_id,
+            "payment_status": "unpaid",
+            "message": "Child added successfully",
+        }
 
     def get_children(self, id_token: str) -> Dict[str, Any]:
         decoded = verify_token(id_token)
@@ -142,6 +147,7 @@ class AuthService:
                 "name": data.get("name", ""),
                 "age": data.get("age", 0),
                 "grade": data.get("grade", ""),
+                "payment_status": data.get("payment_status", "unpaid"),
             }
             for child_id, data in children_data.items()
         ]

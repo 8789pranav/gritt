@@ -122,6 +122,25 @@ class AWSSettings:
 
 
 @dataclass(frozen=True)
+class StripeSettings:
+    """Stripe payment configuration."""
+
+    secret_key: Optional[str]
+    webhook_secret: Optional[str]
+    currency: str = "usd"
+    first_child_price_cents: int = 900
+    additional_child_price_cents: int = 300
+    # Optional comma-separated allowlist of frontend origins for checkout
+    # redirect URLs (e.g. "https://app.example.com,http://localhost:3000").
+    # Empty means any http(s) origin is accepted.
+    allowed_redirect_origins: List[str] = field(default_factory=list)
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.secret_key)
+
+
+@dataclass(frozen=True)
 class AudioSettings:
     """Shared narration settings applied across every assessment."""
 
@@ -169,6 +188,7 @@ class Settings:
     )
     openai: OpenAISettings = field(default_factory=lambda: OpenAISettings(None))
     aws: AWSSettings = field(default_factory=lambda: AWSSettings(None, None))
+    stripe: StripeSettings = field(default_factory=lambda: StripeSettings(None, None))
     audio: AudioSettings = field(default_factory=AudioSettings)
     paths: PathSettings = field(default_factory=lambda: PathSettings.build(BASE_DIR))
 
@@ -212,6 +232,18 @@ def get_settings() -> Settings:
             region=os.getenv("AWS_REGION", "us-east-1"),
             polly_voice=os.getenv("AWS_POLLY_VOICE", "Joanna"),
             polly_engine=os.getenv("AWS_POLLY_ENGINE", "neural"),
+        ),
+        stripe=StripeSettings(
+            secret_key=os.getenv("STRIPE_SECRET_KEY"),
+            webhook_secret=os.getenv("STRIPE_WEBHOOK_SECRET"),
+            currency=os.getenv("PAYMENT_CURRENCY", "usd"),
+            first_child_price_cents=_get_int("PAYMENT_FIRST_CHILD_CENTS", 900),
+            additional_child_price_cents=_get_int("PAYMENT_ADDITIONAL_CHILD_CENTS", 300),
+            allowed_redirect_origins=[
+                origin.strip()
+                for origin in os.getenv("PAYMENT_REDIRECT_ORIGINS", "").split(",")
+                if origin.strip()
+            ],
         ),
         audio=AudioSettings(
             default_speed=_get_float("AUDIO_DEFAULT_SPEED", 0.85),

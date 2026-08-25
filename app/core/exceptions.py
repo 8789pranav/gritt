@@ -99,6 +99,22 @@ class ResultNotFoundError(NotFoundError):
 
 
 # ---------------------------------------------------------------------------
+# 402 - payment errors
+# ---------------------------------------------------------------------------
+class PaymentRequiredError(AppError):
+    """The child has not been paid for; assessments are locked."""
+
+    status_code = status.HTTP_402_PAYMENT_REQUIRED
+    error_code = "payment_required"
+
+    def __init__(self, child_id: str) -> None:
+        super().__init__(
+            "Payment required for this child",
+            details={"child_id": child_id},
+        )
+
+
+# ---------------------------------------------------------------------------
 # 401 / 403 - auth errors
 # ---------------------------------------------------------------------------
 class AuthenticationError(AppError):

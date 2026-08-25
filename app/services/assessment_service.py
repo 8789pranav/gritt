@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.core.exceptions import InvalidGradeError, ResultNotFoundError
-from app.core.security import verify_child
+from app.core.security import verify_paid_child
 from app.domain.enums import Grade, TestType, WordType
 from app.domain.models import (
     ComprehensionResponse,
@@ -90,7 +90,7 @@ class AssessmentService:
     # LOGIC
     # =====================================================================
     def logic_get_test(self, id_token: str, child_id: str, grade: str) -> Dict[str, Any]:
-        verify_child(id_token, child_id)
+        verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = logic_engine()
         items = engine.get_items(grade_enum)
@@ -145,7 +145,7 @@ class AssessmentService:
                               selected_answer_index: int, response_time_seconds: float = 0.0,
                               attempts: int = 1, self_corrected: bool = False,
                               explanation_provided: Optional[str] = None) -> Dict[str, Any]:
-        verify_child(id_token, child_id)
+        verify_paid_child(id_token, child_id)
         engine = logic_engine()
 
         all_items = engine.get_all_items()
@@ -175,7 +175,7 @@ class AssessmentService:
 
     def logic_submit_test(self, id_token: str, child_id: str, grade: str,
                           responses: List[Dict[str, Any]]) -> Dict[str, Any]:
-        uid, _ = verify_child(id_token, child_id)
+        uid, _ = verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = logic_engine()
 
@@ -240,7 +240,7 @@ class AssessmentService:
 
     def logic_complete_result(self, id_token: str, child_id: str,
                               grade: Optional[str] = None) -> Dict[str, Any]:
-        uid, _ = verify_child(id_token, child_id)
+        uid, _ = verify_paid_child(id_token, child_id)
         latest = self._scores.get_latest(uid, child_id, TestType.LOGIC.storage_key, grade)
         if not latest:
             raise ResultNotFoundError("logic", child_id, grade)
@@ -344,7 +344,7 @@ class AssessmentService:
 
     def spelling_submit_words(self, id_token: str, child_id: str, grade: str,
                               words: List[Dict[str, Any]]) -> Dict[str, Any]:
-        uid, _ = verify_child(id_token, child_id)
+        uid, _ = verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = spelling_engine()
 
@@ -427,7 +427,7 @@ class AssessmentService:
 
     def spelling_complete_result(self, id_token: str, child_id: str,
                                  grade: Optional[str] = None) -> Dict[str, Any]:
-        uid, _ = verify_child(id_token, child_id)
+        uid, _ = verify_paid_child(id_token, child_id)
         latest = self._scores.get_latest(uid, child_id, TestType.SPELLING.storage_key, grade)
         if not latest:
             raise ResultNotFoundError("spelling", child_id, grade)
@@ -535,7 +535,7 @@ class AssessmentService:
     async def speaking_analyze(self, id_token: str, child_id: str, grade: str,
                                original_sentence: str, audio_base64: str,
                                audio_format: str = "mp3") -> Dict[str, Any]:
-        verify_child(id_token, child_id)
+        verify_paid_child(id_token, child_id)
         from app.infrastructure.hybrid_speech import HybridSpeechProvider
 
         speech = HybridSpeechProvider()
@@ -571,7 +571,7 @@ class AssessmentService:
                               audio_base64: Optional[str] = None,
                               audio_format: Optional[str] = "mp3",
                               submissions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-        uid, _ = verify_child(id_token, child_id)
+        uid, _ = verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = speaking_engine()
 
@@ -748,7 +748,7 @@ class AssessmentService:
 
     def speaking_complete_result(self, id_token: str, child_id: str,
                                  grade: Optional[str] = None) -> Dict[str, Any]:
-        uid, _ = verify_child(id_token, child_id)
+        uid, _ = verify_paid_child(id_token, child_id)
         latest = self._scores.get_latest(uid, child_id, TestType.SPEAKING.storage_key, grade)
         if not latest:
             raise ResultNotFoundError("speaking", child_id, grade)
@@ -845,7 +845,7 @@ class AssessmentService:
     # =====================================================================
     def comprehension_submit(self, id_token: str, child_id: str, grade: str,
                              story_answers: List[Dict[str, Any]]) -> Dict[str, Any]:
-        uid, _ = verify_child(id_token, child_id)
+        uid, _ = verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = comprehension_engine()
 
@@ -914,7 +914,7 @@ class AssessmentService:
 
     def comprehension_complete_result(self, id_token: str, child_id: str,
                                       grade: Optional[str] = None) -> Dict[str, Any]:
-        uid, _ = verify_child(id_token, child_id)
+        uid, _ = verify_paid_child(id_token, child_id)
         latest = self._scores.get_latest(uid, child_id, TestType.COMPREHENSION.storage_key, grade)
         if not latest:
             raise ResultNotFoundError("comprehension", child_id, grade)

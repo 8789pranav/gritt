@@ -53,6 +53,20 @@ def verify_child(id_token: str, child_id: str) -> tuple[str, dict]:
     return uid, child_data
 
 
+def verify_paid_child(id_token: str, child_id: str) -> tuple[str, dict]:
+    """Verify token + child ownership + payment.
+
+    Returns ``(uid, child_data)``. Raises :class:`PaymentRequiredError`
+    (HTTP 402) when the child has not been unlocked with a payment.
+    """
+    uid, child_data = verify_child(id_token, child_id)
+    if child_data.get("payment_status") != "paid":
+        from app.core.exceptions import PaymentRequiredError
+
+        raise PaymentRequiredError(child_id)
+    return uid, child_data
+
+
 def verify_admin(id_token: str) -> str:
     """Verify token + admin flag. Returns ``uid``."""
     decoded = verify_token(id_token)

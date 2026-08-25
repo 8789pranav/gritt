@@ -235,6 +235,27 @@ class ComprehensionResultRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Payments
+# ---------------------------------------------------------------------------
+class PaymentQuoteRequest(BaseModel):
+    idToken: str
+    child_ids: List[str]
+
+
+class CreateCheckoutSessionRequest(BaseModel):
+    idToken: str
+    child_ids: List[str]
+    success_url: str
+    cancel_url: str
+
+
+class PaymentStatusRequest(BaseModel):
+    idToken: str
+    payment_id: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
 # Final Report
 # ---------------------------------------------------------------------------
 class FinalReportRequest(BaseModel):

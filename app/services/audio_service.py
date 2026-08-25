@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.core.exceptions import InvalidGradeError, NotFoundError
-from app.core.security import verify_child, verify_token
+from app.core.security import verify_paid_child, verify_token
 from app.domain.enums import Grade
 from app.engines.registry import (
     comprehension_engine,
@@ -116,7 +116,7 @@ class AudioService:
 
     # -- logic: test with audio --------------------------------------------
     async def logic_test_with_audio(self, id_token: str, child_id: str, grade: str) -> Dict[str, Any]:
-        verify_child(id_token, child_id)
+        verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = logic_engine()
         items = engine.get_items(grade_enum)
@@ -206,7 +206,7 @@ class AudioService:
 
     # -- speaking: get sentence with audio ---------------------------------
     async def get_speaking_sentence(self, id_token: str, child_id: str, grade: str) -> Dict[str, Any]:
-        verify_child(id_token, child_id)
+        verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = speaking_engine()
         selected = engine.pick_sentence(grade_enum)
@@ -238,7 +238,7 @@ class AudioService:
 
     # -- speaking: all sentences with audio --------------------------------
     async def get_all_speaking_sentences(self, id_token: str, child_id: str, grade: str) -> Dict[str, Any]:
-        verify_child(id_token, child_id)
+        verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = speaking_engine()
         sentences = engine.shuffled_sentences(grade_enum)
@@ -287,7 +287,7 @@ class AudioService:
 
     # -- comprehension: stories with audio ---------------------------------
     async def get_comprehension_stories(self, id_token: str, child_id: str, grade: str) -> Dict[str, Any]:
-        verify_child(id_token, child_id)
+        verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = comprehension_engine()
         stories = engine.get_items(grade_enum)

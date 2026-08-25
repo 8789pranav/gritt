@@ -157,6 +157,39 @@ class AudioCacheRepository:
         return self._client.ref(path).get() or {}
 
 
+class PaymentRepository:
+    """Payment records under ``payments/{payment_id}`` plus a Stripe
+    Checkout session index under ``payment_sessions/{session_id}``."""
+
+    def __init__(self, client: Optional[FirebaseClient] = None) -> None:
+        self._client = client or get_firebase_client()
+
+    def create(self, payment_id: str, data: Dict[str, Any]) -> None:
+        self._client.ref(f"payments/{payment_id}").set(sanitize_data(data))
+        session_id = data.get("stripe_session_id")
+        if session_id:
+            self._client.ref(
+                f"payment_sessions/{sanitize_key(session_id)}"
+            ).set(payment_id)
+
+    def get(self, payment_id: str) -> Optional[Dict[str, Any]]:
+        return self._client.ref(f"payments/{payment_id}").get()
+
+    def get_by_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        payment_id = self._client.ref(
+            f"payment_sessions/{sanitize_key(session_id)}"
+        ).get()
+        if not payment_id:
+            return None
+        data = self.get(payment_id)
+        if data is not None:
+            data.setdefault("payment_id", payment_id)
+        return data
+
+    def update(self, payment_id: str, fields: Dict[str, Any]) -> None:
+        self._client.ref(f"payments/{payment_id}").update(sanitize_data(fields))
+
+
 class FeedbackRepository:
     """Parent feedback stored under ``parent_feedback/``."""
 

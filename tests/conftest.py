@@ -142,6 +142,13 @@ def seed_user(mock_firebase_client: MockFirebaseClient, mock_firebase_auth):
         "name": "Test Child",
         "age": 6,
         "grade": "Kindergarten",
+        "payment_status": "paid",
+    })
+    mock_firebase_client.ref("users/test-uid/children/child-unpaid").set({
+        "name": "Unpaid Child",
+        "age": 7,
+        "grade": "First",
+        "payment_status": "unpaid",
     })
     return {"uid": "test-uid", "child_id": "child-1", "token": "test-token"}
 
