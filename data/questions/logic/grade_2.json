@@ -40,7 +40,7 @@
       "item_id": "logic_2_2",
       "item_number": "2-2",
       "item_type": "double_analogy",
-      "question_text": "Shoe is to foot as glove is to ___. Now: hat is to head as belt is to ___",
+      "question_text": "Shoe is to foot as glove is to ___.\nNow: hat is to head as belt is to ___",
       "options": [
         {
           "index": 0,
@@ -72,7 +72,7 @@
       "item_id": "logic_2_3",
       "item_number": "2-3",
       "item_type": "transitive_reasoning",
-      "question_text": "Priya is taller than Sam. Sam is taller than Leo. Who is the shortest?",
+      "question_text": "Priya is taller than Sam.\nSam is taller than Leo.\nWho is the shortest?",
       "options": [
         {
           "index": 0,
@@ -104,7 +104,7 @@
       "item_id": "logic_2_4",
       "item_number": "2-4",
       "item_type": "rule_boundary",
-      "question_text": "A farmer puts animals in pens using this rule: animals with 4 legs go in the red pen, animals with 2 legs go in the blue pen. The spider has 8 legs. What happens?",
+      "question_text": "A farmer puts animals in pens using this rule: animals with 4 legs go in the red pen, animals with 2 legs go in the blue pen.\nThe spider has 8 legs.\nWhat happens?",
       "options": [
         {
           "index": 0,
@@ -168,7 +168,7 @@
       "item_id": "logic_2_6",
       "item_number": "2-6",
       "item_type": "strategy",
-      "question_text": "Zara tried to cross a stream by jumping. She couldn't reach. What should she try next?",
+      "question_text": "Zara tried to cross a stream by jumping.\nShe couldn't reach.\nWhat should she try next?",
       "options": [
         {
           "index": 0,
@@ -200,7 +200,7 @@
       "item_id": "logic_2_7",
       "item_number": "2-7",
       "item_type": "multi_step_quantity",
-      "question_text": "In a game, red shapes are worth 2 points and blue shapes are worth 3 points. You pick 2 red shapes and 1 blue shape. How many points do you have?",
+      "question_text": "In a game, red shapes are worth 2 points and blue shapes are worth 3 points.\nYou pick 2 red shapes and 1 blue shape.\nHow many points do you have?",
       "options": [
         {
           "index": 0,
@@ -232,7 +232,7 @@
       "item_id": "logic_2_8",
       "item_number": "2-8",
       "item_type": "dual_rule",
-      "question_text": "Tom's rule: 'If it has wheels, it goes in the garage. If it has wings, it goes in the hangar.' A toy plane has both wheels and wings. Where does it go?",
+      "question_text": "Tom's rule: 'If it has wheels, it goes in the garage.\nIf it has wings, it goes in the hangar.' A toy plane has both wheels and wings.\nWhere does it go?",
       "options": [
         {
           "index": 0,

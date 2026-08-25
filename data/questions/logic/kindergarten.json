@@ -72,7 +72,7 @@
       "item_id": "logic_k_3",
       "item_number": "K-3",
       "item_type": "analogy",
-      "question_text": "A hat goes on your head. A shoe goes on your foot. Where does a glove go?",
+      "question_text": "A hat goes on your head.\nA shoe goes on your foot.\nWhere does a glove go?",
       "options": [
         {
           "index": 0,
@@ -104,7 +104,7 @@
       "item_id": "logic_k_4",
       "item_number": "K-4",
       "item_type": "combining",
-      "question_text": "Ravi has 3 red blocks and 2 blue blocks. How many blocks does Ravi have in total?",
+      "question_text": "Ravi has 3 red blocks and 2 blue blocks.\nHow many blocks does Ravi have in total?",
       "options": [
         {
           "index": 0,
@@ -168,7 +168,7 @@
       "item_id": "logic_k_6",
       "item_number": "K-6",
       "item_type": "analogy",
-      "question_text": "A bird can fly. A fish can swim. What can a frog do?",
+      "question_text": "A bird can fly.\nA fish can swim.\nWhat can a frog do?",
       "options": [
         {
           "index": 0,
@@ -232,7 +232,7 @@
       "item_id": "logic_k_8",
       "item_number": "K-8",
       "item_type": "conditional_logic",
-      "question_text": "If today is sunny, you wear sunglasses. If today is rainy, you wear a raincoat. Today is rainy. What do you wear?",
+      "question_text": "If today is sunny, you wear sunglasses.\nIf today is rainy, you wear a raincoat.\nToday is rainy.\nWhat do you wear?",
       "options": [
         {
           "index": 0,

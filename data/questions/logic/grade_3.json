@@ -40,7 +40,7 @@
       "item_id": "logic_3_2",
       "item_number": "3-2",
       "item_type": "transitive_reasoning",
-      "question_text": "Maya is older than Kai. Kai is older than Priya. Priya is older than Jude. Who is the second youngest?",
+      "question_text": "Maya is older than Kai.\nKai is older than Priya.\nPriya is older than Jude.\nWho is the second youngest?",
       "options": [
         {
           "index": 0,
@@ -72,7 +72,7 @@
       "item_id": "logic_3_3",
       "item_number": "3-3",
       "item_type": "syllogism",
-      "question_text": "Every blooper is a floop. Every floop is a zang. Is every blooper a zang?",
+      "question_text": "Every blooper is a floop.\nEvery floop is a zang.\nIs every blooper a zang?",
       "options": [
         {
           "index": 0,
@@ -104,7 +104,7 @@
       "item_id": "logic_3_4",
       "item_number": "3-4",
       "item_type": "dual_rule_arithmetic",
-      "question_text": "In a game, you earn a star for every 3 correct answers. You lose a star for every 2 wrong answers. You got 9 right and 4 wrong. How many stars do you have?",
+      "question_text": "In a game, you earn a star for every 3 correct answers.\nYou lose a star for every 2 wrong answers.\nYou got 9 right and 4 wrong.\nHow many stars do you have?",
       "options": [
         {
           "index": 0,
@@ -136,7 +136,7 @@
       "item_id": "logic_3_5",
       "item_number": "3-5",
       "item_type": "meta_categorization",
-      "question_text": "Each group follows a rule. Which group breaks its own rule?",
+      "question_text": "Each group follows a rule.\nWhich group breaks its own rule?",
       "options": [
         {
           "index": 0,
@@ -168,7 +168,7 @@
       "item_id": "logic_3_6",
       "item_number": "3-6",
       "item_type": "strategic_search",
-      "question_text": "You're trying to find a word in a dictionary. You open to page 200 and see 'monkey.' Your word is 'planet.' What should you do?",
+      "question_text": "You're trying to find a word in a dictionary.\nYou open to page 200 and see 'monkey.' Your word is 'planet.' What should you do?",
       "options": [
         {
           "index": 0,
@@ -200,7 +200,7 @@
       "item_id": "logic_3_7",
       "item_number": "3-7",
       "item_type": "dual_condition",
-      "question_text": "A rule says: 'If it rains, bring an umbrella. If it's cold, wear a jacket.' Today it's raining and cold. What do you do?",
+      "question_text": "A rule says: 'If it rains, bring an umbrella.\nIf it's cold, wear a jacket.' Today it's raining and cold.\nWhat do you do?",
       "options": [
         {
           "index": 0,
@@ -232,7 +232,7 @@
       "item_id": "logic_3_8",
       "item_number": "3-8",
       "item_type": "meta_strategy",
-      "question_text": "Aisha tried to solve a puzzle one way and got stuck. She tried a second way and also got stuck. Her friend says 'try combining both ways.' What should Aisha do?",
+      "question_text": "Aisha tried to solve a puzzle one way and got stuck.\nShe tried a second way and also got stuck.\nHer friend says 'try combining both ways.' What should Aisha do?",
       "options": [
         {
           "index": 0,
