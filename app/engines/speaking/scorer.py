@@ -83,6 +83,16 @@ class SpeakingScorer(Scorer[SpeakingSentence, SpeakingResponse]):
 
             answered += 1
             points = max(0.0, min(analysis.overall_score, MAX_SENTENCE_SCORE))
+
+            # Guard: if no speech was detected (empty transcription or no word
+            # overlap with the original sentence), force score to 0.
+            transcribed = getattr(response, "transcribed_text", "") or ""
+            transcribed_words = set(w.strip(".,!?;:\"'") for w in transcribed.lower().split())
+            original_words = set(w.strip(".,!?;:\"'") for w in sentence.sentence.lower().split())
+            has_overlap = bool(transcribed_words & original_words)
+            if not transcribed.strip() or not has_overlap:
+                points = 0.0
+
             total_points += points
 
             # "Correct" for a spoken response means a solid overall delivery.

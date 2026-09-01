@@ -217,6 +217,7 @@ class SpeakingResponse(ItemResponse):
     original_sentence: str
     audio_base64: Optional[str] = None
     audio_format: str = "mp3"
+    transcribed_text: Optional[str] = None
 
 
 class ComprehensionResponse(ItemResponse):

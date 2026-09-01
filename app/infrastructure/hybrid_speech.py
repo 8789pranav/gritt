@@ -241,7 +241,7 @@ Respond with valid JSON only, no markdown."""
             "omitted_words": [],
             "inserted_words": [],
             "per_word": [],
-            "prosody_score": 50,
+            "prosody_score": 0,
             "prosody_notes": "",
             "estimated_duration": 0,
             "wpm": 0,
@@ -379,10 +379,9 @@ Respond with valid JSON only, no markdown."""
         pron_score = audio_analysis["pronunciation_score"]
         raw_transcription = audio_analysis.get("raw_transcription", "")
 
-        # If GPT-audio failed, use neutral scores
+        # If GPT-audio failed (no speech detected), keep scores at 0
         if pron_score == 0 and not raw_transcription:
-            pron_score = 50.0
-            logger.warning("GPT-audio analysis failed, using neutral scores")
+            logger.warning("GPT-audio analysis failed — no speech detected, scoring 0")
 
         # Step 2: Fluency — compute precise pauses from per-word timestamps
         per_word = audio_analysis.get("per_word", [])
@@ -472,9 +471,14 @@ Respond with valid JSON only, no markdown."""
                 original_sentence, raw_transcription
             )
         else:
-            completeness_result = self._compute_completeness(
-                original_sentence, original_sentence
-            )
+            # No speech detected — completeness is 0
+            completeness_result = {
+                "completeness_score": 0,
+                "expected_words": len(original_sentence.split()),
+                "spoken_words": 0,
+                "missing_words": original_sentence.lower().split(),
+                "extra_words": [],
+            }
 
         # Add GPT-audio's omitted words to completeness
         omitted = audio_analysis.get("omitted_words", [])
@@ -490,30 +494,43 @@ Respond with valid JSON only, no markdown."""
             ) if expected > 0 else 0
 
         # Step 4: Prosody from GPT-audio
-        prosody_score = audio_analysis.get("prosody_score", 50)
+        prosody_score = audio_analysis.get("prosody_score", 0)
         prosody_result = {
             "score": prosody_score,
             "notes": audio_analysis.get("prosody_notes", ""),
         }
 
         # Step 5: Grammar analysis — use raw transcription (not auto-corrected)
-        grammar_result = self._analyze_grammar(
-            original_sentence, raw_transcription or original_sentence, grade,
-            phoneme_result=completeness_result,
-        )
+        # If no speech was detected, grammar score is 0
+        if raw_transcription:
+            grammar_result = self._analyze_grammar(
+                original_sentence, raw_transcription, grade,
+                phoneme_result=completeness_result,
+            )
+        else:
+            grammar_result = {"grammar_score": 0, "issues": []}
 
         # Step 6: Compute overall score
         grammar_score = grammar_result.get("grammar_score", 0)
         completeness_score = completeness_result.get("completeness_score", 0)
 
-        overall_score = round(
-            pron_score * 0.35 +
-            fluency_score * 0.25 +
-            prosody_score * 0.15 +
-            grammar_score * 0.15 +
-            completeness_score * 0.10,
-            1,
-        )
+        # If no speech was detected (empty transcription), score everything 0
+        if not raw_transcription or not raw_transcription.strip():
+            overall_score = 0.0
+            pron_score = 0.0
+            fluency_score = 0.0
+            prosody_score = 0.0
+            grammar_score = 0.0
+            completeness_score = 0.0
+        else:
+            overall_score = round(
+                pron_score * 0.35 +
+                fluency_score * 0.25 +
+                prosody_score * 0.15 +
+                grammar_score * 0.15 +
+                completeness_score * 0.10,
+                1,
+            )
 
         # Step 7: Generate parent-friendly feedback with GPT-4o
         pron_detail = {
@@ -924,18 +941,21 @@ Rules:
         pron_score = round(word_match_ratio * 100, 1)
 
         # Prosody: no data without audio
-        prosody_score = 50.0
+        prosody_score = 0.0
         prosody_result = {}
 
-        # Overall
-        overall_score = round(
-            pron_score * 0.35 +
-            fluency_result.get("fluency_score", 0) * 0.25 +
-            prosody_score * 0.15 +
-            grammar_result.get("grammar_score", 0) * 0.15 +
-            completeness_result.get("completeness_score", 0) * 0.10,
-            1,
-        )
+        # If no transcription, all scores are 0
+        if not transcribed_text or not transcribed_text.strip():
+            overall_score = 0.0
+        else:
+            overall_score = round(
+                pron_score * 0.35 +
+                fluency_result.get("fluency_score", 0) * 0.25 +
+                prosody_score * 0.15 +
+                grammar_result.get("grammar_score", 0) * 0.15 +
+                completeness_result.get("completeness_score", 0) * 0.10,
+                1,
+            )
 
         feedback = self._generate_feedback(
             original_sentence, transcribed_text, grade,
