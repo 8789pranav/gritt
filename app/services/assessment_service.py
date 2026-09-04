@@ -201,6 +201,51 @@ class AssessmentService:
         for item in logic_scored_items:
             item["detail"]["tags"] = logic_tag_map.get(item.get("item_id", ""), [])
 
+        # G4: Use human-readable descriptions instead of raw tag ids for parent summary.
+        strengths = [
+            t.description for t in result.tags if t.polarity.value == "strength"
+        ]
+        focus_areas = [
+            t.description for t in result.tags if t.polarity.value == "growth_edge"
+        ]
+
+        # G2: Ensure the report never shows only a growth edge with no strength.
+        if focus_areas and not strengths:
+            strengths = ["Your child is working on these skills and making progress."]
+
+        per_item_map_submit = {
+            p.get("item_id", ""): p.get("tags", [])
+            for p in per_item_dicts
+        }
+
+        def _error_type_for_submit(item_dict: Dict[str, Any]) -> Optional[str]:
+            if item_dict.get("is_correct"):
+                return None
+            tags = per_item_map_submit.get(item_dict.get("item_id", ""), [])
+            if "impulsive_response" in tags:
+                return "Impulsive response"
+            if "reasoning_under_load_emerging" in tags:
+                return "Reasoning under load"
+            if "trial_and_error_strategy" in tags:
+                return "Trial and error"
+            for tag in tags:
+                if tag.endswith("_missed"):
+                    return tag.replace("_missed", "").replace("_", " ")
+            return "Incorrect"
+
+        table_data_submit = [
+            {
+                "question": s.get("label", ""),
+                "selected_index": s.get("detail", {}).get("selected_index"),
+                "correct_index": s.get("detail", {}).get("correct_answer_index"),
+                "correct": s.get("is_correct", False),
+                "error_type": _error_type_for_submit(s),
+                "time": s.get("detail", {}).get("response_time_seconds", 0.0),
+                "icon": "Correct" if s.get("is_correct") else "Incorrect",
+            }
+            for s in logic_scored_items
+        ]
+
         score_id = self._scores.save(
             uid, child_id, TestType.LOGIC.storage_key,
             {
@@ -214,7 +259,6 @@ class AssessmentService:
                 "dear_parent_tags": tag_dicts,
                 "per_item_tags": per_item_dicts,
                 "recommendation": result.recommendation,
-                "message": result.message,
                 "timestamp": self._utc_now(),
                 "responses": sanitize_data(responses),
                 "scored_items": sanitize_data(logic_scored_items),
@@ -232,10 +276,27 @@ class AssessmentService:
             "correct_answers": result.score.correct_answers,
             "total_items": result.score.total_items,
             "level": result.score.level,
+            "parent_summary": {
+                "overall_accuracy": result.score.percentage,
+                "level": result.score.level,
+                "strengths": strengths,
+                "focus_areas": focus_areas,
+                "recommendation": result.recommendation,
+                "note": "Assessment is instructional and not a clinical diagnosis.",
+            },
             "dear_parent_tags": tag_dicts,
             "per_item_tags": per_item_dicts,
+            "teacher_admin_detail": {
+                "test_level": grade,
+                "questions": result.score.total_items,
+                "correct": result.score.correct_answers,
+                "instructional_level": result.score.level,
+                "table_data": table_data_submit,
+            },
             "recommendation": result.recommendation,
-            "message": result.message,
+            "signals": result.signals,
+            "scored_items": logic_scored_items,
+            "timestamp": self._utc_now(),
         }
 
     def logic_complete_result(self, id_token: str, child_id: str,
@@ -283,13 +344,17 @@ class AssessmentService:
         ]
 
         strengths = [
-            t.get("tag", "") for t in dear_parent_tags
+            t.get("description", "") for t in dear_parent_tags
             if t.get("polarity") == "strength"
         ]
         focus_areas = [
-            t.get("tag", "") for t in dear_parent_tags
+            t.get("description", "") for t in dear_parent_tags
             if t.get("polarity") == "growth_edge"
         ]
+
+        # G2: Ensure the report never shows only a growth edge with no strength.
+        if focus_areas and not strengths:
+            strengths = ["Your child is working on these skills and making progress."]
 
         return {
             "user_id": uid,
