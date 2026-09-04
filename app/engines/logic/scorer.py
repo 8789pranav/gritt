@@ -10,11 +10,11 @@ from app.engines.base import Scorer
 
 #: Percentage bands, highest first.
 LEVEL_BANDS: Sequence[tuple[float, str]] = (
-    (90.0, "Exceptional Logical Thinker"),
-    (80.0, "Advanced Logical Thinker"),
-    (70.0, "Good Logical Thinker"),
-    (60.0, "Developing Logical Thinker"),
-    (0.0, "Emerging Logical Thinker"),
+    (90.0, "Above grade level"),
+    (80.0, "At grade level"),
+    (70.0, "Approaching grade level"),
+    (60.0, "Below grade level"),
+    (0.0, "Well below grade level"),
 )
 
 

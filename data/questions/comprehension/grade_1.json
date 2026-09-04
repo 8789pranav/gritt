@@ -14,24 +14,24 @@
           "question_id": "f1_q1",
           "question": "What was the weather like when Emma found the kitten?",
           "options": [
-            "Sunny",
-            "Snowy",
             "Rainy",
-            "Windy"
+            "Snowy",
+            "Windy",
+            "Sunny"
           ],
-          "correct_index": 2,
+          "correct_index": 0,
           "question_type": "literal"
         },
         {
           "question_id": "f1_q2",
           "question": "What color was the kitten?",
           "options": [
-            "White",
             "Gray",
+            "White",
             "Orange",
             "Black"
           ],
-          "correct_index": 1,
+          "correct_index": 0,
           "question_type": "literal"
         },
         {
@@ -39,11 +39,11 @@
           "question": "What did they give the kitten to drink?",
           "options": [
             "Water",
-            "Juice",
             "Warm milk",
+            "Juice",
             "Tea"
           ],
-          "correct_index": 2,
+          "correct_index": 1,
           "question_type": "literal"
         },
         {
@@ -51,9 +51,33 @@
           "question": "Why did Emma name the kitten Misty?",
           "options": [
             "Because it was gray",
-            "Because of the rainy, misty day",
             "Because it had misty eyes",
+            "Because of the rainy, misty day",
             "Because her mom chose the name"
+          ],
+          "correct_index": 2,
+          "question_type": "inferential"
+        },
+        {
+          "question_id": "f1_q5",
+          "question": "In the story, what does 'shivering' mean when the kitten was wet and shivering?",
+          "options": [
+            "Sleeping peacefully",
+            "Shaking from cold",
+            "Playing happily",
+            "Eating quickly"
+          ],
+          "correct_index": 1,
+          "question_type": "vocabulary"
+        },
+        {
+          "question_id": "f1_q6",
+          "question": "Why did Emma's parents smile at each other after nobody claimed the kitten?",
+          "options": [
+            "They were happy nobody found the owner",
+            "They had already decided to let Emma keep the kitten",
+            "They were laughing at the kitten",
+            "They were thinking about getting a dog"
           ],
           "correct_index": 1,
           "question_type": "inferential"
@@ -71,11 +95,11 @@
           "question": "How old was Jake turning?",
           "options": [
             "Five",
+            "Eight",
             "Six",
-            "Seven",
-            "Eight"
+            "Seven"
           ],
-          "correct_index": 2,
+          "correct_index": 3,
           "question_type": "literal"
         },
         {
@@ -94,12 +118,12 @@
           "question_id": "f2_q3",
           "question": "Where was the bicycle hidden?",
           "options": [
-            "In his bedroom",
-            "In the backyard",
             "In the garage",
+            "In the backyard",
+            "In his bedroom",
             "In the basement"
           ],
-          "correct_index": 2,
+          "correct_index": 0,
           "question_type": "literal"
         },
         {
@@ -108,14 +132,26 @@
           "options": [
             "One time",
             "Two times",
-            "Three times",
-            "Four times"
+            "Four times",
+            "Three times"
+          ],
+          "correct_index": 3,
+          "question_type": "literal"
+        },
+        {
+          "question_id": "f2_q5",
+          "question": "Why did Jake try not to look sad when he didn't see a bicycle?",
+          "options": [
+            "Because he didn't want a bicycle anymore",
+            "Because he was actually happy",
+            "Because he didn't want to seem ungrateful for his party",
+            "Because his parents told him to stop"
           ],
           "correct_index": 2,
-          "question_type": "literal"
+          "question_type": "inferential"
         }
       ]
     }
   ],
-  "total_questions": 8
+  "total_questions": 11
 }

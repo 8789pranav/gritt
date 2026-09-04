@@ -15,11 +15,11 @@
           "question": "Where did Sophie find the treasure map?",
           "options": [
             "In the basement",
-            "In the attic",
             "In the kitchen",
+            "In the attic",
             "In the garden"
           ],
-          "correct_index": 1,
+          "correct_index": 2,
           "question_type": "literal"
         },
         {
@@ -28,34 +28,46 @@
           "options": [
             "The oak tree",
             "The rose bushes",
-            "The tomato plants",
-            "The pond"
+            "The pond",
+            "The tomato plants"
           ],
-          "correct_index": 2,
+          "correct_index": 3,
           "question_type": "literal"
         },
         {
           "question_id": "s1_q3",
           "question": "What was inside the metal box?",
           "options": [
-            "Gold and diamonds",
             "Old coins, marbles, a locket, and a letter",
+            "Gold and diamonds",
             "Toys and games",
             "Money and jewelry"
           ],
-          "correct_index": 1,
+          "correct_index": 0,
           "question_type": "literal"
         },
         {
           "question_id": "s1_q4",
           "question": "According to the story, what was the real treasure?",
           "options": [
-            "The old coins",
+            "The metal box",
             "The silver locket",
-            "The memories and stories",
-            "The metal box"
+            "The old coins",
+            "The memories and stories"
           ],
-          "correct_index": 2,
+          "correct_index": 3,
+          "question_type": "inferential"
+        },
+        {
+          "question_id": "s1_q5",
+          "question": "Why do you think Sophie's grandmother created the treasure map years ago?",
+          "options": [
+            "To hide her valuables from thieves",
+            "To share her childhood memories with Sophie someday",
+            "Because she forgot where she put her things",
+            "To test Sophie's math skills"
+          ],
+          "correct_index": 1,
           "question_type": "inferential"
         }
       ]
@@ -63,19 +75,19 @@
     {
       "story_id": "s_story2",
       "title": "The Science Fair Project",
-      "story_text": "Marcus had two weeks to prepare for the school science fair. He decided to create a volcano that would actually erupt. His father helped him build a mountain shape using cardboard and paper. They painted it brown and gray to look like real rocks. Marcus researched how volcanoes work. He learned about magma deep inside the Earth. For the eruption, he would use baking soda and vinegar. On the day of the science fair, Marcus was nervous. Many students had impressive projects. Some made robots, others had plant experiments. When it was his turn, Marcus explained how volcanoes form. Then he poured the vinegar into the volcano. Red foam bubbled up and flowed down the sides like real lava. Everyone clapped and cheered. The judges were very impressed. Marcus won second place and received a blue ribbon. He felt proud of all his hard work and learning.",
+      "story_text": "Marcus had two weeks to prepare for the school science fair. He decided to create a volcano that would actually erupt. His father helped him build a mountain shape using cardboard and paper. They painted it brown and gray to look like real rocks. Marcus researched how volcanoes work. He learned about magma deep inside the Earth. For the eruption, he would use baking soda and vinegar. On the day of the science fair, Marcus was nervous. Many students had impressive projects. Some made robots, others had plant experiments. When it was his turn, Marcus explained how volcanoes form. Then he poured the vinegar into the volcano. Red foam bubbled up and flowed down the sides like real lava. Everyone clapped and cheered. The judges were very impressed. Marcus won second place and received a red ribbon. He felt proud of all his hard work and learning.",
       "duration_estimate": "62 seconds",
       "questions": [
         {
           "question_id": "s2_q1",
           "question": "How much time did Marcus have to prepare?",
           "options": [
-            "One week",
             "Two weeks",
+            "One week",
             "Three weeks",
             "One month"
           ],
-          "correct_index": 1,
+          "correct_index": 0,
           "question_type": "literal"
         },
         {
@@ -95,27 +107,39 @@
           "question": "What place did Marcus win at the science fair?",
           "options": [
             "First place",
-            "Second place",
             "Third place",
+            "Second place",
             "He did not win"
           ],
-          "correct_index": 1,
+          "correct_index": 2,
           "question_type": "literal"
         },
         {
           "question_id": "s2_q4",
-          "question": "What color ribbon did Marcus receive?",
+          "question": "In the story, what does 'magma' mean when Marcus learned about magma deep inside the Earth?",
           "options": [
-            "Red",
-            "Blue",
-            "Yellow",
-            "Green"
+            "Hot liquid rock inside a volcano",
+            "Cold water under the ground",
+            "A type of rock found on the surface",
+            "A tool used to build volcanoes"
+          ],
+          "correct_index": 0,
+          "question_type": "vocabulary"
+        },
+        {
+          "question_id": "s2_q5",
+          "question": "What does Marcus's science fair project tell us about him?",
+          "options": [
+            "He likes to copy other people's work",
+            "He is curious and works hard to learn new things",
+            "He only cares about winning prizes",
+            "He doesn't like science very much"
           ],
           "correct_index": 1,
-          "question_type": "vocabulary"
+          "question_type": "inferential"
         }
       ]
     }
   ],
-  "total_questions": 8
+  "total_questions": 10
 }

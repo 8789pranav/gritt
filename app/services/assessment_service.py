@@ -952,6 +952,7 @@ class AssessmentService:
                     item_id=qa["question_id"],
                     question_id=qa["question_id"],
                     selected_index=qa["selected_index"],
+                    response_time_seconds=qa.get("response_time_seconds", 0.0),
                 ))
 
         result = engine.evaluate(child_id, grade_enum, domain_responses)
@@ -968,6 +969,31 @@ class AssessmentService:
         for item in scored_items:
             item["detail"]["tags"] = comp_tag_map.get(item.get("item_id", ""), [])
 
+        # C3: Use human-readable descriptions instead of raw tag ids.
+        strengths = [
+            t.description for t in result.tags if t.polarity.value == "strength"
+        ]
+        focus_areas = [
+            t.description for t in result.tags if t.polarity.value == "growth_edge"
+        ]
+
+        # C4: Fallback copy for sparse reports.
+        if not strengths and not focus_areas:
+            strengths = ["There wasn't quite enough here to say something specific yet. That's normal, and worth trying again in a few months."]
+        elif focus_areas and not strengths:
+            strengths = ["Your child is working on these skills and making progress."]
+
+        percentage = result.score.percentage
+        if percentage >= 90:
+            placement = "Above Grade Level"
+            next_step = "Consider more advanced reading materials"
+        elif percentage >= 75:
+            placement = "At Grade Level"
+            next_step = "Continue with current grade level materials"
+        else:
+            placement = "Below Grade Level"
+            next_step = "Practice with guided reading and comprehension activities"
+
         test_id = self._scores.save(
             uid, child_id, TestType.COMPREHENSION.storage_key,
             {
@@ -983,6 +1009,7 @@ class AssessmentService:
                 "recommendation": result.recommendation,
                 "dear_parent_tags": tag_dicts,
                 "per_question_tags": per_item_dicts,
+                "signals": result.signals,
                 "timestamp": self._utc_now(),
                 "scored_items": sanitize_data(scored_items),
             },
@@ -1003,9 +1030,22 @@ class AssessmentService:
             "status": status,
             "recommendation": result.recommendation,
             "results": story_breakdown,
+            "parent_summary": {
+                "overall_score": f"{result.score.correct_answers}/{int(result.score.max_points)}",
+                "percentage": result.score.percentage,
+                "level": result.score.level,
+                "strengths": strengths,
+                "focus_areas": focus_areas,
+                "grade_placement": placement,
+                "next_step": next_step,
+                "recommendation": result.recommendation,
+                "note": "Assessment is instructional and not a clinical diagnosis.",
+            },
             "dear_parent_tags": tag_dicts,
             "per_question_tags": per_item_dicts,
-            "message": result.message,
+            "signals": result.signals,
+            "scored_items": scored_items,
+            "timestamp": self._utc_now(),
         }
 
     def comprehension_complete_result(self, id_token: str, child_id: str,
@@ -1061,13 +1101,19 @@ class AssessmentService:
         ]
 
         strengths = [
-            t.get("tag", "") for t in dear_parent_tags
+            t.get("description", "") for t in dear_parent_tags
             if t.get("polarity") == "strength"
         ]
         focus_areas = [
-            t.get("tag", "") for t in dear_parent_tags
+            t.get("description", "") for t in dear_parent_tags
             if t.get("polarity") == "growth_edge"
         ]
+
+        # C4: If no tags fired, show warm fallback copy instead of blank lists.
+        if not strengths and not focus_areas:
+            strengths = ["There wasn't quite enough here to say something specific yet. That's normal, and worth trying again in a few months."]
+        elif focus_areas and not strengths:
+            strengths = ["Your child is working on these skills and making progress."]
 
         return {
             "user_id": uid,
@@ -1078,13 +1124,13 @@ class AssessmentService:
                 "total_questions": latest.get("max_score", 8),
                 "correct_answers": latest.get("correct_answers", 0),
                 "percentage": percentage,
-                "level": latest.get("level", "Developing Reader"),
+                "level": latest.get("level", "Below grade level"),
                 "status": latest.get("status", "Below"),
             },
             "parent_summary": {
-                "overall_score": f"{latest.get('correct_answers', 0)}/{latest.get('max_score', 8)}",
+                "overall_score": f"{latest.get('correct_answers', 0)}/{int(latest.get('max_score', 8))}",
                 "percentage": percentage,
-                "level": latest.get("level", "Developing Reader"),
+                "level": latest.get("level", "Below grade level"),
                 "strengths": strengths,
                 "focus_areas": focus_areas,
                 "grade_placement": placement,

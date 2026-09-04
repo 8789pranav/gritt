@@ -15,10 +15,10 @@ from app.engines.base import Scorer
 
 #: Percentage bands, highest first.
 LEVEL_BANDS: Sequence[tuple[float, str]] = (
-    (90.0, "Excellent Reader"),
-    (75.0, "Good Reader"),
-    (50.0, "Developing Reader"),
-    (0.0, "Needs Practice"),
+    (90.0, "Above grade level"),
+    (75.0, "At grade level"),
+    (50.0, "Approaching grade level"),
+    (0.0, "Below grade level"),
 )
 
 #: Placement status shown alongside the level.
@@ -105,6 +105,7 @@ class ComprehensionScorer(Scorer[ComprehensionStory, ComprehensionResponse]):
                             "correct_answer": question.answer_text(
                                 question.correct_index
                             ),
+                            "response_time_seconds": response.response_time_seconds,
                         },
                     )
                 )
