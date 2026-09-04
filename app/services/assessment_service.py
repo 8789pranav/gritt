@@ -360,7 +360,16 @@ class AssessmentService:
             for w in words
         ]
 
-        result = engine.evaluate(child_id, grade_enum, domain_responses)
+        # Only score the words that were actually given to the child.
+        # For Kindergarten, build_test draws a random sample of 15 from 31,
+        # so we must filter the full bank to just the submitted words.
+        submitted_words = {w.get("word", "").strip().lower() for w in words}
+        test_items = [
+            item for item in engine.get_items(grade_enum)
+            if item.word.strip().lower() in submitted_words
+        ]
+
+        result = engine.evaluate(child_id, grade_enum, domain_responses, items=test_items)
 
         tag_dicts = _tag_outputs_to_dicts(result.tags)
         per_item_dicts = _per_item_tags_to_dicts(result.per_item_tags)
@@ -446,12 +455,19 @@ class AssessmentService:
             WordType.SIGHT.value, WordType.NONSENSE.value
         )]
 
+        # #53: sight_word_score must match sight_word_accuracy from signals.
+        # Signals compute accuracy as correct/attempted (only answered words),
+        # so the parent summary must do the same — not points/max_points which
+        # includes unattempted words in the denominator.
+        phonics_attempted = [r for r in phonics if r.get("detail", {}).get("user_input", "").strip()]
+        sight_attempted = [r for r in sight if r.get("detail", {}).get("user_input", "").strip()]
+
         phonics_pct = (
-            sum(r["points"] for r in phonics) / sum(r["max_points"] for r in phonics) * 100
-        ) if phonics else 0
+            sum(1 for r in phonics_attempted if r.get("is_correct")) / len(phonics_attempted) * 100
+        ) if phonics_attempted else 0
         sight_pct = (
-            sum(r["points"] for r in sight) / sum(r["max_points"] for r in sight) * 100
-        ) if sight else 0
+            sum(1 for r in sight_attempted if r.get("is_correct")) / len(sight_attempted) * 100
+        ) if sight_attempted else 0
 
         per_word_tag_map = {
             p.get("item_id", ""): p.get("tags", [])
@@ -462,13 +478,16 @@ class AssessmentService:
             if result.get("is_correct"):
                 return None
 
+            # #55: blank (not answered) words should have no error_type.
+            user_input = result.get("detail", {}).get("user_input", "").strip()
+            if not user_input:
+                return None
+
             tags = per_word_tag_map.get(result.get("item_id", ""), [])
             if "unrelated_attempt" in tags:
                 return "Unrelated attempt"
             if "unrelated_attempt_sightword" in tags:
                 return "Sight word (unrelated)"
-            if "rushed_attempt" in tags:
-                return "Rushed attempt"
             if "homophone_error" in tags:
                 return "Homophone"
 
@@ -484,6 +503,14 @@ class AssessmentService:
             )
             if feature_key:
                 return feature_key.replace("_", " ").replace(" error", "")
+            # #62: if the word has a spelling_error tag or "spelling" mistake
+            # key, return "Spelling" instead of None.
+            if "spelling_error" in tags or "spelling" in mistakes:
+                return "Spelling"
+            # #61: rushed_attempt is the least specific error type — check it
+            # last so more descriptive tags take priority.
+            if "rushed_attempt" in tags:
+                return "Rushed attempt"
             return None
 
         table_data = [
@@ -494,7 +521,11 @@ class AssessmentService:
                 "error_type": _error_type_for(r),
                 "time": r.get("detail", {}).get("time", 0.0),
                 "hints_used": r.get("detail", {}).get("hints_used", 0),
-                "icon": "Correct" if r.get("is_correct") else "Incorrect",
+                # #54: blank words should show "Not answered" icon.
+                "icon": (
+                    "Correct" if r.get("is_correct")
+                    else ("Not answered" if not r.get("detail", {}).get("user_input", "").strip() else "Incorrect")
+                ),
             }
             for r in results
         ]

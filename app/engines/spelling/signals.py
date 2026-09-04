@@ -79,13 +79,16 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
             mistakes = scored.detail.get("mistakes", {})
 
             # Per-word-type accuracy.
+            # #53: Only count words with non-blank input as "attempted" so
+            # sight_word_accuracy matches sight_word_score in parent_summary.
+            has_input = attempted and (response.user_input or "").strip()
             if item.word_type is WordType.REGULAR:
-                if attempted:
+                if has_input:
                     regular_attempted += 1
                     if scored.is_correct:
                         regular_correct += 1
             elif item.word_type is WordType.SIGHT:
-                if attempted:
+                if has_input:
                     sight_attempted += 1
                     if scored.is_correct:
                         sight_correct += 1
@@ -231,7 +234,11 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
                 tags.append(f"{item.word_type.value}_word_error")
 
             if not is_correct and 0 < response.response_time_seconds < FAST_RESPONSE_SECONDS:
-                tags.append("rushed_attempt")
+                if not any(t in tags for t in (
+                    "unrelated_attempt", "unrelated_attempt_sightword",
+                    "homophone_error", "spelling_convention_error",
+                )):
+                    tags.append("rushed_attempt")
 
             results.append(
                 PerItemTags(

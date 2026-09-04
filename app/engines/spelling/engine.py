@@ -106,6 +106,29 @@ class SpellingEngine(AssessmentEngine[SpellingWord, SpellingResponse]):
             if len(focus) >= 3:
                 break
 
+        # #70: Also include sight words as a focus area if the child
+        # has not mastered them.  Previously focus_areas only listed
+        # phonics features, never sight words.
+        sight_attempted = sum(
+            1 for item in score.scored_items
+            if item.detail.get("type") in (
+                WordType.SIGHT.value, WordType.NONSENSE.value,
+            )
+            and item.detail.get("user_input", "").strip()
+        )
+        sight_correct = sum(
+            1 for item in score.scored_items
+            if item.detail.get("type") in (
+                WordType.SIGHT.value, WordType.NONSENSE.value,
+            )
+            and item.detail.get("user_input", "").strip()
+            and item.is_correct
+        )
+        if sight_attempted > 0:
+            sight_accuracy = sight_correct / sight_attempted
+            if sight_accuracy < MASTERY_THRESHOLD and "Sight words" not in focus:
+                focus.append("Sight words")
+
         return focus
 
     def strengths(self, signals: Dict[str, float]) -> List[str]:
