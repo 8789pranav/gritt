@@ -669,7 +669,6 @@ class AssessmentService:
                     original_sentence=sent.sentence,
                     audio_base64=audio_b64,
                     audio_format=audio_fmt,
-                    transcribed_text=ai_result.get("transcribed_text", ""),
                 ))
             else:
                 results.append({
@@ -683,7 +682,6 @@ class AssessmentService:
                     item_id=sid,
                     sentence_id=sid,
                     original_sentence=sent.sentence,
-                    transcribed_text=ai_result.get("transcribed_text", ""),
                 ))
 
         result = engine.evaluate_with_analyses(child_id, grade_enum, domain_responses, analyses)

@@ -139,7 +139,8 @@ Respond with valid JSON only, no markdown."""
             try:
                 response = self._openai.chat.completions.create(
                     model="gpt-audio",
-                    modalities=["text"],
+                    modalities=["text", "audio"],
+                    audio={"voice": "alloy", "format": "wav"},
                     messages=[
                         {
                             "role": "system",
@@ -170,7 +171,10 @@ Respond with valid JSON only, no markdown."""
                     max_tokens=1500,
                 )
 
-                result_text = response.choices[0].message.content
+                message = response.choices[0].message
+                result_text = message.content
+                if not result_text and getattr(message, "audio", None):
+                    result_text = getattr(message.audio, "transcript", None)
                 if not result_text:
                     logger.warning("GPT-audio returned empty content (attempt %d/%d)", attempt + 1, max_retries)
                     if attempt < max_retries - 1:
@@ -379,9 +383,14 @@ Respond with valid JSON only, no markdown."""
         pron_score = audio_analysis["pronunciation_score"]
         raw_transcription = audio_analysis.get("raw_transcription", "")
 
-        # If GPT-audio failed (no speech detected), keep scores at 0
-        if pron_score == 0 and not raw_transcription:
-            logger.warning("GPT-audio analysis failed — no speech detected, scoring 0")
+        # If GPT-audio failed to detect/transcribe any speech, this is a real
+        # failure (no speech, silence, or unsupported audio) — do NOT
+        # substitute neutral/default scores. Keep pron_score at 0 and let
+        # downstream completeness/grammar/fluency reflect that nothing was
+        # said, instead of comparing the original sentence against itself.
+        analysis_failed = pron_score == 0 and not raw_transcription.strip()
+        if analysis_failed:
+            logger.warning("GPT-audio detected no valid speech — scoring as no response")
 
         # Step 2: Fluency — compute precise pauses from per-word timestamps
         per_word = audio_analysis.get("per_word", [])
@@ -424,7 +433,10 @@ Respond with valid JSON only, no markdown."""
 
         # Use GPT-audio's fluency score if provided, otherwise use computed
         gpt_fluency = audio_analysis.get("fluency_score", 0)
-        if gpt_fluency > 0:
+        if analysis_failed:
+            # No speech detected at all — there is nothing fluent about silence
+            fluency_score = 0.0
+        elif gpt_fluency > 0:
             # Blend: 60% GPT-audio, 40% computed for more accuracy
             fluency_score = round(gpt_fluency * 0.6 + computed_fluency * 0.4, 1)
         else:
@@ -465,20 +477,13 @@ Respond with valid JSON only, no markdown."""
             "per_word_timing": per_word,
         }
 
-        # Step 3: Completeness from GPT-audio's raw transcription
-        if raw_transcription:
-            completeness_result = self._compute_completeness(
-                original_sentence, raw_transcription
-            )
-        else:
-            # No speech detected — completeness is 0
-            completeness_result = {
-                "completeness_score": 0,
-                "expected_words": len(original_sentence.split()),
-                "spoken_words": 0,
-                "missing_words": original_sentence.lower().split(),
-                "extra_words": [],
-            }
+        # Step 3: Completeness from GPT-audio's raw transcription.
+        # IMPORTANT: never fall back to comparing original_sentence against
+        # itself — that always yields a fake 100% completeness score even
+        # when nothing was actually said.
+        completeness_result = self._compute_completeness(
+            original_sentence, raw_transcription
+        )
 
         # Add GPT-audio's omitted words to completeness
         omitted = audio_analysis.get("omitted_words", [])
@@ -493,44 +498,49 @@ Respond with valid JSON only, no markdown."""
                 max(0, spoken) / expected * 100, 1
             ) if expected > 0 else 0
 
+        # Pronunciation/fluency/prosody credit must reflect the EXPECTED
+        # sentence, not just "how well did the child speak in general". GPT-
+        # audio's raw scores judge clarity/smoothness/expression of whatever
+        # was said — if the child said a completely unrelated sentence, GPT
+        # will still rate those (wrong) words as clearly and smoothly spoken.
+        # Scale these scores by the fraction of expected words actually
+        # present in the transcription so an unrelated response can never
+        # earn a high score just for speaking clearly about something else.
+        if not analysis_failed:
+            completeness_ratio = completeness_result.get("completeness_score", 0) / 100.0
+            pron_score = round(pron_score * completeness_ratio, 1)
+            fluency_score = round(fluency_score * completeness_ratio, 1)
+            fluency_result["fluency_score"] = fluency_score
+
         # Step 4: Prosody from GPT-audio
-        prosody_score = audio_analysis.get("prosody_score", 0)
+        prosody_score = 0.0 if analysis_failed else audio_analysis.get("prosody_score", 50)
+        if not analysis_failed:
+            prosody_score = round(prosody_score * completeness_ratio, 1)
         prosody_result = {
             "score": prosody_score,
             "notes": audio_analysis.get("prosody_notes", ""),
         }
 
-        # Step 5: Grammar analysis — use raw transcription (not auto-corrected)
-        # If no speech was detected, grammar score is 0
-        if raw_transcription:
-            grammar_result = self._analyze_grammar(
-                original_sentence, raw_transcription, grade,
-                phoneme_result=completeness_result,
-            )
-        else:
-            grammar_result = {"grammar_score": 0, "issues": []}
+        # Step 5: Grammar analysis — use raw transcription (not auto-corrected).
+        # Never substitute original_sentence when transcription is empty; that
+        # would grade grammar of the original sentence against itself.
+        grammar_result = self._analyze_grammar(
+            original_sentence, raw_transcription, grade,
+            phoneme_result=completeness_result,
+        )
 
         # Step 6: Compute overall score
         grammar_score = grammar_result.get("grammar_score", 0)
         completeness_score = completeness_result.get("completeness_score", 0)
 
-        # If no speech was detected (empty transcription), score everything 0
-        if not raw_transcription or not raw_transcription.strip():
-            overall_score = 0.0
-            pron_score = 0.0
-            fluency_score = 0.0
-            prosody_score = 0.0
-            grammar_score = 0.0
-            completeness_score = 0.0
-        else:
-            overall_score = round(
-                pron_score * 0.35 +
-                fluency_score * 0.25 +
-                prosody_score * 0.15 +
-                grammar_score * 0.15 +
-                completeness_score * 0.10,
-                1,
-            )
+        overall_score = round(
+            pron_score * 0.35 +
+            fluency_score * 0.25 +
+            prosody_score * 0.15 +
+            grammar_score * 0.15 +
+            completeness_score * 0.10,
+            1,
+        )
 
         # Step 7: Generate parent-friendly feedback with GPT-4o
         pron_detail = {
@@ -547,7 +557,7 @@ Respond with valid JSON only, no markdown."""
         }
 
         feedback = self._generate_feedback(
-            original_sentence, raw_transcription or original_sentence, grade,
+            original_sentence, raw_transcription, grade,
             pron_score, fluency_score, prosody_score,
             grammar_score, completeness_score,
             pron_detail, fluency_result, prosody_result,
@@ -941,21 +951,18 @@ Rules:
         pron_score = round(word_match_ratio * 100, 1)
 
         # Prosody: no data without audio
-        prosody_score = 0.0
+        prosody_score = 50.0
         prosody_result = {}
 
-        # If no transcription, all scores are 0
-        if not transcribed_text or not transcribed_text.strip():
-            overall_score = 0.0
-        else:
-            overall_score = round(
-                pron_score * 0.35 +
-                fluency_result.get("fluency_score", 0) * 0.25 +
-                prosody_score * 0.15 +
-                grammar_result.get("grammar_score", 0) * 0.15 +
-                completeness_result.get("completeness_score", 0) * 0.10,
-                1,
-            )
+        # Overall
+        overall_score = round(
+            pron_score * 0.35 +
+            fluency_result.get("fluency_score", 0) * 0.25 +
+            prosody_score * 0.15 +
+            grammar_result.get("grammar_score", 0) * 0.15 +
+            completeness_result.get("completeness_score", 0) * 0.10,
+            1,
+        )
 
         feedback = self._generate_feedback(
             original_sentence, transcribed_text, grade,
