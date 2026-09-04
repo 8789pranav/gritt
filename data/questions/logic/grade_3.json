@@ -232,7 +232,7 @@
       "item_id": "logic_3_8",
       "item_number": "3-8",
       "item_type": "meta_strategy",
-      "question_text": "Aisha tried to solve a puzzle one way and got stuck.\nShe tried a second way and also got stuck.\nHer friend says 'try combining both ways.' What should Aisha do?",
+      "question_text": "Aisha tried to solve a puzzle one way and got stuck.\n She tried a second way and also got stuck.\nHer friend says 'try combining both ways.' What should Aisha do?",
       "options": [
         {
           "index": 0,

@@ -8,7 +8,7 @@
       "item_id": "logic_k_1",
       "item_number": "K-1",
       "item_type": "categorization",
-      "question_text": "Which one does NOT belong? Dog, Cat, Fish, Chair",
+      "question_text": "Which one does NOT belong? \n Dog, Cat, Fish, Chair",
       "options": [
         {
           "index": 0,
@@ -40,7 +40,7 @@
       "item_id": "logic_k_2",
       "item_number": "K-2",
       "item_type": "pattern",
-      "question_text": "What comes next? Circle, Square, Circle, Square, Circle, ___",
+      "question_text": "What comes next? \n Circle, Square, Circle, Square, Circle, ___",
       "options": [
         {
           "index": 0,
@@ -136,7 +136,7 @@
       "item_id": "logic_k_5",
       "item_number": "K-5",
       "item_type": "categorization",
-      "question_text": "What is the odd one out? Apple, Banana, Carrot, Grapes?",
+      "question_text": "What is the odd one out? \n Apple, Banana, Carrot, Grapes?",
       "options": [
         {
           "index": 0,
@@ -200,7 +200,7 @@
       "item_id": "logic_k_7",
       "item_number": "K-7",
       "item_type": "comparison",
-      "question_text": "Which one is the biggest? Ant, dog, horse, cat?",
+      "question_text": "Which one is the biggest? \n Ant, dog, horse, cat?",
       "options": [
         {
           "index": 0,
