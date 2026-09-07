@@ -69,11 +69,13 @@ class TestLogicTags:
         "pattern_detection_strong",
         "pattern_detection_emerging",
         "relational_reasoning_present",
+        "relational_reasoning_emerging",
         "systematic_problem_solving",
-        "cognitive_flexibility_intact",
+        "systematic_problem_solving_emerging",
         "flexible_strategy_use",
+        "flexible_strategy_emerging",
+        "reasoning_under_load",
         "reasoning_under_load_emerging",
-        "strategy_shift_difficulty",
         "rule_maintenance_difficulty",
         "trial_and_error_strategy",
         "impulsive_response",
@@ -120,9 +122,53 @@ class TestLogicTags:
         ]
         result = engine.evaluate("child", grade, responses)
 
-        # All wrong + fast → should flag impulsive_response (growth_edge)
+        # Every construct the child was shown should now report as emerging.
+        # (Uniform pacing means impulsive_response correctly does NOT fire -
+        # it is measured against the child's own median, so a child who works
+        # at one speed throughout is never rushing relative to themselves.)
+        growth = {t.tag for t in result.growth_edges}
+        assert growth, f"{grade.value}: no growth edge tags on an all-wrong run"
+        assert "pattern_detection_emerging" in growth, growth
         emitted = tag_ids(result.tags)
-        assert "impulsive_response" in emitted, f"{grade.value}: expected impulsive_response, got {emitted}"
+        unknown = emitted - self.EXPECTED_TAG_IDS
+        assert not unknown, f"{grade.value}: unknown tags: {unknown}"
+
+    @pytest.mark.parametrize("grade", list(Grade))
+    def test_impulsive_response_needs_a_pace_to_be_fast_against(self, grade: Grade):
+        """G1: impulsive is relative to the child's own median time."""
+        engine = registry.logic_engine()
+        items = engine.get_items(grade)
+        responses = []
+        for index, item in enumerate(items):
+            fast = index < 2
+            responses.append(
+                LogicResponse(
+                    item_id=item.item_id,
+                    selected_answer_index=(
+                        (item.correct_answer_index + 1) % len(item.options)
+                        if fast else item.correct_answer_index
+                    ),
+                    response_time_seconds=1.0 if fast else 20.0,
+                )
+            )
+        result = engine.evaluate("child", grade, responses)
+        assert result.signals["fast_and_wrong_count"] == 2
+        assert "impulsive_response" in tag_ids(result.tags)
+
+    @pytest.mark.parametrize("grade", list(Grade))
+    def test_uniform_pace_is_not_impulsive(self, grade: Grade):
+        engine = registry.logic_engine()
+        items = engine.get_items(grade)
+        responses = [
+            LogicResponse(
+                item_id=item.item_id,
+                selected_answer_index=(item.correct_answer_index + 1) % len(item.options),
+                response_time_seconds=1.0,
+            )
+            for item in items
+        ]
+        result = engine.evaluate("child", grade, responses)
+        assert "impulsive_response" not in tag_ids(result.tags)
 
     @pytest.mark.parametrize("grade", list(Grade))
     def test_trial_and_error_detected(self, grade: Grade):
@@ -234,20 +280,33 @@ class TestLogicPerItemTags:
     def test_per_item_tags_impulsive_on_fast_wrong(self, grade: Grade):
         engine = registry.logic_engine()
         items = engine.get_items(grade)
-        responses = [
-            LogicResponse(
-                item_id=item.item_id,
-                selected_answer_index=(item.correct_answer_index + 1) % len(item.options),
-                response_time_seconds=1,  # very fast
+        responses = []
+        for index, item in enumerate(items):
+            fast = index < 2
+            responses.append(
+                LogicResponse(
+                    item_id=item.item_id,
+                    selected_answer_index=(
+                        (item.correct_answer_index + 1) % len(item.options)
+                        if fast else item.correct_answer_index
+                    ),
+                    response_time_seconds=1.0 if fast else 20.0,
+                )
             )
-            for item in items
-        ]
         result = engine.evaluate("child", grade, responses)
 
+        # G1: only the two dashed-off items are fast relative to the median.
+        fast_ids = {items[0].item_id, items[1].item_id}
         for pit in result.per_item_tags:
             assert pit.answered is True
-            assert pit.is_correct is False
-            assert "impulsive_response" in pit.tags, f"{grade.value}/{pit.item_id}: expected impulsive_response, got {pit.tags}"
+            if pit.item_id in fast_ids:
+                assert pit.is_correct is False
+                assert "impulsive_response" in pit.tags, (
+                    f"{grade.value}/{pit.item_id}: expected impulsive_response, "
+                    f"got {pit.tags}"
+                )
+            else:
+                assert "impulsive_response" not in pit.tags
 
     @pytest.mark.parametrize("grade", list(Grade))
     def test_per_item_tags_unanswered_for_empty(self, grade: Grade):

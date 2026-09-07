@@ -224,7 +224,7 @@
         }
       ],
       "correct_answer_index": 1,
-      "primary_tag": "reasoning_under_load_emerging",
+      "primary_tag": "reasoning_under_load",
       "difficulty": "medium",
       "expected_latency_seconds": 30
     },
@@ -264,7 +264,7 @@
   "tag_coverage": {
     "flexible_strategy_use": 1,
     "pattern_detection_strong": 2,
-    "reasoning_under_load_emerging": 1,
+    "reasoning_under_load": 1,
     "relational_reasoning_present": 2,
     "systematic_problem_solving": 2
   }

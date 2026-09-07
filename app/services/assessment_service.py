@@ -224,7 +224,7 @@ class AssessmentService:
             tags = per_item_map_submit.get(item_dict.get("item_id", ""), [])
             if "impulsive_response" in tags:
                 return "Impulsive response"
-            if "reasoning_under_load_emerging" in tags:
+            if "reasoning_under_load" in tags or "reasoning_under_load_emerging" in tags:
                 return "Reasoning under load"
             if "trial_and_error_strategy" in tags:
                 return "Trial and error"
@@ -236,7 +236,9 @@ class AssessmentService:
         table_data_submit = [
             {
                 "question": s.get("label", ""),
-                "selected_index": s.get("detail", {}).get("selected_index"),
+                # L-D1: these must match the keys LogicScorer writes into
+                # ScoredItem.detail, or the teacher table reads null.
+                "selected_index": s.get("detail", {}).get("selected_answer_index"),
                 "correct_index": s.get("detail", {}).get("correct_answer_index"),
                 "correct": s.get("is_correct", False),
                 "error_type": _error_type_for_submit(s),
@@ -321,7 +323,7 @@ class AssessmentService:
             tags = per_item_map.get(item.get("item_id", ""), [])
             if "impulsive_response" in tags:
                 return "Impulsive response"
-            if "reasoning_under_load_emerging" in tags:
+            if "reasoning_under_load" in tags or "reasoning_under_load_emerging" in tags:
                 return "Reasoning under load"
             if "trial_and_error_strategy" in tags:
                 return "Trial and error"
@@ -333,11 +335,13 @@ class AssessmentService:
         table_data = [
             {
                 "question": s.get("label", ""),
-                "selected_index": s.get("detail", {}).get("selected_index"),
-                "correct_index": s.get("detail", {}).get("correct_index"),
+                # L-D1: selected_index / correct_index / time never existed
+                # in ScoredItem.detail, so every row read null, null and 0.0.
+                "selected_index": s.get("detail", {}).get("selected_answer_index"),
+                "correct_index": s.get("detail", {}).get("correct_answer_index"),
                 "correct": s.get("is_correct", False),
                 "error_type": _error_type_for(s),
-                "time": s.get("detail", {}).get("time", 0.0),
+                "time": s.get("detail", {}).get("response_time_seconds", 0.0),
                 "icon": "Correct" if s.get("is_correct") else "Incorrect",
             }
             for s in scored_items

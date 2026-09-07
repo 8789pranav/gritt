@@ -404,13 +404,16 @@ class ReportService:
 
     _TAG_SENTENCE_MAP: Dict[str, str] = {
         # Logic
+        # One entry per tag in data/tags/logic_tags.json.
         "pattern_detection_strong": "Child recognises and extends patterns with confidence.",
         "pattern_detection_emerging": "Child is beginning to recognise patterns but needs more practice with complex ones.",
         "relational_reasoning_present": "Child connects ideas and sees relationships between concepts.",
+        "relational_reasoning_emerging": "Child is starting to see how ideas connect, and needs practice comparing and sorting.",
         "systematic_problem_solving": "Child breaks down multi-step problems in a structured way.",
-        "cognitive_flexibility_intact": "Child adapts their thinking when rules or strategies change.",
+        "systematic_problem_solving_emerging": "Child is learning to work through problems step by step rather than jumping to an answer.",
         "flexible_strategy_use": "Child switches strategies when the first approach doesn't work.",
-        "strategy_shift_difficulty": "Child finds it hard to change approach when a strategy stops working.",
+        "flexible_strategy_emerging": "Child tends to stay with the first approach they try.",
+        "reasoning_under_load": "Child holds several pieces of information in mind at once and works through them.",
         "reasoning_under_load_emerging": "Child can handle simple logic but struggles with multi-step or high-load problems.",
         "trial_and_error_strategy": "Child tends to guess rather than plan, trying options until one fits.",
         "impulsive_response": "Child answers too quickly without thinking through the problem.",

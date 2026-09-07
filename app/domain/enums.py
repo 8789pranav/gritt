@@ -172,10 +172,16 @@ class CognitiveTag(str, Enum):
     PATTERN_DETECTION_STRONG = "pattern_detection_strong"
     PATTERN_DETECTION_EMERGING = "pattern_detection_emerging"
     RELATIONAL_REASONING_PRESENT = "relational_reasoning_present"
+    RELATIONAL_REASONING_EMERGING = "relational_reasoning_emerging"
     SYSTEMATIC_PROBLEM_SOLVING = "systematic_problem_solving"
+    SYSTEMATIC_PROBLEM_SOLVING_EMERGING = "systematic_problem_solving_emerging"
     COGNITIVE_FLEXIBILITY_INTACT = "cognitive_flexibility_intact"
     FLEXIBLE_STRATEGY_USE = "flexible_strategy_use"
+    FLEXIBLE_STRATEGY_EMERGING = "flexible_strategy_emerging"
     STRATEGY_SHIFT_DIFFICULTY = "strategy_shift_difficulty"
+    #: L-B3: the ITEM tag names the construct only. An item can measure load;
+    #: it cannot know whether the child is emerging at it. The rollup decides.
+    REASONING_UNDER_LOAD = "reasoning_under_load"
     REASONING_UNDER_LOAD_EMERGING = "reasoning_under_load_emerging"
     TRIAL_AND_ERROR_STRATEGY = "trial_and_error_strategy"
     IMPULSIVE_RESPONSE = "impulsive_response"
