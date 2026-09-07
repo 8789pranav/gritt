@@ -312,6 +312,12 @@ def aggregate(results: Sequence[Dict[str, Any]], grade: str) -> Dict[str, Any]:
         "insertion_count": total_of(("errors", "insertion")),
         "mispronunciation_count": total_of(("errors", "mispronunciation")),
         "monotone_count": total_of(("errors", "monotone")),
+        # Our own banding. Azure flags Mispronunciation below 60 only, which
+        # misses words a teacher would mark.
+        "clear_error_count": total_of(("errors", "clear_error")),
+        "needs_attention_count": total_of(("errors", "needs_attention")),
+        "prolonged_count": total_of(("errors", "prolonged")),
+        "words_flagged": total_of(("errors", "words_flagged")),
         "unexpected_break_count": total_of(("errors", "unexpected_break")),
 
         "phonics": phonics,

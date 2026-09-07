@@ -578,3 +578,121 @@ class TestTestLevelWcpm:
         signals = aggregate(rows, "First")
         assert signals["speaking_seconds"] == pytest.approx(12.0, abs=0.1)
         assert signals["correct_words"] == 9
+
+
+# ---------------------------------------------------------------------------
+# Edge cases a transcriber auto-corrects away
+# ---------------------------------------------------------------------------
+def _mk_word(word, accuracy, error, offset_ms, duration_ms, phonemes,
+             monotone=0.0):
+    from app.infrastructure.azure_pronunciation import Phoneme, Word as W
+
+    return W(
+        word=word, accuracy=accuracy, error_type=error,
+        offset_ms=offset_ms, duration_ms=duration_ms,
+        phonemes=[Phoneme(ipa=i, accuracy=a, offset_ms=offset_ms, duration_ms=30)
+                  for i, a in phonemes],
+        monotone_confidence=monotone,
+    )
+
+
+class TestWordFindings:
+    """Azure flags Mispronunciation below 60 only. Measured against deliberate
+    errors, "dug" for "dog" scored 67 and "doggggg" scored 76 - neither
+    flagged, though a teacher would mark both. And the recognised text said
+    "dog" for every one of them, so the transcript cannot be the detector."""
+
+    from app.engines.speaking.metrics import word_findings
+
+    def _sentence(self, target):
+        return [
+            _mk_word("the", 96, "None", 0, 200, [("ð", 96), ("ə", 96)]),
+            _mk_word("brown", 95, "None", 220, 300,
+                     [("b", 95), ("ɹ", 95), ("aʊ", 95), ("n", 95)]),
+            target,
+            _mk_word("likes", 97, "None", 1200, 300,
+                     [("l", 97), ("aɪ", 97), ("k", 97), ("s", 97)]),
+        ]
+
+    def _flags(self, target):
+        from app.engines.speaking.metrics import word_findings
+
+        found = word_findings(self._sentence(target))
+        return next(f for f in found if f["word"] == target.word)["flags"]
+
+    def test_a_correct_word_is_not_flagged(self):
+        dog = _mk_word("dog", 100, "None", 600, 220,
+                       [("d", 100), ("ɑ", 100), ("g", 100)])
+        assert self._flags(dog) == []
+
+    def test_a_word_azure_calls_fine_at_67_is_still_flagged(self):
+        """The "dug" case: Azure said ErrorType None, a teacher would not."""
+        dog = _mk_word("dog", 67, "None", 600, 220,
+                       [("d", 71), ("ɑ", 50), ("g", 80)])
+        assert self._flags(dog), "a word at 67 reached the parent unflagged"
+
+    def test_the_middle_band_is_needs_attention_not_a_clear_error(self):
+        """Audibly off, but still recognisably the word."""
+        dog = _mk_word("dog", 78, "None", 600, 220,
+                       [("d", 90), ("ɑ", 62), ("g", 82)])
+        flags = self._flags(dog)
+        assert "needs_attention" in flags
+        assert "clear_error" not in flags
+
+    def test_a_word_at_59_is_a_clear_error(self):
+        dog = _mk_word("dog", 59, "Mispronunciation", 600, 220,
+                       [("d", 100), ("ɔ", 37), ("g", 4)])
+        assert "clear_error" in self._flags(dog)
+
+    def test_a_stretched_word_is_caught_by_duration(self):
+        """The "doggggg" case: every sound present, so accuracy stays high."""
+        dog = _mk_word("dog", 94, "None", 600, 1500,
+                       [("d", 100), ("ɑ", 100), ("g", 81)])
+        flags = self._flags(dog)
+        assert "prolonged" in flags, flags
+        assert "clear_error" not in flags
+
+    def test_a_normal_length_word_is_not_prolonged(self):
+        dog = _mk_word("dog", 97, "None", 600, 230,
+                       [("d", 97), ("ɑ", 97), ("g", 97)])
+        assert "prolonged" not in self._flags(dog)
+
+    def test_the_weakest_sound_is_named(self):
+        from app.engines.speaking.metrics import word_findings
+
+        dog = _mk_word("dog", 59, "Mispronunciation", 600, 220,
+                       [("d", 100), ("ɔ", 37), ("g", 4)])
+        found = word_findings(self._sentence(dog))
+        weakest = next(f for f in found if f["word"] == "dog")["weakest_sound"]
+        assert weakest["ipa"] == "g"
+        assert weakest["accuracy"] == 4
+
+    def test_omission_is_reported_as_omission_not_a_low_score(self):
+        from app.engines.speaking.metrics import word_findings
+
+        dog = _mk_word("dog", 0, "Omission", 0, 0, [])
+        flags = next(f for f in word_findings(self._sentence(dog))
+                     if f["word"] == "dog")["flags"]
+        assert flags == ["omitted"]
+
+    def test_monotone_confidence_is_surfaced(self):
+        dog = _mk_word("dog", 97, "None", 600, 220,
+                       [("d", 97), ("ɑ", 97), ("g", 97)], monotone=0.8)
+        assert "monotone" in self._flags(dog)
+
+    def test_prolongation_needs_enough_words_to_compare(self):
+        from app.engines.speaking.metrics import word_findings
+
+        pair = [_mk_word("dog", 95, "None", 0, 1500,
+                         [("d", 95), ("ɑ", 95), ("g", 95)])]
+        assert word_findings(pair)[0]["flags"] == []
+
+    def test_counts_roll_up(self):
+        from app.engines.speaking.metrics import error_counts
+
+        dog = _mk_word("dog", 52, "Mispronunciation", 600, 220,
+                       [("d", 47), ("ɑ", 40), ("g", 100)])
+        counts = error_counts(self._sentence(dog))
+        assert counts["clear_error"] == 1
+        assert counts["words_flagged"] == 1
+        assert counts["mispronunciation"] == 1

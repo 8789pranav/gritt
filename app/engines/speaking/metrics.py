@@ -19,6 +19,21 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from app.infrastructure.azure_pronunciation import PronunciationResult, Word
 
+#: Azure sets ErrorType="Mispronunciation" only below word accuracy 60, which
+#: is too lenient for a reading diagnostic. Measured against deliberate errors:
+#: "dug" for "dog" scored 67 and "doggggg" scored 76, and neither was flagged,
+#: though a teacher would mark both. We band the word accuracy ourselves.
+WORD_CLEAR_ERROR = 70.0     # unmistakably not the target word
+WORD_NEEDS_ATTENTION = 85.0  # audibly off, worth a parent knowing
+
+#: A word held far longer than its neighbours, per sound, is being stretched -
+#: the "doggggg" case. Transcription normalises this away completely: both
+#: Whisper and Azure reported plain "dog". Duration is the only channel that
+#: sees it, and Azure gives us the duration.
+PROLONGATION_RATIO = 2.0
+#: Below this many spoken words there is no reliable pace to compare against.
+MIN_WORDS_FOR_PROLONGATION = 3
+
 #: A gap between words longer than this is a pause a listener would notice.
 PAUSE_MS = 150.0
 
@@ -321,6 +336,65 @@ def disfluency_metrics(verbatim_text: str, reference_text: str) -> DisfluencyMet
 # ---------------------------------------------------------------------------
 # assembly
 # ---------------------------------------------------------------------------
+def word_findings(words: Sequence[Word]) -> List[Dict[str, Any]]:
+    """Our own read of each word, not only Azure's ErrorType.
+
+    Three things Azure's ErrorType alone will not tell you:
+
+    * a word at 61-84 accuracy is wrong enough to matter but is reported as
+      ``None``;
+    * a stretched word ("doggggg") keeps a decent accuracy because every sound
+      is present - it is the duration that gives it away;
+    * which sound failed, which is in the phonemes rather than the word.
+    """
+    spoken = [w for w in words if w.was_spoken and w.duration_ms > 0 and w.phonemes]
+
+    # Typical time this child spent on one sound, in this sentence.
+    per_sound = [w.duration_ms / len(w.phonemes) for w in spoken]
+    baseline = sorted(per_sound)[len(per_sound) // 2] if per_sound else 0.0
+
+    findings: List[Dict[str, Any]] = []
+    for word in words:
+        flags: List[str] = []
+
+        if word.error_type == "Omission":
+            flags.append("omitted")
+        elif word.error_type == "Insertion":
+            flags.append("inserted")
+        else:
+            if word.accuracy < WORD_CLEAR_ERROR:
+                flags.append("clear_error")
+            elif word.accuracy < WORD_NEEDS_ATTENTION:
+                flags.append("needs_attention")
+
+            if (
+                baseline > 0
+                and len(spoken) >= MIN_WORDS_FOR_PROLONGATION
+                and word.phonemes
+                and word.duration_ms / len(word.phonemes)
+                > baseline * PROLONGATION_RATIO
+            ):
+                flags.append("prolonged")
+
+        if word.monotone_confidence >= 0.5:
+            flags.append("monotone")
+
+        weakest = min(word.phonemes, key=lambda p: p.accuracy) if word.phonemes else None
+        findings.append({
+            "word": word.word,
+            "accuracy": word.accuracy,
+            "azure_error_type": word.error_type,
+            "flags": flags,
+            "weakest_sound": (
+                {"ipa": weakest.ipa, "accuracy": weakest.accuracy} if weakest else None
+            ),
+            "ms_per_sound": (
+                round(word.duration_ms / len(word.phonemes), 1) if word.phonemes else 0.0
+            ),
+        })
+    return findings
+
+
 def error_counts(words: Sequence[Word]) -> Dict[str, int]:
     counts = {
         "omission": 0, "insertion": 0, "mispronunciation": 0,
@@ -338,6 +412,15 @@ def error_counts(words: Sequence[Word]) -> Dict[str, int]:
         key = lookup.get(word.error_type)
         if key:
             counts[key] += 1
+
+    # Our own banding, independent of Azure's threshold.
+    findings = word_findings(words)
+    counts["clear_error"] = sum(1 for f in findings if "clear_error" in f["flags"])
+    counts["needs_attention"] = sum(
+        1 for f in findings if "needs_attention" in f["flags"]
+    )
+    counts["prolonged"] = sum(1 for f in findings if "prolonged" in f["flags"])
+    counts["words_flagged"] = sum(1 for f in findings if f["flags"])
     return counts
 
 
@@ -373,6 +456,7 @@ def build_sentence_metrics(
         "disfluency": disfluency.as_dict(),
         "phonics": phonics_scores(result.words),
         "errors": error_counts(result.words),
+        "findings": word_findings(result.words),
         "words": [
             {
                 "word": w.word,
