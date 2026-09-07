@@ -15,6 +15,7 @@ Zero extra dependencies, zero extra RAM, zero deployment cost increase.
 from __future__ import annotations
 
 import base64
+import io
 import json
 import logging
 import os
@@ -52,6 +53,46 @@ class HybridSpeechProvider:
     @property
     def is_configured(self) -> bool:
         return self._openai is not None
+
+    def _transcribe_blind(self, audio_bytes: bytes, audio_format: str) -> str:
+        """Transcribe WITHOUT telling the model what the child was meant to say.
+
+        This is the fix for the analyser scoring silence at 89/100. The scoring
+        prompt necessarily contains the target sentence, and a model given both
+        an empty recording and the expected answer will produce the expected
+        answer. Whisper is asked to transcribe with no such context, so silence
+        comes back as silence, and this transcript - not the scorer's - decides
+        what the child actually said.
+        """
+        if not self._openai:
+            return ""
+
+        valid_format = audio_format if audio_format in ("mp3", "wav") else "wav"
+        buffer = io.BytesIO(audio_bytes)
+        buffer.name = f"speech.{valid_format}"
+        try:
+            result = self._openai.audio.transcriptions.create(
+                model="whisper-1",
+                file=buffer,
+                response_format="text",
+                # No `prompt=` argument: any hint here would re-open the leak.
+                temperature=0.0,
+            )
+            return (result if isinstance(result, str) else getattr(result, "text", "")).strip()
+        except Exception as exc:  # pragma: no cover - network failure path
+            logger.warning("Blind transcription failed: %s", exc)
+            return ""
+
+    @staticmethod
+    def _transcripts_agree(blind: str, scored: str) -> bool:
+        """Do the blind and scorer transcriptions describe the same utterance?"""
+        from difflib import SequenceMatcher
+
+        blind_words = blind.lower().split()
+        scored_words = scored.lower().split()
+        if not blind_words or not scored_words:
+            return False
+        return SequenceMatcher(None, blind_words, scored_words).ratio() >= 0.5
 
     def _analyze_audio_with_gpt4o(
         self,
@@ -139,6 +180,11 @@ Respond with valid JSON only, no markdown."""
             try:
                 response = self._openai.chat.completions.create(
                     model="gpt-audio",
+                    # The gpt-audio model only accepts input_audio when audio
+                    # output is also requested; with modalities=["text"] it
+                    # replies "please provide the audio sample" and never
+                    # listens. max_tokens is raised instead to stop the JSON
+                    # being truncated.
                     modalities=["text", "audio"],
                     audio={"voice": "alloy", "format": "wav"},
                     messages=[
@@ -168,7 +214,7 @@ Respond with valid JSON only, no markdown."""
                         },
                     ],
                     temperature=0.2,
-                    max_tokens=1500,
+                    max_tokens=4000,
                 )
 
                 message = response.choices[0].message
@@ -234,6 +280,75 @@ Respond with valid JSON only, no markdown."""
 
         logger.warning("GPT-audio failed after %d retries: %s", max_retries, last_error)
         return self._empty_audio_analysis()
+
+    @staticmethod
+    def _no_speech_result(
+        original_sentence: str,
+        reason: str,
+        message: str,
+        check: Any = None,
+    ) -> Dict[str, Any]:
+        """A complete, zero-scored analysis for a recording with no speech.
+
+        Every sub-score is zero and stays zero. Nothing here is derived from
+        the target sentence, so there is no path by which an unanswered item
+        can earn marks for words the child never said.
+        """
+        expected_words = len(original_sentence.split())
+        zero_overall = {
+            "score": 0.0,
+            "status": "Not Attempted",
+            "level": "Not Attempted",
+            "recommendation": message,
+            "parent_tip": (
+                "Have your child hold the microphone close and read the "
+                "sentence aloud. Nothing was picked up this time."
+            ),
+        }
+        return {
+            "success": True,
+            "transcribed_text": "",
+            "duration": round(getattr(check, "duration_seconds", 0.0) or 0.0, 2),
+            "word_timestamps": [],
+            "transcription_source": "audio_gate",
+            "no_speech_reason": reason,
+            "audio_check": {
+                "reason": reason,
+                "duration_seconds": getattr(check, "duration_seconds", 0.0),
+                "rms": getattr(check, "rms", 0.0),
+                "voiced_fraction": getattr(check, "voiced_fraction", 0.0),
+                "peak": getattr(check, "peak", 0.0),
+            },
+            "analysis": {
+                "pronunciation": {
+                    "score": 0.0, "status": "Not Attempted",
+                    "mispronounced_words": [], "omitted_words": [],
+                    "inserted_words": [], "per_word": [],
+                },
+                "speaking_rate": {
+                    "wpm": 0, "score": 0.0, "status": "Not Attempted",
+                },
+                "fluency": {
+                    "fluency_score": 0.0, "rate_score": 0.0, "wpm": 0,
+                    "rate_status": "Not Attempted", "pause_count": 0,
+                    "long_pause_count": 0, "total_pause_duration": 0,
+                    "hesitation_count": 0, "repetition_count": 0,
+                    "word_count": 0, "pause_ratio": 0,
+                },
+                "prosody": {"score": 0.0, "notes": message},
+                "grammar": {"grammar_score": 0.0, "issues": [
+                    {"type": "no_speech", "detail": message}
+                ]},
+                "completeness": {
+                    "completeness_score": 0.0,
+                    "expected_words": expected_words,
+                    "spoken_words": 0,
+                    "missing_words": [],
+                    "extra_words": [],
+                },
+                "overall": zero_overall,
+            },
+        }
 
     @staticmethod
     def _empty_audio_analysis() -> Dict[str, Any]:
@@ -374,23 +489,58 @@ Respond with valid JSON only, no markdown."""
                 "analysis": None,
             }
 
-        # Step 1: GPT-audio analysis — everything in one call
+        # Step 0: measure the waveform BEFORE spending a model call on it.
+        # A model that has been told the target sentence will happily "hear" it
+        # in silence, so the only trustworthy answer to "did the child speak?"
+        # comes from the audio itself.
+        from app.infrastructure.audio_gate import inspect, message_for
+
+        check = inspect(audio_base64, audio_format)
+        if not check.has_speech:
+            logger.info(
+                "Audio gate rejected recording: %s (duration=%.2fs rms=%.4f voiced=%.2f)",
+                check.reason, check.duration_seconds, check.rms, check.voiced_fraction,
+            )
+            return self._no_speech_result(
+                original_sentence, check.reason, message_for(check.reason), check
+            )
+
         audio_bytes = base64.b64decode(audio_base64)
+
+        # Step 1a: transcribe blind — no target sentence in context.
+        blind_transcription = self._transcribe_blind(audio_bytes, audio_format)
+        if not blind_transcription:
+            logger.info("Blind transcription returned nothing — scoring as no response")
+            return self._no_speech_result(
+                original_sentence,
+                "no_speech_detected",
+                message_for("no_speech_detected"),
+                check,
+            )
+
+        # Step 1b: acoustic analysis. The scorer still sees the target sentence
+        # because it must judge pronunciation against it, so its transcription
+        # is NOT trusted: the blind transcript is authoritative.
         audio_analysis = self._analyze_audio_with_gpt4o(
             audio_bytes, audio_format, original_sentence, grade
         )
 
         pron_score = audio_analysis["pronunciation_score"]
-        raw_transcription = audio_analysis.get("raw_transcription", "")
+        scored_transcription = audio_analysis.get("raw_transcription", "")
+        raw_transcription = blind_transcription
 
-        # If GPT-audio failed to detect/transcribe any speech, this is a real
-        # failure (no speech, silence, or unsupported audio) — do NOT
-        # substitute neutral/default scores. Keep pron_score at 0 and let
-        # downstream completeness/grammar/fluency reflect that nothing was
-        # said, instead of comparing the original sentence against itself.
-        analysis_failed = pron_score == 0 and not raw_transcription.strip()
-        if analysis_failed:
-            logger.warning("GPT-audio detected no valid speech — scoring as no response")
+        if scored_transcription and not self._transcripts_agree(
+            blind_transcription, scored_transcription
+        ):
+            # The scorer drifted towards the expected sentence. Its acoustic
+            # judgement is no longer about what was actually said.
+            logger.warning(
+                "Scorer transcription %r disagrees with blind %r — using blind",
+                scored_transcription[:80], blind_transcription[:80],
+            )
+            pron_score = min(pron_score, 50.0)
+
+        analysis_failed = False
 
         # Step 2: Fluency — compute precise pauses from per-word timestamps
         per_word = audio_analysis.get("per_word", [])
@@ -760,6 +910,18 @@ Respond with valid JSON only, no markdown."""
         original_words = original_sentence.lower().strip(".,!?").split()
         transcribed_words = transcribed_text.lower().strip(".,!?").split()
 
+        # Nothing was said, so there is no grammar to credit. Deducting a flat
+        # 15 per missing word used to leave a short sentence on 40 out of 100
+        # for silence, which then carried into the overall score.
+        if not transcribed_words:
+            return {
+                "grammar_score": 0.0,
+                "issues": [{
+                    "type": "no_speech",
+                    "detail": "Nothing was said, so grammar could not be assessed.",
+                }],
+            }
+
         issues = []
 
         # Missing words — use phoneme data if available for accuracy
@@ -797,9 +959,13 @@ Respond with valid JSON only, no markdown."""
                     "detail": "Some words may be in the wrong order",
                 })
 
-        # Grammar score: start at 100, deduct for issues
+        # Grammar score: start at 100, deduct for issues. Deductions are
+        # proportional to sentence length so a long sentence is not scored
+        # more leniently than a short one for the same fraction of errors.
+        expected_count = max(1, len(original_set))
+        per_missing = max(10.0, 100.0 / expected_count)
         grammar_score = 100.0
-        grammar_score -= len(missing) * 15
+        grammar_score -= len(missing) * per_missing
         grammar_score -= len(extra) * 10
         if any(i["type"] == "wrong_order" for i in issues):
             grammar_score -= 10
