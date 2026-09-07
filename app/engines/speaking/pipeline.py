@@ -249,6 +249,30 @@ def aggregate(results: Sequence[Dict[str, Any]], grade: str) -> Dict[str, Any]:
     words_read = total_of(("reading", "total_words"))
     fillers = total_of(("disfluency", "filler_count"))
 
+    # WCPM is a whole-test measure, not a per-sentence one. Published grade
+    # norms assume roughly a minute of connected reading; a nine-word sentence
+    # read in 2.4 seconds computes to 224 wcpm, which is arithmetically true
+    # and educationally meaningless. Summing correct words over total speaking
+    # time across the sitting gives a figure that can be read against a norm.
+    correct_words = total_of(("reading", "correct_words"))
+    speaking_ms = sum(
+        float(r.get("timing", {}).get("speaking_span_ms") or 0.0) for r in answered
+    )
+    speaking_minutes = speaking_ms / 60_000.0
+    test_wcpm = round(correct_words / speaking_minutes, 1) if speaking_minutes else 0.0
+
+    from app.engines.speaking.metrics import DEFAULT_WCPM_BAND, GRADE_WCPM_BANDS
+
+    low, high = GRADE_WCPM_BANDS.get(grade, DEFAULT_WCPM_BAND)
+    if test_wcpm <= 0:
+        rate_band = "no_reading"
+    elif test_wcpm < low:
+        rate_band = "below_band"
+    elif test_wcpm > high:
+        rate_band = "above_band"
+    else:
+        rate_band = "in_band"
+
     return {
         "sentences_total": total,
         "sentences_answered": attempted,
@@ -263,6 +287,12 @@ def aggregate(results: Sequence[Dict[str, Any]], grade: str) -> Dict[str, Any]:
         "avg_prosody": mean(("scores", "prosody")),
         "avg_pron_score": mean(("scores", "pron_score")),
 
+        # The figure to report. avg_wcpm is kept for continuity but is the
+        # mean of per-sentence rates, which is not comparable to a grade norm.
+        "wcpm": test_wcpm,
+        "wcpm_band": rate_band,
+        "correct_words": correct_words,
+        "speaking_seconds": round(speaking_ms / 1000.0, 2),
         "avg_wcpm": mean(("reading", "wcpm")),
         "avg_accuracy_pct": mean(("reading", "accuracy_pct")),
         "words_read": words_read,

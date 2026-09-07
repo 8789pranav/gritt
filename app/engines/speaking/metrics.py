@@ -221,10 +221,13 @@ def reading_metrics(
     grade: str,
     elapsed_ms: Optional[float] = None,
 ) -> ReadingMetrics:
-    """Words correct per minute, the standard oral reading fluency measure.
+    """Words correct per minute for one sentence.
 
     A teacher already knows how to read WCPM, which is why it belongs in the
-    report ahead of any score we invent.
+    report ahead of any score we invent - but read the whole-test figure from
+    ``pipeline.aggregate``, not this one. Grade norms assume roughly a minute
+    of connected reading, and a nine-word sentence read in 2.4 seconds
+    computes to 224 wcpm. Per sentence this value is diagnostic only.
     """
     total = len([w for w in words if w.word])
     correct = len([w for w in words if w.is_correct])

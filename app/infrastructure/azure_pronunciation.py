@@ -63,6 +63,15 @@ class Phoneme:
 
 
 @dataclass(frozen=True)
+class Syllable:
+    syllable: str
+    grapheme: str
+    accuracy: float
+    offset_ms: float
+    duration_ms: float
+
+
+@dataclass(frozen=True)
 class Word:
     word: str
     accuracy: float
@@ -70,6 +79,13 @@ class Word:
     offset_ms: float
     duration_ms: float
     phonemes: List[Phoneme] = field(default_factory=list)
+    syllables: List[Syllable] = field(default_factory=list)
+    #: Per-word prosody feedback. The REST response carries confidences here
+    #: rather than a decided error type, so the thresholds are ours.
+    unexpected_break_confidence: float = 0.0
+    missing_break_confidence: float = 0.0
+    monotone_confidence: float = 0.0
+    break_length_ms: float = 0.0
 
     @property
     def end_ms(self) -> float:
@@ -96,6 +112,9 @@ class PronunciationResult:
     prosody: Optional[float]
     pron_score: float
     words: List[Word] = field(default_factory=list)
+    #: Signal-to-noise ratio, reported by the service. A low value means a
+    #: noisy room, which is worth knowing before trusting a low score.
+    snr: Optional[float] = None
     raw: Dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -280,11 +299,59 @@ def _ticks_to_ms(ticks: Any) -> float:
         return 0.0
 
 
+def _scores(node: Dict[str, Any]) -> Dict[str, Any]:
+    """Read assessment scores from either response shape.
+
+    The Speech SDK nests them under "PronunciationAssessment". The REST
+    short-audio endpoint returns them flat on the same object, with
+    "PronunciationAssessment" present but null. Confirmed against the live
+    service - the documentation shows the SDK shape only.
+    """
+    nested = node.get("PronunciationAssessment")
+    return nested if isinstance(nested, dict) and nested else node
+
+
+def _number(node: Dict[str, Any], key: str, default: Optional[float] = None):
+    value = _scores(node).get(key, default)
+    try:
+        return float(value) if value is not None else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _break_feedback(entry: Dict[str, Any]) -> Dict[str, float]:
+    """Prosody confidences for one word, where the response provides them."""
+    prosody = ((entry.get("Feedback") or {}).get("Prosody") or {})
+    brk = prosody.get("Break") or {}
+    intonation = prosody.get("Intonation") or {}
+
+    def confidence(node: Any) -> float:
+        if isinstance(node, dict):
+            try:
+                return float(node.get("Confidence", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                return 0.0
+        return 0.0
+
+    try:
+        break_length = float(brk.get("BreakLength", 0) or 0)
+    except (TypeError, ValueError):
+        break_length = 0.0
+
+    return {
+        "unexpected_break_confidence": confidence(brk.get("UnexpectedBreak")),
+        "missing_break_confidence": confidence(brk.get("MissingBreak")),
+        "monotone_confidence": confidence(intonation.get("Monotone")),
+        "break_length_ms": _ticks_to_ms(break_length),
+    }
+
+
 def parse_result(payload: Dict[str, Any]) -> PronunciationResult:
     """Turn Azure's detailed JSON into our own shape.
 
-    Kept separate from the HTTP call so it can be unit-tested against recorded
-    fixtures without a key or a network.
+    Tolerates both the flat REST response and the nested SDK one, so the same
+    parser serves either transport. Kept separate from the HTTP call so it can
+    be unit-tested against recorded fixtures without a key or a network.
     """
     if payload.get("RecognitionStatus") not in (None, "Success"):
         return PronunciationResult(
@@ -293,43 +360,59 @@ def parse_result(payload: Dict[str, Any]) -> PronunciationResult:
         )
 
     best = (payload.get("NBest") or [{}])[0]
-    assessment = best.get("PronunciationAssessment", {})
 
     words: List[Word] = []
     for entry in best.get("Words", []) or []:
-        word_assessment = entry.get("PronunciationAssessment", {}) or {}
         phonemes = [
             Phoneme(
                 ipa=p.get("Phoneme", ""),
-                accuracy=float(
-                    (p.get("PronunciationAssessment") or {}).get("AccuracyScore", 0.0)
-                ),
+                accuracy=_number(p, "AccuracyScore", 0.0) or 0.0,
                 offset_ms=_ticks_to_ms(p.get("Offset")),
                 duration_ms=_ticks_to_ms(p.get("Duration")),
             )
             for p in (entry.get("Phonemes") or [])
         ]
+        syllables = [
+            Syllable(
+                syllable=y.get("Syllable", ""),
+                grapheme=y.get("Grapheme", ""),
+                accuracy=_number(y, "AccuracyScore", 0.0) or 0.0,
+                offset_ms=_ticks_to_ms(y.get("Offset")),
+                duration_ms=_ticks_to_ms(y.get("Duration")),
+            )
+            for y in (entry.get("Syllables") or [])
+        ]
         words.append(
             Word(
                 word=entry.get("Word", ""),
-                accuracy=float(word_assessment.get("AccuracyScore", 0.0)),
-                error_type=word_assessment.get("ErrorType", "None"),
+                accuracy=_number(entry, "AccuracyScore", 0.0) or 0.0,
+                error_type=_scores(entry).get("ErrorType", "None") or "None",
                 offset_ms=_ticks_to_ms(entry.get("Offset")),
                 duration_ms=_ticks_to_ms(entry.get("Duration")),
                 phonemes=phonemes,
+                syllables=syllables,
+                **_break_feedback(entry),
             )
         )
 
-    prosody = assessment.get("ProsodyScore")
+    snr = payload.get("SNR")
+    try:
+        snr = float(snr) if snr is not None else None
+    except (TypeError, ValueError):
+        snr = None
 
     return PronunciationResult(
-        recognized_text=best.get("Display") or best.get("Lexical") or "",
-        accuracy=float(assessment.get("AccuracyScore", 0.0)),
-        fluency=float(assessment.get("FluencyScore", 0.0)),
-        completeness=float(assessment.get("CompletenessScore", 0.0)),
-        prosody=float(prosody) if prosody is not None else None,
-        pron_score=float(assessment.get("PronScore", 0.0)),
+        recognized_text=(
+            best.get("Display") or best.get("Lexical")
+            or payload.get("DisplayText") or ""
+        ),
+        accuracy=_number(best, "AccuracyScore", 0.0) or 0.0,
+        fluency=_number(best, "FluencyScore", 0.0) or 0.0,
+        completeness=_number(best, "CompletenessScore", 0.0) or 0.0,
+        prosody=_number(best, "ProsodyScore", None),
+        pron_score=_number(best, "PronScore", 0.0) or 0.0,
         words=words,
+        snr=snr,
         raw=payload,
     )
 

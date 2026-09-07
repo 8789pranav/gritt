@@ -529,3 +529,52 @@ class TestAggregate:
         assert signals["sentences_total"] == 0
         assert signals["avg_pron_score"] == 0.0
         assert signals["attempted_ratio"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# WCPM is a whole-test measure
+# ---------------------------------------------------------------------------
+class TestTestLevelWcpm:
+    """Grade norms assume ~a minute of connected reading, not one sentence."""
+
+    def _answered(self, correct_words, span_ms):
+        return {
+            "status": "answered",
+            "scores": {"pron_score": 90.0, "accuracy": 90.0, "fluency": 90.0,
+                       "completeness": 90.0, "prosody": 90.0},
+            "reading": {"correct_words": correct_words, "total_words": correct_words,
+                        "wcpm": round(correct_words / (span_ms / 60000.0), 1),
+                        "accuracy_pct": 100.0},
+            "timing": {"speaking_span_ms": span_ms, "pause_count": 0,
+                       "long_pause_count": 0},
+            "disfluency": {"filler_count": 0, "repetitions": 0},
+            "errors": {}, "phonics": {},
+        }
+
+    def test_totals_not_the_mean_of_per_sentence_rates(self):
+        # Eight 9-word sentences, 2.4s each: 72 words in 19.2s.
+        rows = [self._answered(9, 2400) for _ in range(8)]
+        signals = aggregate(rows, "First")
+        assert signals["correct_words"] == 72
+        assert signals["speaking_seconds"] == pytest.approx(19.2, abs=0.1)
+        assert signals["wcpm"] == pytest.approx(225.0, abs=1.0)
+
+    def test_a_slow_reader_lands_in_band(self):
+        # 9 words in 12s per sentence -> 45 wcpm, inside the First band.
+        rows = [self._answered(9, 12_000) for _ in range(8)]
+        signals = aggregate(rows, "First")
+        assert signals["wcpm"] == pytest.approx(45.0, abs=1.0)
+        assert signals["wcpm_band"] == "in_band"
+
+    def test_no_speaking_time_is_no_reading(self):
+        signals = aggregate([], "First")
+        assert signals["wcpm"] == 0.0
+        assert signals["wcpm_band"] == "no_reading"
+
+    def test_unattempted_sentences_do_not_add_time(self):
+        rows = [self._answered(9, 12_000),
+                {"status": "not_attempted", "scores": {}, "reading": {}, "timing": {},
+                 "disfluency": {}, "errors": {}, "phonics": {}}]
+        signals = aggregate(rows, "First")
+        assert signals["speaking_seconds"] == pytest.approx(12.0, abs=0.1)
+        assert signals["correct_words"] == 9
