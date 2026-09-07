@@ -21,8 +21,44 @@ from app.engines.spelling.phonics import (
     sounds_like,
 )
 
-#: A word answered faster than this (seconds) is treated as rushed.
+#: A word answered faster than this (seconds) is treated as rushed when the
+#: child's median response time is unavailable.
 FAST_RESPONSE_SECONDS = 3.0
+
+#: Mistake keys that classify *why* an attempt is wrong. When one of these
+#: fires, the attempt is explained - it is not a rushed slip (#61).
+CLASSIFICATION_MISTAKES = frozenset(
+    {"unrelated_attempt", "spelling_convention", "homophone_error"}
+)
+
+#: Item-level tags that classify an attempt, suppressing rushed_attempt (#61).
+CLASSIFICATION_TAGS = frozenset(
+    {
+        "unrelated_attempt",
+        "unrelated_attempt_sightword",
+        "homophone_error",
+        "spelling_convention_error",
+    }
+)
+
+
+def rushed_threshold(responses) -> float:
+    """Half the child's median response time (#61).
+
+    A fixed 3-second cut-off mislabels a naturally fast child and misses a
+    slow one. Falls back to :data:`FAST_RESPONSE_SECONDS` when there are too
+    few timed responses to take a median.
+    """
+    from statistics import median
+
+    times = [
+        r.response_time_seconds
+        for r in responses
+        if r.response_time_seconds and r.response_time_seconds > 0
+    ]
+    if not times:
+        return 0.0
+    return median(times) / 2.0
 
 
 class _FeatureTally:
@@ -67,7 +103,9 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
         sight_attempted = sight_correct = 0
         hard_attempted = hard_total = 0
         fast_slips = 0
+        convention_errors = 0
         improved_with_audio = False
+        fast_cutoff = rushed_threshold(responses)
 
         for scored in score.scored_items:
             item = items_by_id.get(scored.item_id)
@@ -78,20 +116,17 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
             attempted = response is not None
             mistakes = scored.detail.get("mistakes", {})
 
-            # Per-word-type accuracy.
-            # #53: Only count words with non-blank input as "attempted" so
-            # sight_word_accuracy matches sight_word_score in parent_summary.
-            has_input = attempted and (response.user_input or "").strip()
+            # Per-word-type accuracy. The denominator is every word SHOWN,
+            # so a sound-alike or a blank stays in the pool and counts as
+            # not-yet-correct (Q3). parent_summary mirrors this exactly.
             if item.word_type is WordType.REGULAR:
-                if has_input:
-                    regular_attempted += 1
-                    if scored.is_correct:
-                        regular_correct += 1
+                regular_attempted += 1
+                if scored.is_correct:
+                    regular_correct += 1
             elif item.word_type is WordType.SIGHT:
-                if has_input:
-                    sight_attempted += 1
-                    if scored.is_correct:
-                        sight_correct += 1
+                sight_attempted += 1
+                if scored.is_correct:
+                    sight_correct += 1
 
             # Feature-level accuracy, regular words only.
             # Skip unrelated attempts so they don't create phantom feature errors.
@@ -112,9 +147,18 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
                 if attempted and (response.user_input or "").strip():
                     hard_attempted += 1
 
-            # Rushed slips: fast, wrong, and on a word with few features.
+            # #75: convention errors are the signal that a child hears the
+            # sounds but does not know the spelling rule.
+            if "spelling_convention" in mistakes:
+                convention_errors += 1
+
+            # Rushed slips: wrong and answered in under half the median time.
+            # #61: never on an item a classification tag already explains.
             if attempted and not scored.is_correct:
-                if 0 < response.response_time_seconds < FAST_RESPONSE_SECONDS:
+                if (
+                    0 < response.response_time_seconds < fast_cutoff
+                    and not (CLASSIFICATION_MISTAKES & set(mistakes))
+                ):
                     fast_slips += 1
 
             if attempted and response.hints_used > 0 and scored.is_correct:
@@ -134,9 +178,13 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
             "vowel_error_count": vowel_errors,
             "digraph_accuracy": digraph.accuracy(),
             "blend_accuracy": blend.accuracy(),
-            "digraph_error_count": digraph.errors + blend.errors,
+            "digraph_error_count": digraph.errors,
+            "blend_error_count": blend.errors,
             "digraph_words_count": digraph.attempted,
             "blend_words_count": blend.attempted,
+            "vowel_words_count": vowel_attempted,
+            "sight_words_count": sight_attempted,
+            "convention_error_count": convention_errors,
             "sight_word_accuracy": self.ratio(sight_correct, sight_attempted),
             "regular_word_accuracy": self.ratio(regular_correct, regular_attempted),
             "improved_with_audio": improved_with_audio,
@@ -175,11 +223,14 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
         """
         responses_by_word = {r.word.strip().lower(): r for r in responses}
         scored_by_id = {s.item_id: s for s in (score.scored_items if score else [])}
+        fast_cutoff = rushed_threshold(responses)
         results: List[PerItemTags] = []
 
         for item in items:
             response = responses_by_word.get(item.word.strip().lower())
-            if response is None:
+            # A word the child never saw, and a word submitted blank, are both
+            # unanswered: answered=False and no tags at all.
+            if response is None or not (response.user_input or "").strip():
                 results.append(
                     PerItemTags(item_id=item.item_id, answered=False, is_correct=None)
                 )
@@ -233,11 +284,10 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
             else:
                 tags.append(f"{item.word_type.value}_word_error")
 
-            if not is_correct and 0 < response.response_time_seconds < FAST_RESPONSE_SECONDS:
-                if not any(t in tags for t in (
-                    "unrelated_attempt", "unrelated_attempt_sightword",
-                    "homophone_error", "spelling_convention_error",
-                )):
+            # #61: rushed only when nothing better explains the attempt, and
+            # only against half the child's own median time.
+            if not is_correct and 0 < response.response_time_seconds < fast_cutoff:
+                if not CLASSIFICATION_TAGS.intersection(tags):
                     tags.append("rushed_attempt")
 
             results.append(

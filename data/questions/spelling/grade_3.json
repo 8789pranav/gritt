@@ -46,7 +46,7 @@
         "beginning_consonant": "p",
         "final_consonant": "x",
         "short_vowels": "e, e",
-        "consonant_blends": "pr, pl"
+        "consonant_blends": "pl"
       }
     },
     {
@@ -67,7 +67,8 @@
       "features": {
         "beginning_consonant": "t",
         "final_consonant": "l, e",
-        "short_vowels": "u, i",
+        "short_vowels": "u",
+        "long_vowel_patterns": "i-e",
         "consonant_blends": "rn, st"
       }
     },

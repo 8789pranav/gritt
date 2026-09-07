@@ -291,13 +291,15 @@ class TestSpellingTags:
     EXPECTED_TAG_IDS = {
         "phonetic_strategy_strong",
         "vowel_accuracy_strong",
-        "vowel_difficulty_emerging",
-        "digraph_blend_competent",
-        "digraph_difficulty_emerging",
+        "vowel_emerging",
+        "digraph_competent",
+        "blend_competent",
+        "digraph_emerging",
+        "blend_emerging",
         "sight_word_recognition_strong",
         "sight_word_emerging",
+        "spelling_convention_emerging",
         "audio_support_benefit",
-        "confident_attempt",
         "rushed_spelling",
     }
 
@@ -352,20 +354,44 @@ class TestSpellingTags:
     def test_rushed_spelling_detected(self, grade: Grade):
         engine = registry.spelling_engine()
         items = engine.get_items(grade)
-        # Answer very quickly with wrong inputs
+        # #61: rushed is relative to the child's own median time, so the run
+        # needs a working pace to be fast *against*. The first two words are
+        # dashed off wrong; the rest are answered correctly at a normal pace.
+        responses = []
+        for index, item in enumerate(items):
+            fast = index < 2
+            responses.append(
+                SpellingResponse(
+                    item_id=item.item_id,
+                    word=item.word,
+                    # A plausible misspelling, not an unrelated word -
+                    # an unrelated attempt is classified and so never rushed.
+                    user_input=item.word + "z" if fast else item.word,
+                    word_type=item.word_type,
+                    response_time_seconds=1.0 if fast else 12.0,
+                )
+            )
+        result = engine.evaluate("child", grade, responses)
+        emitted = tag_ids(result.tags)
+        assert "rushed_spelling" in emitted, f"{grade.value}: expected rushed_spelling, got {emitted}"
+
+    @pytest.mark.parametrize("grade", list(Grade))
+    def test_uniformly_fast_run_is_not_rushed(self, grade: Grade):
+        """#61: a child who simply works fast is not rushing every word."""
+        engine = registry.spelling_engine()
+        items = engine.get_items(grade)
         responses = [
             SpellingResponse(
                 item_id=item.item_id,
                 word=item.word,
                 user_input="x",
                 word_type=item.word_type,
-                response_time_seconds=1.0,  # very fast
+                response_time_seconds=1.0,
             )
             for item in items
         ]
         result = engine.evaluate("child", grade, responses)
-        emitted = tag_ids(result.tags)
-        assert "rushed_spelling" in emitted, f"{grade.value}: expected rushed_spelling, got {emitted}"
+        assert "rushed_spelling" not in tag_ids(result.tags)
 
     @pytest.mark.parametrize("grade", list(Grade))
     def test_empty_submission_minimal_tags(self, grade: Grade):
@@ -376,7 +402,9 @@ class TestSpellingTags:
         # but should NOT emit confidence-based tags like phonetic_strategy_strong
         emitted = tag_ids(result.tags)
         assert "phonetic_strategy_strong" not in emitted, f"{grade.value}: should not emit phonetic_strategy_strong on empty"
-        assert "digraph_blend_competent" not in emitted, f"{grade.value}: should not emit digraph_blend_competent on empty"
+        assert "digraph_competent" not in emitted, f"{grade.value}: should not emit digraph_competent on empty"
+        assert "blend_competent" not in emitted, f"{grade.value}: should not emit blend_competent on empty"
+        assert "vowel_accuracy_strong" not in emitted, f"{grade.value}: should not emit vowel_accuracy_strong on empty"
 
 
 # ---------------------------------------------------------------------------

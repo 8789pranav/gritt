@@ -131,7 +131,7 @@
       "type": "regular",
       "sentence": "I like to read and write.",
       "features": {
-        "beginning": "a",
+        "beginning": "a (vowel start)",
         "final": "d",
         "short_vowels": "a",
         "consonant_blends": "nd"

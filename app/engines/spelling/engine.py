@@ -21,6 +21,10 @@ from app.engines.spelling.signals import SpellingSignalDeriver
 #: Accuracy at or above this counts as mastery of a phonics feature.
 MASTERY_THRESHOLD = 0.75
 
+#: Convention errors in one sitting before it becomes a focus area (#75).
+#: Kept in step with the spelling_convention_emerging trigger.
+CONVENTION_ERROR_THRESHOLD = 3
+
 
 class SpellingEngine(AssessmentEngine[SpellingWord, SpellingResponse]):
     """Assembles the spelling loader, scorer and signal deriver."""
@@ -128,6 +132,16 @@ class SpellingEngine(AssessmentEngine[SpellingWord, SpellingResponse]):
             sight_accuracy = sight_correct / sight_attempted
             if sight_accuracy < MASTERY_THRESHOLD and "Sight words" not in focus:
                 focus.append("Sight words")
+
+        # #75: convention errors leave the phonics error count untouched, so
+        # without this a child who hears every sound but knows no spelling
+        # rules reaches the parent with strengths and nothing else.
+        convention_errors = sum(
+            1 for item in score.scored_items
+            if "spelling_convention" in item.detail.get("mistakes", {})
+        )
+        if convention_errors >= CONVENTION_ERROR_THRESHOLD:
+            focus.append("Spelling conventions")
 
         return focus
 

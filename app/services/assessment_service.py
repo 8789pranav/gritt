@@ -520,19 +520,28 @@ class AssessmentService:
             WordType.SIGHT.value, WordType.NONSENSE.value
         )]
 
-        # #53: sight_word_score must match sight_word_accuracy from signals.
-        # Signals compute accuracy as correct/attempted (only answered words),
-        # so the parent summary must do the same — not points/max_points which
-        # includes unattempted words in the denominator.
-        phonics_attempted = [r for r in phonics if r.get("detail", {}).get("user_input", "").strip()]
-        sight_attempted = [r for r in sight if r.get("detail", {}).get("user_input", "").strip()]
+        # #53 / Q3: both scores must match the accuracies in signals, whose
+        # denominator is every word SHOWN — sound-alikes and blanks stay in
+        # the pool as not-yet-correct rather than shrinking it.
+        def _phonics_ok(result: Dict[str, Any]) -> bool:
+            """True when the child produced every sound, spelling aside.
+
+            phonics_score means phonics. A convention error (candel, fone) or
+            a homophone means the child heard the word correctly and wrote a
+            plausible spelling, so it does not count against phonics. Genuine
+            sound changes (hambuger, fen for fan) still do.
+            """
+            if result.get("is_correct"):
+                return True
+            mistakes = result.get("detail", {}).get("mistakes", {})
+            return "spelling_convention" in mistakes or "homophone_error" in mistakes
 
         phonics_pct = (
-            sum(1 for r in phonics_attempted if r.get("is_correct")) / len(phonics_attempted) * 100
-        ) if phonics_attempted else 0
+            sum(1 for r in phonics if _phonics_ok(r)) / len(phonics) * 100
+        ) if phonics else 0
         sight_pct = (
-            sum(1 for r in sight_attempted if r.get("is_correct")) / len(sight_attempted) * 100
-        ) if sight_attempted else 0
+            sum(1 for r in sight if r.get("is_correct")) / len(sight) * 100
+        ) if sight else 0
 
         per_word_tag_map = {
             p.get("item_id", ""): p.get("tags", [])
