@@ -117,6 +117,10 @@ def build_sentence(
                 "rate_band": reading.get("rate_band", ""),
             },
             "timing": {
+                # How long the child spent reading this sentence aloud.
+                "duration_seconds": round(
+                    (timing.get("speaking_span_ms") or 0) / 1000.0, 2
+                ),
                 "time_to_speak_ms": timing.get("time_to_speak_ms"),
                 "time_to_first_word_ms": timing.get("time_to_first_word_ms", 0.0),
                 "pause_count": timing.get("pause_count", 0),
@@ -160,3 +164,76 @@ def build_sentences(
         )
         for m in measured
     ]
+
+
+#: How each status reads in the teacher table.
+_STATUS_LABEL = {
+    ANSWERED: "Answered",
+    NOT_ATTEMPTED: "Not Attempted",
+    NEEDS_REVIEW: "Needs Review",
+}
+
+#: A sentence at or above this reads as correct in the table.
+TABLE_CORRECT_AT = 85.0
+
+
+def teacher_table(sentences: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """One row per sentence, for the teacher view.
+
+    Derived from the sentence objects rather than assembled separately. The
+    old response built this list from its own copy of the numbers, which gave
+    the same fact two homes and two chances to go stale.
+    """
+    rows: List[Dict[str, Any]] = []
+    for sentence in sentences:
+        analysis = sentence.get("analysis") or {}
+        overall = analysis.get("overall") or {}
+        score = overall.get("score", 0.0) or 0.0
+        answered = bool(sentence.get("answered"))
+        status = sentence.get("status", NOT_ATTEMPTED)
+
+        if not answered:
+            error_type = (
+                "Needs review" if status == NEEDS_REVIEW else "Not attempted"
+            )
+        elif score >= TABLE_CORRECT_AT:
+            error_type = None
+        else:
+            # Name the biggest thing that went wrong, rather than "incorrect".
+            errors = analysis.get("errors") or {}
+            error_type = next(
+                (label for key, label in (
+                    ("mispronounced", "Mispronounced words"),
+                    ("skipped", "Skipped words"),
+                    ("stretched", "Stretched sounds"),
+                    ("added", "Extra words"),
+                    ("unclear", "Unclear words"),
+                ) if errors.get(key)),
+                "Developing",
+            )
+
+        rows.append({
+            "sentence_id": sentence.get("sentence_id", ""),
+            "sentence": sentence.get("sentence", ""),
+            "heard": (sentence.get("transcription") or {}).get("heard", ""),
+            "status": _STATUS_LABEL.get(status, "Not Attempted"),
+            "correct": answered and score >= TABLE_CORRECT_AT,
+            "overall_score": score,
+            "level": overall.get("level", ""),
+            "pronunciation": (analysis.get("pronunciation") or {}).get("score", 0.0),
+            "fluency": (analysis.get("fluency") or {}).get("score", 0.0),
+            "prosody": (analysis.get("prosody") or {}).get("score", 0.0),
+            "completeness": (analysis.get("completeness") or {}).get("score", 0.0),
+            "wcpm": (analysis.get("reading") or {}).get("wcpm", 0.0),
+            "time": (analysis.get("timing") or {}).get("duration_seconds", 0.0),
+            "pauses": (analysis.get("timing") or {}).get("long_pause_count", 0),
+            "fillers": (analysis.get("disfluency") or {}).get("filler_count", 0),
+            "error_type": error_type,
+            "icon": (
+                "Correct" if answered and score >= TABLE_CORRECT_AT
+                else "Not answered" if status == NOT_ATTEMPTED
+                else "Incorrect"
+            ),
+            "tags": list(sentence.get("tags") or []),
+        })
+    return rows

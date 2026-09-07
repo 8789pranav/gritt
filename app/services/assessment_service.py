@@ -61,6 +61,12 @@ def _tag_outputs_to_dicts(tags):
     ]
 
 
+def _speaking_table(sentences):
+    from app.engines.speaking.result import teacher_table
+
+    return teacher_table(sentences)
+
+
 def _restore_sentences(stored):
     """Re-add the keys Firebase drops when reading sentences back.
 
@@ -826,7 +832,7 @@ class AssessmentService:
             SpeakingPipeline,
             aggregate,
         )
-        from app.engines.speaking.result import build_sentences
+        from app.engines.speaking.result import build_sentences, teacher_table
 
         all_sentences = engine.get_items(grade_enum)
 
@@ -952,6 +958,13 @@ class AssessmentService:
             "percentage": percentage,
             "level": level,
             "sentences": sentences,
+            "teacher_admin_detail": {
+                "test_level": grade,
+                "sentences": len(sentences),
+                "answered": answered_count,
+                "instructional_level": level,
+                "table_data": teacher_table(sentences),
+            },
             "signals": signals,
             "dear_parent_tags": tag_dicts,
             "per_sentence_tags": per_item_dicts,
@@ -1020,6 +1033,16 @@ class AssessmentService:
             "dear_parent_tags": dear_parent_tags,
             "signals": latest.get("signals", {}),
             "sentences": sentences,
+
+            # Derived from `sentences` above, never stored alongside them, so
+            # the table cannot drift from the results it summarises.
+            "teacher_admin_detail": {
+                "test_level": latest.get("grade", grade),
+                "sentences": len(sentences),
+                "answered": sum(1 for s in sentences if s["answered"]),
+                "instructional_level": placement,
+                "table_data": _speaking_table(sentences),
+            },
         }
 
     # =====================================================================

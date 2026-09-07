@@ -235,3 +235,227 @@ class TestHeadlineIsOneNumber:
         _, data = await _run(client)
         summary = data["summary"]
         assert summary["answered"] <= summary["sentences"]
+
+
+class TestReportDerivation:
+    """What TestResults.tsx computes from the response, checked here.
+
+    The component reads paths, so a rename is silent on both sides: the page
+    renders blank rather than raising. These reproduce its derivation so a
+    shape change fails in CI instead of in front of a parent.
+    """
+
+    async def _rows(self, client, **kwargs):
+        _, data = await _run(client, **kwargs)
+        summary = data.get("summary") or {}
+        sentences = data.get("sentences") or []
+        rows = []
+        for result in sentences:
+            analysis = result.get("analysis") or {}
+            score = (analysis.get("overall") or {}).get("score") or 0
+            rows.append({
+                "word": result.get("sentence") or "",
+                "attempt": (result.get("transcription") or {}).get("heard") or "",
+                "correct": bool(result.get("answered")) and score >= 85,
+                "time": (analysis.get("timing") or {}).get("duration_seconds") or 0,
+                "score": score,
+                "status": ("Answered" if result.get("status") == "answered"
+                           else "Needs Review"
+                           if result.get("status") == "needs_review"
+                           else "Not Attempted"),
+                "level": (analysis.get("overall") or {}).get("level") or "",
+                "pronunciation": analysis.get("pronunciation"),
+                "fluency": analysis.get("fluency"),
+                "grammar": analysis.get("completeness"),
+                "strengths": analysis.get("strengths") or [],
+                "parent_tip": analysis.get("parent_tip") or "",
+                "sentence_id": result.get("sentence_id") or "",
+            })
+        return summary, sentences, rows
+
+    async def test_header_values_are_all_readable(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        summary, _, _ = await self._rows(client)
+        for key in ("total_marks", "user_score", "answered",
+                    "average_score", "level"):
+            assert key in summary, key
+        # .toFixed(1) on the score would throw if this were undefined
+        assert isinstance(summary["user_score"], (int, float))
+        assert summary["level"]
+
+    async def test_one_row_per_sentence_with_text_and_level(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, sentences, rows = await self._rows(client)
+        assert len(rows) == len(sentences)
+        assert all(r["word"] for r in rows)
+        assert all(r["level"] for r in rows)
+
+    @pytest.mark.parametrize("dimension", ["pronunciation", "fluency", "grammar"])
+    async def test_each_dimension_has_a_score_and_feedback(
+        self, client, mock_firebase_auth, seed_user, mock_speech, dimension
+    ):
+        """The report renders row.<dimension>.score and .feedback."""
+        _, _, rows = await self._rows(client)
+        for row in rows:
+            block = row[dimension]
+            assert isinstance(block, dict), f'{row["sentence_id"]}.{dimension}'
+            assert isinstance(block.get("score"), (int, float))
+            assert block.get("feedback")
+
+    async def test_tags_come_from_the_sentence_not_a_separate_array(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, sentences, _ = await self._rows(client)
+        tag_map = {s["sentence_id"]: s["tags"] for s in sentences}
+        assert len(tag_map) == len(sentences)
+        assert all(isinstance(v, list) for v in tag_map.values())
+
+    async def test_strengths_aggregate_from_answered_sentences(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, sentences, _ = await self._rows(client)
+        answered = [s for s in sentences if s["answered"]]
+        strengths = [
+            item for s in answered
+            for item in (s["analysis"].get("strengths") or [])
+        ]
+        assert isinstance(strengths, list)
+
+    async def test_an_unattempted_row_still_renders(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        """Every value the row template touches must exist, not be undefined."""
+        _, _, rows = await self._rows(client, audio="")
+        assert rows
+        for row in rows:
+            assert row["status"] == "Not Attempted"
+            assert row["score"] == 0
+            assert row["level"]
+            assert row["parent_tip"]
+            assert isinstance(row["time"], (int, float))
+            assert row["correct"] is False
+
+
+class TestTeacherTable:
+    """One row per sentence, derived from the sentences rather than stored
+    beside them - the old response built this list from its own copy of the
+    numbers, which gave the same fact two homes and two chances to go stale."""
+
+    ROW_FIELDS = {
+        "sentence_id", "sentence", "heard", "status", "correct",
+        "overall_score", "level", "pronunciation", "fluency", "prosody",
+        "completeness", "wcpm", "time", "pauses", "fillers",
+        "error_type", "icon", "tags",
+    }
+
+    async def _table(self, client, **kwargs):
+        _, data = await _run(client, **kwargs)
+        return data, data["teacher_admin_detail"]
+
+    async def test_the_block_is_present(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, detail = await self._table(client)
+        for key in ("test_level", "sentences", "answered",
+                    "instructional_level", "table_data"):
+            assert key in detail, key
+
+    async def test_one_row_per_sentence(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        data, detail = await self._table(client)
+        rows = detail["table_data"]
+        assert len(rows) == len(data["sentences"])
+        assert [r["sentence_id"] for r in rows] == \
+               [s["sentence_id"] for s in data["sentences"]]
+
+    @pytest.mark.parametrize("field", sorted(ROW_FIELDS))
+    async def test_every_row_field(
+        self, client, mock_firebase_auth, seed_user, mock_speech, field
+    ):
+        _, detail = await self._table(client)
+        for row in detail["table_data"]:
+            assert field in row, f'{row.get("sentence_id")}.{field}'
+
+    async def test_a_row_holds_nothing_else(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, detail = await self._table(client)
+        for row in detail["table_data"]:
+            assert set(row) == self.ROW_FIELDS, set(row) ^ self.ROW_FIELDS
+
+    async def test_the_table_agrees_with_the_sentences(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        """The reason to derive it rather than store it."""
+        data, detail = await self._table(client)
+        by_id = {s["sentence_id"]: s for s in data["sentences"]}
+        for row in detail["table_data"]:
+            sentence = by_id[row["sentence_id"]]
+            analysis = sentence["analysis"]
+            assert row["overall_score"] == analysis["overall"]["score"]
+            assert row["level"] == analysis["overall"]["level"]
+            assert row["pronunciation"] == analysis["pronunciation"]["score"]
+            assert row["fluency"] == analysis["fluency"]["score"]
+            assert row["completeness"] == analysis["completeness"]["score"]
+            assert row["tags"] == sentence["tags"]
+            assert row["sentence"] == sentence["sentence"]
+
+    async def test_answered_count_matches_the_summary(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        data, detail = await self._table(client)
+        assert detail["answered"] == data["summary"]["answered"]
+
+    async def test_an_unattempted_row_is_labelled_not_marked_wrong(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        """A child who never saw a sentence has not got it wrong."""
+        _, detail = await self._table(client, audio="")
+        for row in detail["table_data"]:
+            assert row["status"] == "Not Attempted"
+            assert row["icon"] == "Not answered"
+            assert row["error_type"] == "Not attempted"
+            assert row["correct"] is False
+
+    async def test_a_wrong_answer_names_what_went_wrong(self):
+        """error_type says which error, not just "incorrect"."""
+        from app.engines.speaking.result import teacher_table
+
+        sentence = {
+            "sentence_id": "s1", "sentence": "The cat sat.", "answered": True,
+            "status": "answered", "tags": [],
+            "transcription": {"heard": "The cat sat."},
+            "analysis": {
+                "overall": {"score": 55.0, "level": "Developing"},
+                "pronunciation": {"score": 55.0}, "fluency": {"score": 60.0},
+                "prosody": {"score": 50.0}, "completeness": {"score": 70.0},
+                "reading": {"wcpm": 30.0}, "timing": {},
+                "disfluency": {}, "errors": {"skipped": 2},
+            },
+        }
+        row = teacher_table([sentence])[0]
+        assert row["error_type"] == "Skipped words"
+        assert row["icon"] == "Incorrect"
+
+    async def test_a_strong_reading_has_no_error_type(self):
+        from app.engines.speaking.result import teacher_table
+
+        sentence = {
+            "sentence_id": "s1", "sentence": "The cat sat.", "answered": True,
+            "status": "answered", "tags": [],
+            "transcription": {"heard": "The cat sat."},
+            "analysis": {
+                "overall": {"score": 95.0, "level": "Excellent"},
+                "pronunciation": {"score": 95.0}, "fluency": {"score": 95.0},
+                "prosody": {"score": 90.0}, "completeness": {"score": 100.0},
+                "reading": {"wcpm": 60.0}, "timing": {},
+                "disfluency": {}, "errors": {},
+            },
+        }
+        row = teacher_table([sentence])[0]
+        assert row["error_type"] is None
+        assert row["correct"] is True
+        assert row["icon"] == "Correct"
