@@ -61,6 +61,25 @@ def _tag_outputs_to_dicts(tags):
     ]
 
 
+def _restore_per_item_tags(stored):
+    """Re-add the keys Firebase drops when reading per-item tags back.
+
+    The Realtime Database stores no empty containers, so an unanswered item -
+    which by design carries an empty tag list - comes back with no ``tags``
+    key at all rather than ``tags: []``. A client doing ``p.tags.length``
+    then breaks on exactly the blank words #54 was about.
+    """
+    return [
+        {
+            "item_id": entry.get("item_id", ""),
+            "answered": entry.get("answered", False),
+            "is_correct": entry.get("is_correct"),
+            "tags": entry.get("tags") or [],
+        }
+        for entry in (stored or [])
+    ]
+
+
 def _per_item_tags_to_dicts(per_items):
     """Serialise ``PerItemTags`` into plain dicts."""
     return [
@@ -309,13 +328,10 @@ class AssessmentService:
             raise ResultNotFoundError("logic", child_id, grade)
 
         scored_items = latest.get("scored_items", [])
-        per_item_tags = latest.get("per_item_tags", [])
+        per_item_tags = _restore_per_item_tags(latest.get("per_item_tags", []))
         dear_parent_tags = latest.get("dear_parent_tags", [])
 
-        per_item_map = {
-            p.get("item_id", ""): p.get("tags", [])
-            for p in per_item_tags
-        }
+        per_item_map = {p["item_id"]: p["tags"] for p in per_item_tags}
 
         def _error_type_for(item: Dict[str, Any]) -> Optional[str]:
             if item.get("is_correct"):
@@ -547,9 +563,9 @@ class AssessmentService:
             sum(1 for r in sight if r.get("is_correct")) / len(sight) * 100
         ) if sight else 0
 
+        per_word_tags = _restore_per_item_tags(latest.get("per_word_tags", []))
         per_word_tag_map = {
-            p.get("item_id", ""): p.get("tags", [])
-            for p in latest.get("per_word_tags", [])
+            p["item_id"]: p["tags"] for p in per_word_tags
         }
 
         def _error_type_for(result: Dict[str, Any]) -> Optional[str]:
@@ -580,7 +596,9 @@ class AssessmentService:
                 None,
             )
             if feature_key:
-                return feature_key.replace("_", " ").replace(" error", "")
+                # Every other error_type is capitalised ("Spelling convention",
+                # "Homophone"); phonics features were the odd one out.
+                return feature_key.replace("_", " ").replace(" error", "").capitalize()
             # #62: if the word has a spelling_error tag or "spelling" mistake
             # key, return "Spelling" instead of None.
             if "spelling_error" in tags or "spelling" in mistakes:
@@ -628,7 +646,7 @@ class AssessmentService:
                 "note": "Note: Placement is instructional and not a clinical diagnosis.",
             },
             "dear_parent_tags": latest.get("dear_parent_tags", []),
-            "per_word_tags": latest.get("per_word_tags", []),
+            "per_word_tags": per_word_tags,
             "teacher_admin_detail": {
                 "test_level": latest.get("grade", grade),
                 "words": total_words,
