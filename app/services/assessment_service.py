@@ -61,6 +61,35 @@ def _tag_outputs_to_dicts(tags):
     ]
 
 
+def _restore_sentences(stored):
+    """Re-add the keys Firebase drops when reading sentences back.
+
+    The Realtime Database stores no empty containers, so a sentence with no
+    tags, no findings or no words comes back missing those keys entirely
+    rather than holding an empty list - and a client doing .length on one of
+    them breaks on exactly the unattempted sentences.
+    """
+    restored = []
+    for entry in (stored or []):
+        entry = dict(entry or {})
+        entry.setdefault("tags", [])
+        analysis = dict(entry.get("analysis") or {})
+        for key in ("strengths", "areas_to_improve"):
+            analysis.setdefault(key, [])
+        for key in ("overall", "pronunciation", "fluency", "prosody",
+                    "completeness", "reading", "timing", "disfluency",
+                    "errors", "phonics"):
+            analysis.setdefault(key, {})
+        disfluency = dict(analysis.get("disfluency") or {})
+        disfluency.setdefault("fillers", [])
+        analysis["disfluency"] = disfluency
+        entry["analysis"] = analysis
+        entry.setdefault("transcription", {})
+        entry.setdefault("answered", entry.get("status") == "answered")
+        restored.append(entry)
+    return restored
+
+
 def _restore_per_item_tags(stored):
     """Re-add the keys Firebase drops when reading per-item tags back.
 
@@ -792,13 +821,12 @@ class AssessmentService:
         grade_enum = _parse_grade(grade)
         engine = speaking_engine()
 
-        from app.engines.speaking.feedback import build as build_feedback
-        from app.engines.speaking.feedback import level_for as feedback_level
         from app.engines.speaking.pipeline import (
             SentenceSubmission,
             SpeakingPipeline,
             aggregate,
         )
+        from app.engines.speaking.result import build_sentences
 
         all_sentences = engine.get_items(grade_enum)
 
@@ -831,95 +859,30 @@ class AssessmentService:
         signals = aggregate(measured, grade)
 
         by_id = {m["sentence_id"]: m for m in measured}
-        results: List[Dict[str, Any]] = []
+        text_by_id = {sent.sentence_id: sent.sentence for sent in all_sentences}
+
+        # Per-sentence tags first, so the sentence object can carry them.
+        tags_by_id = {
+            m["sentence_id"]: _sentence_tags(m) for m in measured
+        }
+
+        sentences = build_sentences(measured, text_by_id, tags_by_id)
+
         domain_responses: List[SpeakingResponse] = []
         total_score = 0.0
         answered_count = 0
-
         for sent in all_sentences:
             m = by_id[sent.sentence_id]
-            status = m.get("status", "not_attempted")
-            scores = m.get("scores", {})
-            overall = scores.get("pron_score", 0.0) or 0.0
-
-            if status == "answered":
-                total_score += overall
+            if m.get("status") == "answered":
+                total_score += m.get("scores", {}).get("pron_score", 0.0) or 0.0
                 answered_count += 1
-
-            fb = build_feedback(m)
-            results.append({
-                "sentence_id": sent.sentence_id,
-                "original_sentence": sent.sentence,
-                "transcribed_text": m.get("recognized", ""),
-                "verbatim_text": m.get("verbatim", ""),
-                "status": {
-                    "answered": "Answered",
-                    "not_attempted": "Not Attempted",
-                    "needs_review": "Needs Review",
-                }.get(status, "Not Attempted"),
-                "duration_seconds": round(
-                    (m.get("timing", {}).get("speaking_span_ms") or 0) / 1000.0, 2
-                ),
-                "pronunciation": {
-                    "score": scores.get("accuracy", 0.0),
-                    "feedback": fb["pronunciation_feedback"],
-                    "words": m.get("words", []),
-                    "findings": m.get("findings", []),
-                },
-                "fluency": {
-                    # "score" is the key the report reads; fluency_score stays
-                    # so nothing that already used that name breaks.
-                    "score": scores.get("fluency", 0.0),
-                    "fluency_score": scores.get("fluency", 0.0),
-                    "feedback": fb["fluency_feedback"],
-                    **m.get("timing", {}),
-                },
-                "prosody": {
-                    "score": scores.get("prosody") or 0.0,
-                    "feedback": fb["prosody_feedback"],
-                },
-                "completeness": {
-                    "score": scores.get("completeness", 0.0),
-                    "feedback": fb["completeness_feedback"],
-                },
-                # Azure replaces the old text-diff grammar check with
-                # completeness, which measures the same thing better: did the
-                # child say every word. Reported under both names so the
-                # existing report keeps working.
-                "grammar": {
-                    "score": scores.get("completeness", 0.0),
-                    "feedback": fb["completeness_feedback"],
-                    "issues": [],
-                },
-                "speaking_rate": {
-                    "wpm": m.get("reading", {}).get("wcpm", 0.0),
-                    "score": scores.get("fluency", 0.0),
-                    "status": m.get("reading", {}).get("rate_band", ""),
-                },
-                "reading": m.get("reading", {}),
-                "disfluency": m.get("disfluency", {}),
-                "phonics": m.get("phonics", {}),
-                "errors": m.get("errors", {}),
-                "overall": {
-                    "score": overall,
-                    "status": engine.scorer.status_for(overall)
-                    if hasattr(engine.scorer, "status_for") else "",
-                    "level": feedback_level(overall),
-                    "strengths": fb["strengths"],
-                    "areas_to_improve": fb["areas_to_improve"],
-                    "recommendation": fb["parent_tip"],
-                    "parent_tip": fb["parent_tip"],
-                },
-                "message": m.get("message", ""),
-                "analysis_method": "azure_pronunciation_assessment",
-            })
-
+            item = submitted.get(sent.sentence_id) or {}
             domain_responses.append(SpeakingResponse(
                 item_id=sent.sentence_id,
                 sentence_id=sent.sentence_id,
                 original_sentence=sent.sentence,
-                audio_base64=(submitted.get(sent.sentence_id) or {}).get("audio_base64", ""),
-                audio_format=(submitted.get(sent.sentence_id) or {}).get("audio_format", "wav"),
+                audio_base64=item.get("audio_base64", ""),
+                audio_format=item.get("audio_format", "wav"),
             ))
 
         # The tag engine reads the aggregate signals directly - the chain has
@@ -934,18 +897,20 @@ class AssessmentService:
                 "item_id": m["sentence_id"],
                 "answered": m.get("status") == "answered",
                 "is_correct": None,
-                "tags": _sentence_tags(m),
+                "tags": tags_by_id[m["sentence_id"]],
             }
             for m in measured
         ]
-        sentence_tag_map = {p["item_id"]: p["tags"] for p in per_item_dicts}
-        for r in results:
-            r["tags"] = sentence_tag_map.get(r["sentence_id"], [])
 
         max_score = len(all_sentences) * 100
         user_score = round(total_score, 1)
-        percentage = round((user_score / max_score) * 100, 1) if max_score else 0
+        # The headline is the average of the sentences the child actually
+        # read. Dividing by every sentence in the test reported 12% for a
+        # child who read one sentence at 95.9, which describes how much of
+        # the test was attempted, not how well it was read. Attempted is
+        # reported separately, where it can be read for what it is.
         avg_score = round(total_score / answered_count, 1) if answered_count else 0
+        percentage = avg_score
 
         if avg_score >= 90:
             level = "Excellent Speaker"
@@ -960,7 +925,7 @@ class AssessmentService:
             uid, child_id, TestType.SPEAKING.storage_key,
             {
                 "grade": grade,
-                "results": sanitize_data(results),
+                "sentences": sanitize_data(sentences),
                 "total_marks": max_score,
                 "user_score": user_score,
                 "answered_count": answered_count,
@@ -986,20 +951,22 @@ class AssessmentService:
             "average_score": avg_score,
             "percentage": percentage,
             "level": level,
-            "results": results,
+            "sentences": sentences,
             "signals": signals,
             "dear_parent_tags": tag_dicts,
             "per_sentence_tags": per_item_dicts,
             "message": (
                 f"Submission completed: {answered_count} answered, "
-                f"{len(results) - answered_count} not attempted."
+                f"{len(sentences) - answered_count} not attempted."
             ),
         }
 
     def speaking_complete_result(self, id_token: str, child_id: str,
                                  grade: Optional[str] = None) -> Dict[str, Any]:
+        """The stored result, in the same per-sentence shape submit returns."""
         uid, _ = verify_paid_child(id_token, child_id)
-        latest = self._scores.get_latest(uid, child_id, TestType.SPEAKING.storage_key, grade)
+        latest = self._scores.get_latest(
+            uid, child_id, TestType.SPEAKING.storage_key, grade)
         if not latest:
             raise ResultNotFoundError("speaking", child_id, grade)
 
@@ -1011,83 +978,48 @@ class AssessmentService:
         else:
             placement = "Below Grade Level"
 
-        all_results = latest.get("results", [])
-        per_sentence_tags = latest.get("per_sentence_tags", [])
+        sentences = _restore_sentences(latest.get("sentences", []))
         dear_parent_tags = latest.get("dear_parent_tags", [])
-
-        per_sentence_map = {
-            p.get("item_id", ""): p.get("tags", [])
-            for p in per_sentence_tags
-        }
-
-        def _error_type_for(result: Dict[str, Any]) -> Optional[str]:
-            status = result.get("status", "")
-            if status == "Not Attempted":
-                return "Not attempted"
-            if status == "Analysis Error":
-                return "Analysis error"
-            overall = result.get("overall", {})
-            score = overall.get("score", 0)
-            if score >= 75:
-                return None
-            tags = per_sentence_map.get(result.get("sentence_id", ""), [])
-            for tag in tags:
-                if tag.endswith("_needs_work"):
-                    return tag.replace("_needs_work", " needs work")
-            if score < 50:
-                return "Below benchmark"
-            return "Developing"
-
-        table_data = [
-            {
-                "sentence": r.get("original_sentence", ""),
-                "sentence_id": r.get("sentence_id", ""),
-                "status": r.get("status", ""),
-                "overall_score": r.get("overall", {}).get("score", 0),
-                "level": r.get("overall", {}).get("level", ""),
-                "error_type": _error_type_for(r),
-                "icon": "Correct" if r.get("overall", {}).get("score", 0) >= 75 else "Incorrect",
-            }
-            for r in all_results
-        ]
-
-        strengths = [
-            t.get("tag", "") for t in dear_parent_tags
-            if t.get("polarity") == "strength"
-        ]
-        focus_areas = [
-            t.get("tag", "") for t in dear_parent_tags
-            if t.get("polarity") == "growth_edge"
-        ]
 
         return {
             "user_id": uid,
             "child_id": child_id,
             "grade": latest.get("grade"),
-            "total_marks": latest.get("total_marks", 100),
-            "user_score": latest.get("user_score", 0),
-            "answered_count": latest.get("answered_count", 0),
-            "average_score": latest.get("average_score", 0),
-            "percentage": percentage,
-            "level": latest.get("level", "Developing Speaker"),
-            "parent_summary": {
-                "level": latest.get("level", "Developing Speaker"),
-                "strengths": strengths,
-                "focus_areas": focus_areas,
-                "recommendation": "See detailed feedback for each sentence.",
+            "timestamp": latest.get("timestamp", ""),
+
+            "summary": {
+                "sentences": len(sentences),
+                "answered": sum(1 for s in sentences if s["answered"]),
+                "needs_review": sum(
+                    1 for s in sentences if s["status"] == "needs_review"),
+                "total_marks": latest.get("total_marks", 0),
+                "user_score": latest.get("user_score", 0),
+                "average_score": latest.get("average_score", 0),
+                "percentage": percentage,
+                "level": latest.get("level", ""),
                 "grade_placement": placement,
-                "note": "Assessment is instructional and not a clinical diagnosis.",
             },
+
+            "parent_summary": {
+                "level": latest.get("level", ""),
+                "strengths": [
+                    t.get("description") or t.get("tag", "")
+                    for t in dear_parent_tags if t.get("polarity") == "strength"
+                ],
+                "focus_areas": [
+                    t.get("description") or t.get("tag", "")
+                    for t in dear_parent_tags
+                    if t.get("polarity") == "growth_edge"
+                ],
+                "grade_placement": placement,
+                "note": (
+                    "Assessment is instructional and not a clinical diagnosis."
+                ),
+            },
+
             "dear_parent_tags": dear_parent_tags,
-            "per_sentence_tags": per_sentence_tags,
-            "teacher_admin_detail": {
-                "test_level": latest.get("grade", grade),
-                "sentences": len(all_results),
-                "answered": latest.get("answered_count", 0),
-                "instructional_level": placement,
-                "table_data": table_data,
-            },
-            "all_results": all_results,
+            "signals": latest.get("signals", {}),
+            "sentences": sentences,
         }
 
     # =====================================================================

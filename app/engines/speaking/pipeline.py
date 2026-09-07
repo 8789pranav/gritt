@@ -195,6 +195,12 @@ class SpeakingPipeline:
                 "prosody": 0.0, "pron_score": 0.0,
             }
             payload["recognized"] = ""
+            # The word and phoneme detail is Azure aligning the wrong audio to
+            # the reference sentence, so it describes sounds the child never
+            # made. Withhold it with the scores.
+            payload["withheld"]["words"] = payload.get("words", [])
+            payload["words"] = []
+            payload["findings"] = []
             payload["reading"] = empty_sentence_metrics(
                 reference, "channel_disagreement", payload["message"]
             )["reading"]

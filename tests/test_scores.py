@@ -464,7 +464,8 @@ class TestSpeakingScores:
         assert data["answered_count"] == 0
         assert data["percentage"] == 0.0
         assert not data["dear_parent_tags"]
-        assert all(r["status"] == "Not Attempted" for r in data["results"])
+        assert all(s["status"] == "not_attempted" for s in data["sentences"])
+        assert all(s["answered"] is False for s in data["sentences"])
 
     @pytest.mark.parametrize("grade", GRADE_STR)
     async def test_complete_result_fields(
@@ -481,9 +482,10 @@ class TestSpeakingScores:
         })
         assert result.status_code == 200
         data = result.json()
-        for key in ("parent_summary", "dear_parent_tags",
-                    "per_sentence_tags", "teacher_admin_detail"):
+        for key in ("summary", "parent_summary", "dear_parent_tags",
+                    "signals", "sentences"):
             assert key in data, key
+        assert len(data["sentences"]) == len(sentences)
 
 
 class TestComprehensionScores:

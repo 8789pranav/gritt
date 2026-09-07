@@ -1,13 +1,13 @@
-"""The response fields the dpp-main report actually dereferences.
+"""The per-sentence result shape, and what the report reads from it.
 
-The Azure cutover changed the speaking response shape, and eight fields the
-TestResults component reads went missing: fluency.score (the chain emitted
-fluency_score), grammar.score, every *.feedback string, and overall.strengths,
-areas_to_improve and parent_tip. overall.level came back as an empty string,
-so every row rendered as "Not Attempted".
+Five things per sentence and nothing else: which sentence it is, whether it
+was answered, what was actually said, every measurement, and its tags. Both
+/speaking/submit/ and /speaking/complete_result/ return the same object,
+built in app.engines.speaking.result, so the two cannot drift apart.
 
-None of that raises on either side. The report just renders blanks. These
-tests fail instead.
+The previous shape mixed those together at the top level and repeated the same
+score under three names, which is how a value ended up present in one place
+and stale in another.
 """
 
 from __future__ import annotations
@@ -16,28 +16,49 @@ import pytest
 
 pytestmark = pytest.mark.asyncio
 
-#: path -> what the report uses it for
-RESULT_FIELDS = {
-    "status": "filter for Answered",
-    "original_sentence": "table: word column",
-    "transcribed_text": "table: attempt column",
-    "overall.score": "table score, and the >= 85 correct test",
-    "overall.level": "table: level column",
-    "overall.strengths": "aggregated strengths list",
-    "overall.areas_to_improve": "aggregated focus list",
-    "overall.parent_tip": "per-row tip",
-    "pronunciation.score": "score breakdown",
-    "pronunciation.feedback": "expandable row",
-    "fluency.score": "score breakdown",
-    "fluency.feedback": "expandable row",
-    "grammar.score": "score breakdown",
-    "grammar.feedback": "expandable row",
+#: path within one sentence -> what it is for
+SENTENCE_FIELDS = {
+    "sentence_id": "which sentence",
+    "sentence": "the text the child was asked to read",
+    "answered": "did the child attempt it",
+    "status": "answered / not_attempted / needs_review",
+    "reason": "why it was not scored, when it was not",
+
+    "transcription.heard": "Azure recognition",
+    "transcription.verbatim": "blind channel, keeps fillers",
+    "transcription.spoken_sounds": "IPA actually produced",
+    "transcription.matches_reference": "did it match the target",
+
+    "analysis.overall.score": "headline percentage",
+    "analysis.overall.level": "band name",
+    "analysis.pronunciation.score": "percentage",
+    "analysis.pronunciation.feedback": "one line",
+    "analysis.fluency.score": "percentage",
+    "analysis.fluency.feedback": "one line",
+    "analysis.prosody.score": "percentage",
+    "analysis.prosody.feedback": "one line",
+    "analysis.completeness.score": "percentage",
+    "analysis.completeness.feedback": "one line",
+    "analysis.reading.wcpm": "words correct per minute",
+    "analysis.timing.pause_count": "pauses",
+    "analysis.disfluency.filler_count": "fillers",
+    "analysis.errors.mispronounced": "counted errors",
+    "analysis.phonics": "per phonics feature",
+    "analysis.strengths": "list",
+    "analysis.areas_to_improve": "list",
+    "analysis.parent_tip": "one thing to do",
+
+    "tags": "tags for this sentence",
 }
 
 TOP_FIELDS = {
-    "all_results", "total_marks", "user_score", "answered_count",
-    "average_score", "level", "dear_parent_tags", "per_sentence_tags",
-    "parent_summary",
+    "sentences", "summary", "parent_summary", "dear_parent_tags", "signals",
+    "grade", "child_id", "timestamp",
+}
+
+SUMMARY_FIELDS = {
+    "sentences", "answered", "needs_review", "total_marks", "user_score",
+    "average_score", "percentage", "level", "grade_placement",
 }
 
 
@@ -50,14 +71,14 @@ def dig(obj, path):
     return node
 
 
-async def _run(client, grade="Kindergarten"):
+async def _run(client, grade="Kindergarten", audio="cmVjb3JkaW5n"):
     from app.domain.enums import Grade
     from app.engines.registry import speaking_engine
 
     sentences = speaking_engine().get_items(Grade(grade))
     subs = [
         {"sentence_id": s.sentence_id, "original_sentence": s.sentence,
-         "audio_base64": "cmVjb3JkaW5n", "audio_format": "wav",
+         "audio_base64": audio, "audio_format": "wav",
          "time_to_speak_ms": 700, "attempt": 1}
         for s in sentences
     ]
@@ -71,113 +92,146 @@ async def _run(client, grade="Kindergarten"):
     return submit.json(), result.json()
 
 
-class TestReportContract:
+class TestSentenceShape:
     @pytest.mark.parametrize("path", sorted(TOP_FIELDS))
     async def test_top_level_field(
         self, client, mock_firebase_auth, seed_user, mock_speech, path
     ):
         _, data = await _run(client)
-        assert path in data, f"the report reads {path!r}"
+        assert path in data, path
 
-    @pytest.mark.parametrize("path", sorted(RESULT_FIELDS))
-    async def test_per_result_field(
+    @pytest.mark.parametrize("path", sorted(SUMMARY_FIELDS))
+    async def test_summary_field(
         self, client, mock_firebase_auth, seed_user, mock_speech, path
     ):
         _, data = await _run(client)
-        rows = data["all_results"]
-        assert rows, "no rows to check"
-        for row in rows:
-            dig(row, path)
+        assert path in data["summary"], path
 
-    async def test_submit_and_result_agree_on_the_shape(
+    @pytest.mark.parametrize("path", sorted(SENTENCE_FIELDS))
+    async def test_sentence_field(
+        self, client, mock_firebase_auth, seed_user, mock_speech, path
+    ):
+        _, data = await _run(client)
+        assert data["sentences"], "no sentences"
+        for sentence in data["sentences"]:
+            dig(sentence, path)
+
+    async def test_a_sentence_holds_nothing_else(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        """Five keys per sentence. Anything more crept back in."""
+        _, data = await _run(client)
+        expected = {"sentence_id", "sentence", "answered", "status", "reason",
+                    "transcription", "analysis", "tags"}
+        for sentence in data["sentences"]:
+            assert set(sentence) == expected, set(sentence) ^ expected
+
+    async def test_submit_and_result_return_the_same_shape(
         self, client, mock_firebase_auth, seed_user, mock_speech
     ):
         submit, result = await _run(client)
-        assert {r["sentence_id"] for r in submit["results"]} == {
-            r["sentence_id"] for r in result["all_results"]}
+        assert [s["sentence_id"] for s in submit["sentences"]] == \
+               [s["sentence_id"] for s in result["sentences"]]
+        for a, b in zip(submit["sentences"], result["sentences"]):
+            assert set(a) == set(b)
+            assert set(a["analysis"]) == set(b["analysis"])
 
-    async def test_status_values_are_the_ones_the_report_filters_on(
+    async def test_one_row_per_sentence_in_the_test(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        from app.domain.enums import Grade
+        from app.engines.registry import speaking_engine
+
+        _, data = await _run(client)
+        expected = speaking_engine().get_items(Grade.KINDERGARTEN)
+        assert len(data["sentences"]) == len(expected)
+        assert [s["sentence_id"] for s in data["sentences"]] == \
+               [s.sentence_id for s in expected]
+
+    async def test_status_values_are_the_three_states(
         self, client, mock_firebase_auth, seed_user, mock_speech
     ):
         _, data = await _run(client)
-        allowed = {"Answered", "Not Attempted", "Needs Review"}
-        for row in data["all_results"]:
-            assert row["status"] in allowed, row["status"]
+        allowed = {"answered", "not_attempted", "needs_review"}
+        for sentence in data["sentences"]:
+            assert sentence["status"] in allowed, sentence["status"]
+            assert sentence["answered"] == (sentence["status"] == "answered")
 
     async def test_level_is_never_blank(
         self, client, mock_firebase_auth, seed_user, mock_speech
     ):
-        """An empty level rendered every row as Not Attempted."""
         _, data = await _run(client)
-        for row in data["all_results"]:
-            assert row["overall"]["level"], row["sentence_id"]
+        for sentence in data["sentences"]:
+            assert sentence["analysis"]["overall"]["level"]
 
     async def test_feedback_is_never_blank(
         self, client, mock_firebase_auth, seed_user, mock_speech
     ):
         _, data = await _run(client)
-        for row in data["all_results"]:
-            for dim in ("pronunciation", "fluency", "grammar"):
-                assert row[dim]["feedback"], f"{row['sentence_id']}.{dim}"
+        for sentence in data["sentences"]:
+            analysis = sentence["analysis"]
+            for key in ("pronunciation", "fluency", "prosody", "completeness"):
+                assert analysis[key]["feedback"],                     f'{sentence["sentence_id"]}.{key}'
+            assert analysis["parent_tip"]
+
+    async def test_lists_are_lists_even_when_empty(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        """Firebase stores no empty containers, so these come back absent."""
+        _, data = await _run(client)
+        for sentence in data["sentences"]:
+            assert isinstance(sentence["tags"], list)
+            assert isinstance(sentence["analysis"]["strengths"], list)
+            assert isinstance(sentence["analysis"]["areas_to_improve"], list)
+            assert isinstance(sentence["analysis"]["disfluency"]["fillers"], list)
 
 
-class TestFeedbackIsTrue:
-    """Feedback is generated from measurements, so it must not describe a
-    reading that did not happen."""
+class TestUnattempted:
+    async def test_nothing_recorded(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, data = await _run(client, audio="")
+        assert data["summary"]["answered"] == 0
+        assert data["summary"]["percentage"] == 0
+        assert not data["dear_parent_tags"]
+        for sentence in data["sentences"]:
+            assert sentence["answered"] is False
+            assert sentence["status"] == "not_attempted"
+            assert sentence["analysis"]["overall"]["score"] == 0.0
+            assert sentence["transcription"]["heard"] == ""
+            assert sentence["transcription"]["spoken_sounds"] == ""
+            assert sentence["tags"] == []
 
-    def _measured(self, status, **over):
-        base = {
-            "status": status,
-            "scores": {"accuracy": 0.0, "fluency": 0.0, "completeness": 0.0,
-                       "prosody": 0.0, "pron_score": 0.0},
-            "reading": {"wcpm": 0.0, "rate_band": "no_reading"},
-            "timing": {"pause_count": 0, "long_pause_count": 0},
-            "disfluency": {"filler_count": 0, "repetitions": 0},
-            "errors": {}, "findings": [], "words": [],
-        }
-        base.update(over)
-        return base
+    async def test_the_reference_is_never_echoed_back(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, data = await _run(client, audio="")
+        for sentence in data["sentences"]:
+            assert sentence["transcription"]["heard"] == ""
+            assert sentence["transcription"]["verbatim"] == ""
 
-    @pytest.mark.parametrize("status", ["not_attempted", "needs_review"])
-    async def test_an_unscored_sentence_is_not_praised(self, status):
-        from app.engines.speaking.feedback import build
+    async def test_an_unattempted_sentence_says_why(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, data = await _run(client, audio="")
+        for sentence in data["sentences"]:
+            assert sentence["reason"], sentence["sentence_id"]
 
-        fb = build(self._measured(status))
-        blob = " ".join(str(v) for v in fb.values()).lower()
-        for praise in ("smoothly", "clearly", "natural expression",
-                       "nothing skipped"):
-            assert praise not in blob, f"{status} was praised: {praise}"
-        assert fb["strengths"] == []
-        assert fb["areas_to_improve"] == []
 
-    async def test_a_needs_review_sentence_says_why(self):
-        from app.engines.speaking.feedback import build
+class TestHeadlineIsOneNumber:
+    async def test_percentage_matches_the_average(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        """A child who read one sentence at 95.9 was reported at both 95.9 and
+        12.0 - the second being how much of the test was attempted, not how
+        well it was read."""
+        _, data = await _run(client)
+        summary = data["summary"]
+        assert summary["percentage"] == summary["average_score"]
 
-        fb = build(self._measured("needs_review"))
-        assert "not been scored" in fb["pronunciation_feedback"]
-
-    async def test_a_substituted_sound_is_named_in_the_feedback(self):
-        from app.engines.speaking.feedback import build
-
-        measured = self._measured(
-            "answered",
-            words=[{"word": "dog"}],
-            findings=[{
-                "word": "dog", "flags": ["clear_error", "sound_substituted"],
-                "substitutions": [{"expected": "g", "said": "t",
-                                   "accuracy": 0.0}],
-            }],
-            errors={"clear_error": 1},
-        )
-        fb = build(measured)
-        assert "/g/" in fb["pronunciation_feedback"]
-        assert "/t/" in fb["pronunciation_feedback"]
-        assert "dog" in fb["parent_tip"]
-
-    async def test_skipped_words_are_counted_not_guessed(self):
-        from app.engines.speaking.feedback import build
-
-        fb = build(self._measured("answered", words=[{"word": "a"}],
-                                  errors={"omission": 3}))
-        assert "3 words were skipped" in fb["completeness_feedback"]
-        assert "Reading every word on the line" in fb["areas_to_improve"]
+    async def test_attempted_is_reported_separately(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, data = await _run(client)
+        summary = data["summary"]
+        assert summary["answered"] <= summary["sentences"]

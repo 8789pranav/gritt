@@ -102,8 +102,8 @@ async def test_speaking_submit_single(client, mock_firebase_auth, seed_user, moc
     assert data["success"] is True
     assert data["answered_count"] >= 1
     assert "dear_parent_tags" in data
-    assert "results" in data
-    assert len(data["results"]) > 0
+    assert len(data["sentences"]) > 0
+    assert data["sentences"][0]["sentence_id"]
 
 
 @pytest.mark.asyncio
@@ -164,7 +164,8 @@ async def test_speaking_complete_result(client, mock_firebase_auth, seed_user, m
     assert resp.status_code == 200
     data = resp.json()
     assert "parent_summary" in data
-    assert "all_results" in data
+    assert "sentences" in data
+    assert "summary" in data
     assert "dear_parent_tags" in data
 
 
