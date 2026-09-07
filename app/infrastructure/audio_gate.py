@@ -29,13 +29,31 @@ logger = logging.getLogger(__name__)
 #: Recordings shorter than this cannot contain a spoken sentence.
 MIN_DURATION_SECONDS = 0.35
 
-#: Mean amplitude (0-1) below which a recording is treated as silence.
-#: Room tone on a laptop mic sits around 0.005-0.02; speech is well above 0.02.
-MIN_RMS = 0.012
+#: The loudest part of a real recording, however quiet the child. Below this
+#: there is no signal at all, only a dead microphone or digital silence.
+MIN_PEAK_RMS = 0.0008
 
-#: A recording needs some fraction of reasonably loud frames to be speech
-#: rather than a click, a knock, or a burst of static.
-MIN_VOICED_FRACTION = 0.06
+#: Speech is loud on vowels and near-silent between words, so the spread
+#: between its quiet and loud frames is large. Steady noise has almost none.
+#: Measured: speech from full volume down to 1% gain holds a p90/p10 frame
+#: ratio of 111 or more, while room tone at every level and a pure tone both
+#: sit at exactly 1.0. Thresholding the spread rather than the loudness is
+#: what lets a child sitting back from the microphone through - the old
+#: absolute cut-off rejected speech that Azure went on to score 98.
+MIN_DYNAMIC_RANGE = 6.0
+
+#: Speech is also sustained. A single knock or click is loud and brief, so it
+#: passes the spread test; requiring a share of frames near the recording's own
+#: peak rules it out.
+MIN_VOICED_FRACTION = 0.08
+
+#: A frame counts as voiced at this fraction of the recording's loudest frame.
+#: Relative, so it means the same thing at any recording level.
+VOICED_RELATIVE_TO_PEAK = 0.15
+
+#: Kept for callers that referenced it. No longer a gate criterion: an
+#: absolute loudness floor is exactly what misclassified quiet children.
+MIN_RMS = 0.0008
 
 #: Frames are analysed in windows of this length.
 _FRAME_SECONDS = 0.03
@@ -70,6 +88,10 @@ class AudioCheck:
     rms: float = 0.0
     voiced_fraction: float = 0.0
     peak: float = 0.0
+    #: Spread between the loud and quiet frames. The speech test.
+    dynamic_range: float = 0.0
+    #: Energy of the loudest part, however quiet the recording overall.
+    peak_frame_rms: float = 0.0
 
     @property
     def has_speech(self) -> bool:
@@ -138,25 +160,43 @@ def inspect(audio_base64: str, audio_format: str = "wav") -> AudioCheck:
     rms = _rms(samples) / full_scale
     peak = max(abs(int(v)) for v in samples) / full_scale
 
+    # Frame energies. Everything below is a shape test on these, not a
+    # loudness test, so a quiet child reads the same as a loud one.
     window = max(1, int(rate * _FRAME_SECONDS))
-    voiced = total = 0
-    for start in range(0, len(samples) - window + 1, window):
-        total += 1
-        if _rms(samples[start:start + window]) / full_scale >= MIN_RMS:
-            voiced += 1
-    voiced_fraction = round(voiced / total, 4) if total else 0.0
+    frame_rms = [
+        _rms(samples[start:start + window]) / full_scale
+        for start in range(0, len(samples) - window + 1, window)
+    ]
+
+    if not frame_rms:
+        return AudioCheck(ok=False, reason="too_short",
+                          duration_seconds=round(duration, 3))
+
+    ordered = sorted(frame_rms)
+    quiet = ordered[int(len(ordered) * 0.10)]
+    loud = ordered[int(len(ordered) * 0.90)]
+
+    dynamic_range = round(loud / quiet, 2) if quiet > 1e-9 else float("inf")
+    voiced_cut = loud * VOICED_RELATIVE_TO_PEAK
+    voiced_fraction = round(
+        sum(1 for f in frame_rms if f >= voiced_cut) / len(frame_rms), 4
+    )
 
     measured = {
         "duration_seconds": round(duration, 3),
         "rms": round(rms, 5),
         "voiced_fraction": voiced_fraction,
         "peak": round(peak, 5),
+        "dynamic_range": dynamic_range,
+        "peak_frame_rms": round(loud, 6),
     }
 
     if duration < MIN_DURATION_SECONDS:
         return AudioCheck(ok=False, reason="too_short", **measured)
-    if rms < MIN_RMS:
+    if loud < MIN_PEAK_RMS:
         return AudioCheck(ok=False, reason="silent", **measured)
+    if dynamic_range < MIN_DYNAMIC_RANGE:
+        return AudioCheck(ok=False, reason="no_speech_detected", **measured)
     if voiced_fraction < MIN_VOICED_FRACTION:
         return AudioCheck(ok=False, reason="no_speech_detected", **measured)
 

@@ -291,15 +291,31 @@ def test_error_counts(result):
 # ---------------------------------------------------------------------------
 # audio normalisation
 # ---------------------------------------------------------------------------
-def make_wav(seconds=1.0, rate=48000, channels=2):
+def make_wav(seconds=1.0, rate=48000, channels=2, gain=1.0):
+    """Audio shaped like speech: bursts with near-silent gaps between them.
+
+    A constant tone will not do. The gate tests the spread between a
+    recording's loud and quiet frames, because that is what separates a quiet
+    child from a quiet room - and a flat signal has no spread at all.
+    """
+    import math
+
     frames = int(seconds * rate)
+    samples = []
+    for i in range(frames):
+        t = i / rate
+        on = math.sin(2 * math.pi * 3.5 * t) > 0.1
+        envelope = 1.0 if on else 0.002
+        value = int(gain * 9000 * envelope * math.sin(2 * math.pi * 180 * t))
+        samples.append(max(-32768, min(32767, value)))
+
     buf = io.BytesIO()
     with wave.open(buf, "wb") as handle:
         handle.setnchannels(channels)
         handle.setsampwidth(2)
         handle.setframerate(rate)
         handle.writeframes(b"".join(
-            struct.pack("<h", 8000) * channels for _ in range(frames)
+            struct.pack("<h", v) * channels for v in samples
         ))
     return base64.b64encode(buf.getvalue()).decode()
 

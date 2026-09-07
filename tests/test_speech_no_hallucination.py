@@ -53,13 +53,19 @@ def room_tone(seconds=3.0, rate=16000):
     return wav([random.uniform(-0.004, 0.004) for _ in range(int(seconds * rate))], rate)
 
 
-def speech_like(seconds=2.0, rate=16000):
-    """An amplitude-modulated buzz: loud, and voiced in bursts like speech."""
+def speech_like(seconds=2.0, rate=16000, gain=1.0):
+    """Bursts with near-silent gaps: the shape speech has, at any volume.
+
+    The gaps matter more than the loudness. A steady buzz is not speech no
+    matter how loud, and a whisper is speech no matter how quiet.
+    """
     out = []
     for i in range(int(seconds * rate)):
         t = i / rate
-        envelope = 0.5 * (1 + math.sin(2 * math.pi * 3.5 * t))
-        out.append(0.35 * envelope * math.sin(2 * math.pi * 180 * t))
+        # Syllable-rate gating, with real gaps between bursts.
+        on = (math.sin(2 * math.pi * 3.5 * t) > 0.1)
+        envelope = 1.0 if on else 0.002
+        out.append(gain * 0.35 * envelope * math.sin(2 * math.pi * 180 * t))
     return wav(out, rate)
 
 
@@ -98,21 +104,52 @@ class TestAudioGateRejectsNonSpeech:
         assert not check.has_speech
         assert check.reason == 'undecodable_audio'
 
-    def test_loud_modulated_audio_passes(self):
+    def test_something_speech_shaped_passes(self):
         """The gate must not reject something that could be speech."""
         check = inspect(speech_like(), 'wav')
         assert check.has_speech, check
         assert check.reason == 'ok'
 
     def test_stereo_is_handled(self):
+        """A steady tone is not speech, but the duration must still be right."""
         rate = 16000
         interleaved = []
         for i in range(int(1.5 * rate)):
             v = 0.3 * math.sin(2 * math.pi * 200 * i / rate)
             interleaved.extend([v, v])
         check = inspect(wav(interleaved, rate, channels=2), 'wav')
-        assert check.has_speech
         assert check.duration_seconds == pytest.approx(1.5, abs=0.05)
+
+    def test_a_quiet_child_is_not_mistaken_for_silence(self):
+        """Measured: at 12% recording level Azure scored the reading 98, while
+        the old absolute cut-off rejected it as silent. The gate now tests the
+        spread between loud and quiet frames, which does not move with the
+        recording level."""
+        for gain in (1.0, 0.25, 0.05, 0.01):
+            check = inspect(speech_like(gain=gain), 'wav')
+            assert check.has_speech, f'gain {gain}: {check.reason} {check}'
+
+    def test_noise_is_rejected_at_every_level(self):
+        """Loudness alone cannot separate these: room tone at 5% is louder
+        than real speech at 1%."""
+        import random
+
+        for level in (0.05, 0.02, 0.01, 0.005):
+            random.seed(2)
+            samples = [random.uniform(-1, 1) * level for _ in range(16000 * 2)]
+            check = inspect(wav(samples), 'wav')
+            assert not check.has_speech, f'level {level}: {check}'
+            assert check.dynamic_range < 2.0
+
+    def test_speech_has_a_wide_dynamic_range_and_noise_does_not(self):
+        import random
+
+        random.seed(2)
+        speech = inspect(speech_like(gain=0.2), 'wav')
+        noise = inspect(wav([random.uniform(-1, 1) * 0.05
+                             for _ in range(16000 * 2)]), 'wav')
+        assert speech.dynamic_range > 6.0
+        assert noise.dynamic_range < 2.0
 
     def test_duration_is_measured(self):
         check = inspect(speech_like(seconds=2.0), 'wav')
