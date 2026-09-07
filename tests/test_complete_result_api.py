@@ -621,3 +621,172 @@ class TestFirebaseDropsEmptyContainers:
         _, data = await _logic_round_trip(client, "Third")
         for entry in data["per_item_tags"]:
             assert isinstance(entry["tags"], list), entry
+
+
+# ===========================================================================
+# COMPREHENSION
+# ===========================================================================
+def _comprehension_payload(grade, wrong_types=(), all_wrong=False,
+                           wrong_story_index=None, time=0.0):
+    from app.engines.registry import comprehension_engine
+
+    stories = comprehension_engine().get_items(Grade(grade))
+    story_answers = []
+    for index, story in enumerate(stories):
+        answers = []
+        for q in story.questions:
+            miss = (
+                all_wrong
+                or q.question_type.value in wrong_types
+                or index == wrong_story_index
+            )
+            answers.append({
+                "question_id": q.question_id,
+                "selected_index": ((q.correct_index + 1) % len(q.options)
+                                   if miss else q.correct_index),
+                "response_time_seconds": time,
+            })
+        story_answers.append({"story_id": story.story_id, "answers": answers})
+    return {
+        "idToken": "test-token", "child_id": "child-1", "grade": grade,
+        "story_answers": story_answers,
+    }
+
+
+async def _comprehension_round_trip(client, grade, **kwargs):
+    submit = await client.post(
+        "/comprehension/submit/", json=_comprehension_payload(grade, **kwargs)
+    )
+    assert submit.status_code == 200, submit.text
+    result = await client.post(
+        "/comprehension/complete_result/",
+        json={"idToken": "test-token", "child_id": "child-1", "grade": grade},
+    )
+    assert result.status_code == 200, result.text
+    return submit.json(), result.json()
+
+
+class TestComprehensionCompleteResult:
+    @pytest.mark.parametrize(
+        "grade", ["Kindergarten", "First", "Second", "Third"]
+    )
+    async def test_c7_errors_reach_the_parent(
+        self, client, mock_firebase_auth, seed_user, grade
+    ):
+        """Nine tagged errors used to arrive as an empty focus_areas."""
+        _, data = await _comprehension_round_trip(client, grade, all_wrong=True)
+        ps = data["parent_summary"]
+        assert data["dear_parent_tags"], "dear_parent_tags EMPTY"
+        assert ps["focus_areas"], "focus_areas EMPTY"
+        assert "wasn't quite enough here" not in " ".join(ps["strengths"]), ps
+
+    @pytest.mark.parametrize(
+        "grade", ["Kindergarten", "First", "Second", "Third"]
+    )
+    async def test_c10_a_low_scorer_is_not_praised(
+        self, client, mock_firebase_auth, seed_user, grade
+    ):
+        _, data = await _comprehension_round_trip(client, grade, all_wrong=True)
+        growth = {
+            t["tag"] for t in data["dear_parent_tags"]
+            if t["polarity"] == "growth_edge"
+        }
+        assert "inferential_comprehension_emerging" in growth, growth
+        assert not [
+            t for t in data["dear_parent_tags"] if t["polarity"] == "strength"
+        ]
+
+    @pytest.mark.parametrize(
+        "grade", ["Kindergarten", "First", "Second", "Third"]
+    )
+    async def test_perfect_run_is_all_strengths(
+        self, client, mock_firebase_auth, seed_user, grade
+    ):
+        _, data = await _comprehension_round_trip(client, grade)
+        tags = {t["tag"] for t in data["dear_parent_tags"]}
+        assert "literal_comprehension_strong" in tags
+        assert "inferential_comprehension_strong" in tags
+        assert "vocabulary_in_context_strong" in tags
+        assert not data["parent_summary"]["focus_areas"]
+
+    async def test_listening_tag_is_gone_from_the_payload(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        _, data = await _comprehension_round_trip(client, "First")
+        assert "listening_comprehension_strong" not in {
+            t["tag"] for t in data["dear_parent_tags"]
+        }
+
+    @pytest.mark.parametrize(
+        "grade", ["Kindergarten", "First", "Second", "Third"]
+    )
+    async def test_c5_time_reaches_all_three_views(
+        self, client, mock_firebase_auth, seed_user, grade
+    ):
+        """story_breakdown.questions, teacher table, and scored_items."""
+        submit, data = await _comprehension_round_trip(client, grade, time=8.5)
+        for story in data["story_breakdown"]:
+            for q in story["questions"]:
+                assert q["response_time_seconds"] == 8.5, q
+        for row in data["teacher_admin_detail"]["table_data"]:
+            assert row["time"] == 8.5, row
+        for item in submit["scored_items"]:
+            assert item["detail"]["response_time_seconds"] == 8.5, item
+
+    @pytest.mark.parametrize(
+        "grade", ["Kindergarten", "First", "Second", "Third"]
+    )
+    async def test_c8_question_counts_are_whole_numbers(
+        self, client, mock_firebase_auth, seed_user, grade
+    ):
+        submit, data = await _comprehension_round_trip(client, grade)
+        assert isinstance(submit["total_questions"], int), submit["total_questions"]
+        assert isinstance(submit["max_score"], int)
+        total = data["summary"]["total_questions"]
+        assert isinstance(total, int), f"{total!r} is {type(total).__name__}"
+        assert "." not in data["parent_summary"]["overall_score"]
+
+    async def test_c11_story_collapse_is_flagged(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        _, data = await _comprehension_round_trip(
+            client, "First", wrong_story_index=1
+        )
+        assert "inconsistent_across_stories" in {
+            t["tag"] for t in data["dear_parent_tags"]
+        }
+
+    async def test_c11_silent_on_an_even_run(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        _, data = await _comprehension_round_trip(client, "First")
+        assert "inconsistent_across_stories" not in {
+            t["tag"] for t in data["dear_parent_tags"]
+        }
+
+    async def test_every_emitted_tag_has_parent_copy(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        from app.services.report_service import ReportService
+
+        for kwargs in ({}, {"all_wrong": True}, {"wrong_types": ("vocabulary",)}):
+            _, data = await _comprehension_round_trip(client, "Second", **kwargs)
+            for tag in data["dear_parent_tags"]:
+                assert tag["tag"] in ReportService._TAG_SENTENCE_MAP, tag["tag"]
+
+    async def test_per_question_tags_expose_tags_as_a_list(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        _, data = await _comprehension_round_trip(client, "Third")
+        for entry in data["per_question_tags"]:
+            assert isinstance(entry["tags"], list), entry
+
+    async def test_missing_result_is_a_clean_error(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        resp = await client.post(
+            "/comprehension/complete_result/",
+            json={"idToken": "test-token", "child_id": "child-1",
+                  "grade": "Third"},
+        )
+        assert resp.status_code in (404, 400), resp.status_code

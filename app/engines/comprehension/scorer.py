@@ -158,6 +158,10 @@ class ComprehensionScorer(Scorer[ComprehensionStory, ComprehensionResponse]):
                     "correct_index": item.detail.get("correct_index"),
                     "correct_answer": item.detail.get("correct_answer"),
                     "is_correct": item.is_correct,
+                    # C5: every other activity reports a per-item time.
+                    "response_time_seconds": item.detail.get(
+                        "response_time_seconds", 0.0
+                    ),
                 }
             )
 

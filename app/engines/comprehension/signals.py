@@ -58,6 +58,22 @@ class ComprehensionSignalDeriver(
         )
         overall_accuracy = self.ratio(score.correct_answers, score.total_items)
 
+        # C11: one story near zero while another scored well, same sitting.
+        story_scores = {}
+        for item in score.scored_items:
+            story_id = str(item.detail.get("story_id", ""))
+            bucket = story_scores.setdefault(story_id, [0, 0])
+            bucket[1] += 1
+            if item.is_correct:
+                bucket[0] += 1
+        per_story = [
+            round(right / total, 4) for right, total in story_scores.values() if total
+        ]
+        story_score_gap = (
+            round(max(per_story) - min(per_story), 4) if len(per_story) > 1 else 0.0
+        )
+        story_low = round(min(per_story), 4) if per_story else 0.0
+
         # Only meaningful when both question types were actually asked.
         gap = 0.0
         if attempted[QuestionType.LITERAL] and attempted[QuestionType.INFERENTIAL]:
@@ -88,6 +104,9 @@ class ComprehensionSignalDeriver(
             "vocabulary_accuracy": vocabulary_accuracy,
             "overall_accuracy": overall_accuracy,
             "literal_inferential_gap": gap,
+            "story_score_gap": story_score_gap,
+            "story_low_score": story_low,
+            "stories_attempted": len(per_story),
             # Contextual counts, not referenced by any trigger.
             "literal_attempted": attempted[QuestionType.LITERAL],
             "inferential_attempted": attempted[QuestionType.INFERENTIAL],

@@ -749,11 +749,12 @@ class TestComprehensionTags:
 
     EXPECTED_TAG_IDS = {
         "literal_comprehension_strong",
+        "literal_comprehension_emerging",
         "inferential_comprehension_strong",
         "inferential_comprehension_emerging",
         "vocabulary_in_context_strong",
         "vocabulary_in_context_emerging",
-        "listening_comprehension_strong",
+        "inconsistent_across_stories",
     }
 
     def test_all_tag_ids_match_config(self):
@@ -780,9 +781,12 @@ class TestComprehensionTags:
         unknown = emitted - self.EXPECTED_TAG_IDS
         assert not unknown, f"{grade.value}: unknown tags: {unknown}"
 
-        # Perfect → should flag literal, inferential, listening
+        # Perfect -> every construct reports as a strength, and none of them
+        # as a growth edge.
         assert "literal_comprehension_strong" in emitted, f"{grade.value}: expected literal_comprehension_strong"
-        assert "listening_comprehension_strong" in emitted, f"{grade.value}: expected listening_comprehension_strong"
+        assert "inferential_comprehension_strong" in emitted, f"{grade.value}: expected inferential_comprehension_strong"
+        assert "vocabulary_in_context_strong" in emitted, f"{grade.value}: expected vocabulary_in_context_strong"
+        assert not result.growth_edges, f"{grade.value}: {[t.tag for t in result.growth_edges]}"
 
     @pytest.mark.parametrize("grade", list(Grade))
     def test_all_wrong_emits_growth_edge_tags(self, grade: Grade):
@@ -799,7 +803,13 @@ class TestComprehensionTags:
         ]
         result = engine.evaluate("child", grade, responses)
 
-        assert len(result.growth_edges) > 0, f"{grade.value}: no growth_edge tags on all-wrong"
+        # C7: every tagged error must reach the rollup, not just the item level.
+        growth = {t.tag for t in result.growth_edges}
+        assert growth, f"{grade.value}: no growth_edge tags on all-wrong"
+        assert "literal_comprehension_emerging" in growth, growth
+        assert "inferential_comprehension_emerging" in growth, growth
+        assert "vocabulary_in_context_emerging" in growth, growth
+        assert not result.strengths, [t.tag for t in result.strengths]
 
     @pytest.mark.parametrize("grade", list(Grade))
     def test_empty_submission_no_strength_tags(self, grade: Grade):

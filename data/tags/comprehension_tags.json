@@ -6,13 +6,15 @@
   "description": "Cognitive tag definitions for the Story Explorer reading comprehension assessment.",
   "derived_signals": [
     "literal_accuracy",
-    "inferential_accuracy",
-    "vocabulary_accuracy",
-    "overall_accuracy",
-    "literal_inferential_gap",
     "literal_attempted",
+    "inferential_accuracy",
     "inferential_attempted",
-    "vocabulary_attempted"
+    "vocabulary_accuracy",
+    "vocabulary_attempted",
+    "literal_inferential_gap",
+    "story_score_gap",
+    "story_low_score",
+    "stories_attempted"
   ],
   "question_type_mapping": {
     "literal": "Questions about explicit story details (who, what, where, when)",
@@ -22,52 +24,52 @@
   "tags": [
     {
       "id": "literal_comprehension_strong",
-      "trigger": "literal_accuracy >= 0.8 AND literal_attempted >= 3",
+      "trigger": "literal_accuracy >= 0.75 AND literal_attempted >= 3",
       "confidence": "high",
       "polarity": "strength",
       "description": "Your child recalls and identifies stated facts from the text accurately."
     },
     {
+      "id": "literal_comprehension_emerging",
+      "trigger": "literal_accuracy < 0.75 AND literal_attempted >= 3",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Your child is still building the habit of holding on to what a story actually said. Re-reading a page and asking who, what and where will help."
+    },
+    {
       "id": "inferential_comprehension_strong",
-      "trigger": "inferential_accuracy >= 0.8 AND inferential_attempted >= 3",
+      "trigger": "inferential_accuracy >= 0.75 AND inferential_attempted >= 3",
       "confidence": "high",
       "polarity": "strength",
       "description": "Your child draws valid conclusions and inferences beyond the literal text."
     },
     {
       "id": "inferential_comprehension_emerging",
-      "trigger": "inferential_accuracy >= 0.6 AND inferential_accuracy < 0.8 AND inferential_attempted >= 3",
-      "confidence": "high",
-      "polarity": "strength",
-      "description": "Your child is developing good inference skills. Practice with 'why' and 'how' questions will help them go further."
-    },
-    {
-      "id": "inferential_comprehension_difficulty",
-      "trigger": "inferential_accuracy < 0.6 AND literal_inferential_gap >= 0.3 AND inferential_attempted >= 3",
+      "trigger": "inferential_accuracy < 0.75 AND inferential_attempted >= 3",
       "confidence": "high",
       "polarity": "growth_edge",
-      "description": "Your child understands literal content but is still developing the ability to infer meaning. Practice with 'why' and 'how' questions will help."
+      "description": "Your child is still developing the ability to work out what a story implies. Practice with 'why' and 'how' questions will help."
     },
     {
       "id": "vocabulary_in_context_strong",
-      "trigger": "vocabulary_accuracy >= 0.8 AND vocabulary_attempted >= 3",
-      "confidence": "high",
+      "trigger": "vocabulary_accuracy >= 0.75 AND vocabulary_attempted >= 1",
+      "confidence": "low",
       "polarity": "strength",
-      "description": "Your child determines word meanings from surrounding context effectively."
+      "description": "Your child worked out what a new word meant from the story around it."
     },
     {
       "id": "vocabulary_in_context_emerging",
-      "trigger": "vocabulary_accuracy < 0.6 AND vocabulary_attempted >= 3",
-      "confidence": "high",
+      "trigger": "vocabulary_accuracy < 0.75 AND vocabulary_attempted >= 1",
+      "confidence": "low",
       "polarity": "growth_edge",
       "description": "Your child is still developing the ability to work out word meanings from context. Talking about new words while reading will help."
     },
     {
-      "id": "listening_comprehension_strong",
-      "trigger": "overall_accuracy >= 0.75",
-      "confidence": "high",
-      "polarity": "strength",
-      "description": "Your child demonstrates strong understanding of audio-narrated stories."
+      "id": "inconsistent_across_stories",
+      "trigger": "story_score_gap >= 0.6 AND story_low_score <= 0.25 AND stories_attempted >= 2",
+      "confidence": "medium",
+      "polarity": "neutral",
+      "description": "Your child understood one story well and found the other much harder. That gap is worth a second look rather than a conclusion."
     }
   ]
 }

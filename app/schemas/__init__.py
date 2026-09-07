@@ -208,6 +208,10 @@ class SpeakingResultRequest(BaseModel):
 class ComprehensionQuestionAnswer(BaseModel):
     question_id: str
     selected_index: int
+    #: C5: Story Explorer was the only activity that could not accept a time.
+    #: The field was absent, so anything the client sent was dropped by
+    #: validation before the service ever saw it.
+    response_time_seconds: float = 0.0
 
 
 class ComprehensionStoryAnswer(BaseModel):

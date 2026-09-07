@@ -1030,10 +1030,11 @@ class AssessmentService:
             {
                 "grade": grade,
                 "results": sanitize_data(story_breakdown),
-                "total_questions": result.score.max_points,
+                # C8: a question count is a whole number, not 11.0.
+                "total_questions": int(result.score.max_points),
                 "correct_answers": result.score.correct_answers,
                 "score": result.score.correct_answers,
-                "max_score": result.score.max_points,
+                "max_score": int(result.score.max_points),
                 "percentage": result.score.percentage,
                 "level": result.score.level,
                 "status": status,
@@ -1126,6 +1127,8 @@ class AssessmentService:
                 "correct_index": s.get("detail", {}).get("correct_index"),
                 "correct": s.get("is_correct", False),
                 "error_type": _error_type_for(s),
+                # C5: the scorer has always held this; the view dropped it.
+                "time": s.get("detail", {}).get("response_time_seconds", 0.0),
                 "icon": "Correct" if s.get("is_correct") else "Incorrect",
             }
             for s in scored_items
@@ -1141,6 +1144,9 @@ class AssessmentService:
         ]
 
         # C4: If no tags fired, show warm fallback copy instead of blank lists.
+        # C7: this used to fire on a child with nine tagged errors, because no
+        # growth-edge tag existed to carry them. With the _emerging partners in
+        # place it should now only appear on a genuinely empty submission.
         if not strengths and not focus_areas:
             strengths = ["There wasn't quite enough here to say something specific yet. That's normal, and worth trying again in a few months."]
         elif focus_areas and not strengths:
@@ -1152,7 +1158,7 @@ class AssessmentService:
             "grade": latest.get("grade"),
             "test_timestamp": latest.get("timestamp"),
             "summary": {
-                "total_questions": latest.get("max_score", 8),
+                "total_questions": int(latest.get("max_score", 8) or 0),
                 "correct_answers": latest.get("correct_answers", 0),
                 "percentage": percentage,
                 "level": latest.get("level", "Below grade level"),

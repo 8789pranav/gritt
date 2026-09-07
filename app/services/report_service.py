@@ -435,6 +435,14 @@ class ReportService:
         "spelling_convention_emerging": "Child hears every sound in a word but is still learning the spelling rules that go with them.",
         "audio_support_benefit": "Child spells more accurately after hearing the word read aloud.",
         "rushed_spelling": "Child answers too quickly in spelling, leading to avoidable errors.",
+        # Comprehension - one entry per tag in data/tags/comprehension_tags.json.
+        "literal_comprehension_strong": "Child accurately recalls what a story actually said.",
+        "literal_comprehension_emerging": "Child is still building the habit of holding on to stated details.",
+        "inferential_comprehension_strong": "Child works out what a story implies, beyond the words on the page.",
+        "inferential_comprehension_emerging": "Child is still developing the ability to infer meaning.",
+        "vocabulary_in_context_strong": "Child worked out a new word's meaning from the story around it.",
+        "vocabulary_in_context_emerging": "Child is still learning to work out word meanings from context.",
+        "inconsistent_across_stories": "Child understood one story well and found the other much harder.",
         # Speaking
         "pronunciation_strong": "Child pronounces words clearly and accurately.",
         "pronunciation_needs_work": "Child mispronounces some words and would benefit from targeted practice.",
