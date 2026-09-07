@@ -14,11 +14,12 @@ library so it can run on any deployment.
 
 from __future__ import annotations
 
-import audioop
+import array
 import base64
 import binascii
 import io
 import logging
+import sys
 import wave
 from dataclasses import dataclass
 from typing import Optional
@@ -38,6 +39,25 @@ MIN_VOICED_FRACTION = 0.06
 
 #: Frames are analysed in windows of this length.
 _FRAME_SECONDS = 0.03
+
+
+#: array("h") is native-endian; WAV samples are little-endian.
+_BIG_ENDIAN = sys.byteorder == "big"
+
+
+def _rms(samples) -> float:
+    """Root mean square of 16-bit samples, without the audioop module.
+
+    audioop was removed from the standard library in Python 3.13 (PEP 594).
+    This gate is what guarantees that silence scores zero, so it must not
+    depend on a module that disappears when the base image is bumped.
+    """
+    if not samples:
+        return 0.0
+    total = 0
+    for value in samples:
+        total += int(value) * int(value)
+    return (total / len(samples)) ** 0.5
 
 
 @dataclass(frozen=True)
@@ -97,22 +117,32 @@ def inspect(audio_base64: str, audio_format: str = "wav") -> AudioCheck:
     frames, width, channels, rate = decoded
     if not frames or not rate:
         return AudioCheck(ok=False, reason="empty_audio")
+    if width != 2:
+        # Only 16-bit PCM is measured here; anything else is passed through
+        # to the transcription guard rather than being wrongly rejected.
+        return AudioCheck(ok=True, reason="unmeasurable")
+
+    samples = array.array("h")
+    samples.frombytes(frames[: len(frames) - (len(frames) % 2)])
+    if _BIG_ENDIAN:
+        samples.byteswap()
 
     if channels > 1:
-        frames = audioop.tomono(frames, width, 0.5, 0.5)
+        samples = array.array("h", samples[::channels])
 
-    sample_count = len(frames) // width
-    duration = sample_count / float(rate)
-    full_scale = float(1 << (8 * width - 1))
-    rms = audioop.rms(frames, width) / full_scale
-    peak = audioop.max(frames, width) / full_scale
+    if not samples:
+        return AudioCheck(ok=False, reason="empty_audio")
 
-    window = max(1, int(rate * _FRAME_SECONDS)) * width
+    duration = len(samples) / float(rate)
+    full_scale = 32768.0
+    rms = _rms(samples) / full_scale
+    peak = max(abs(int(v)) for v in samples) / full_scale
+
+    window = max(1, int(rate * _FRAME_SECONDS))
     voiced = total = 0
-    for start in range(0, len(frames) - window + 1, window):
+    for start in range(0, len(samples) - window + 1, window):
         total += 1
-        chunk = frames[start:start + window]
-        if audioop.rms(chunk, width) / full_scale >= MIN_RMS:
+        if _rms(samples[start:start + window]) / full_scale >= MIN_RMS:
             voiced += 1
     voiced_fraction = round(voiced / total, 4) if total else 0.0
 
