@@ -55,11 +55,35 @@ class AzureNotConfigured(RuntimeError):
 
 
 @dataclass(frozen=True)
+class SpokenPhoneme:
+    """A sound the child may actually have produced, and how likely it is."""
+
+    ipa: str
+    score: float
+
+
+@dataclass(frozen=True)
 class Phoneme:
+    #: The sound the reference word expects here.
     ipa: str
     accuracy: float
     offset_ms: float
     duration_ms: float
+    #: What Azure believes was actually produced, most likely first. This is
+    #: the channel that survives transcription: the recognised text reads
+    #: "dog" whatever the child said, but a child who said "dot" shows /t/
+    #: here where /g/ was expected.
+    spoken: List[SpokenPhoneme] = field(default_factory=list)
+
+    @property
+    def actually_said(self) -> str:
+        """The most likely sound produced, falling back to the expected one."""
+        return self.spoken[0].ipa if self.spoken else self.ipa
+
+    @property
+    def is_substitution(self) -> bool:
+        """A different sound was produced from the one the word needs."""
+        return bool(self.spoken) and self.spoken[0].ipa != self.ipa
 
 
 @dataclass(frozen=True)
@@ -99,6 +123,25 @@ class Word:
     def was_spoken(self) -> bool:
         """Omitted words are in the result but were never said."""
         return self.error_type != "Omission"
+
+    @property
+    def expected_ipa(self) -> str:
+        """The sounds the reference word needs."""
+        return "".join(p.ipa for p in self.phonemes)
+
+    @property
+    def spoken_ipa(self) -> str:
+        """The sounds the child actually produced.
+
+        This is the closest thing to a verbatim record of a mispronunciation.
+        No transcriber gives it: both Azure and Whisper spell real words, so
+        "dot" for "dog" reads back as "dog" in every text field.
+        """
+        return "".join(p.actually_said for p in self.phonemes)
+
+    @property
+    def substituted_sounds(self) -> List[Phoneme]:
+        return [p for p in self.phonemes if p.is_substitution]
 
 
 @dataclass(frozen=True)
@@ -208,11 +251,13 @@ class AzurePronunciationClient:
         region: Optional[str] = None,
         locale: str = DEFAULT_LOCALE,
         timeout: float = 25.0,
+        nbest_phoneme_count: int = 5,
     ) -> None:
         self.key = key if key is not None else os.getenv("AZURE_SPEECH_KEY", "")
         self.region = region if region is not None else os.getenv("AZURE_SPEECH_REGION", "")
         self.locale = locale
         self.timeout = timeout
+        self.nbest_phoneme_count = nbest_phoneme_count
 
     @property
     def is_configured(self) -> bool:
@@ -235,6 +280,12 @@ class AzurePronunciationClient:
             "EnableMiscue": enable_miscue,
             "EnableProsodyAssessment": True,
             "PhonemeAlphabet": "IPA",
+            # The phonemes the child ACTUALLY produced, ranked by likelihood,
+            # rather than only a score against the expected one. This is the
+            # channel that survives transcription: the recognised text says
+            # "dog" whatever the child said, but the spoken phoneme for the
+            # final sound tells you they produced something else.
+            "NBestPhonemeCount": self.nbest_phoneme_count,
         }
         payload = json.dumps(config, ensure_ascii=False)
         return base64.b64encode(payload.encode("utf-8")).decode("utf-8")
@@ -363,15 +414,26 @@ def parse_result(payload: Dict[str, Any]) -> PronunciationResult:
 
     words: List[Word] = []
     for entry in best.get("Words", []) or []:
-        phonemes = [
-            Phoneme(
+        phonemes = []
+        for p in (entry.get("Phonemes") or []):
+            candidates = (
+                _scores(p).get("NBestPhonemes")
+                or p.get("NBestPhonemes")
+                or []
+            )
+            phonemes.append(Phoneme(
                 ipa=p.get("Phoneme", ""),
                 accuracy=_number(p, "AccuracyScore", 0.0) or 0.0,
                 offset_ms=_ticks_to_ms(p.get("Offset")),
                 duration_ms=_ticks_to_ms(p.get("Duration")),
-            )
-            for p in (entry.get("Phonemes") or [])
-        ]
+                spoken=[
+                    SpokenPhoneme(
+                        ipa=c.get("Phoneme", ""),
+                        score=float(c.get("Score", 0.0) or 0.0),
+                    )
+                    for c in candidates if c.get("Phoneme")
+                ],
+            ))
         syllables = [
             Syllable(
                 syllable=y.get("Syllable", ""),

@@ -338,137 +338,154 @@ class TestSpellingScores:
 # SPEAKING (Voice Challenge)
 # ===========================================================================
 class TestSpeakingScores:
-    """Verify Speaking scores and results for every grade."""
+    """Verify Voice Challenge scores for every grade.
 
-    @pytest.mark.parametrize("grade", GRADE_STR)
-    async def test_perfect_score(self, client, mock_firebase_auth, seed_user, mock_speech, grade):
-        """Strong delivery on all sentences → high score, strength tags."""
-        engine = registry.speaking_engine()
-        grade_enum = Grade.parse(grade)
-        sentences = engine.get_items(grade_enum)
+    These drive SpeakingPipeline.analyse_sentence, which is where the service
+    meets the Azure signal chain. The old tests patched
+    HybridSpeechProvider.analyze_with_audio, which nothing calls any more - so
+    they were asserting against a mock the code had stopped consulting.
+    """
 
-        # Patch the hybrid speech provider to return high-quality analysis
-        strong_analysis = {
-            "success": True,
-            "analysis": {
-                "pronunciation": {"score": 95, "feedback": "Great!"},
-                "speaking_rate": {"score": 90, "wpm": 120, "status": "Perfect", "feedback": "Good pace."},
-                "fluency": {"score": 92, "long_pauses_count": 0, "feedback": "Smooth."},
-                "prosody": {"score": 88, "monotony_score": 0.7, "feedback": "Good expression."},
-                "grammar": {"score": 95, "issues": [], "feedback": "No issues."},
-                "overall": {"score": 93, "status": "Above", "level": "Excellent Speaker", "recommendation": "Excellent!", "parent_tip": "Keep it up!", "strengths": ["Pronunciation"], "areas_to_improve": []},
-            },
-            "transcribed_text": "test",
-            "word_timestamps": [{"word": "test", "start": 0.0, "end": 0.5}],
-            "duration": 3.0,
-        }
-        with patch("app.infrastructure.hybrid_speech.HybridSpeechProvider.analyze_with_audio", new_callable=AsyncMock,
-                   return_value=strong_analysis):
-            submissions = [
-                {
-                    "sentence_id": s.sentence_id,
-                    "original_sentence": s.sentence,
-                    "audio_base64": "fake_audio",
-                    "audio_format": "mp3",
-                }
-                for s in sentences
-            ]
+    @staticmethod
+    def _pipeline_returning(**scores):
+        """A pipeline stand-in that scores every sentence the same way."""
+        from app.engines.speaking.metrics import (
+            DisfluencyMetrics, PHONICS_FEATURES, ReadingMetrics, TimingMetrics,
+        )
 
-            resp = await client.post("/speaking/submit/", json={
-                "idToken": "test-token", "child_id": "child-1",
-                "grade": grade, "submissions": submissions,
-            })
-        assert resp.status_code == 200
-        data = resp.json()
+        async def fake(self, submission, grade):
+            if not (submission.audio_base64 or "").strip():
+                from app.engines.speaking.metrics import empty_sentence_metrics
 
-        assert data["success"] is True
-        assert data["answered_count"] == len(sentences)
-        assert data["percentage"] >= 90.0, f"{grade}: expected >=90%, got {data['percentage']}"
-        assert len(data["dear_parent_tags"]) > 0, f"{grade}: no tags"
-        assert "results" in data
-        assert len(data["results"]) == len(sentences)
-        assert "per_sentence_tags" in data
-        assert len(data["per_sentence_tags"]) == len(sentences)
-
-    @pytest.mark.parametrize("grade", GRADE_STR)
-    async def test_weak_score(self, client, mock_firebase_auth, seed_user, grade):
-        """Weak delivery → low score, growth-edge tags."""
-        engine = registry.speaking_engine()
-        grade_enum = Grade.parse(grade)
-        sentences = engine.get_items(grade_enum)
-
-        weak_analysis = {
-            "success": True,
-            "analysis": {
-                "pronunciation": {"score": 30, "feedback": "Needs work."},
-                "speaking_rate": {"score": 35, "wpm": 60, "status": "Too Slow", "feedback": "Too slow."},
-                "fluency": {"score": 32, "long_pauses_count": 3, "feedback": "Many pauses."},
-                "prosody": {"score": 25, "monotony_score": 0.1, "feedback": "Monotone."},
-                "grammar": {"score": 28, "issues": [{"type": "missing_word", "detail": "Missing word"}], "feedback": "Issues found."},
-                "overall": {"score": 31, "status": "Well Below", "level": "Needs Improvement", "recommendation": "Practice more.", "parent_tip": "Read daily.", "strengths": [], "areas_to_improve": ["Pronunciation", "Fluency"]},
-            },
-            "transcribed_text": "test",
-            "word_timestamps": [{"word": "test", "start": 0.0, "end": 0.5}],
-            "duration": 3.0,
-        }
-        with patch("app.infrastructure.hybrid_speech.HybridSpeechProvider.analyze_with_audio", new_callable=AsyncMock,
-                   return_value=weak_analysis):
-            submissions = [
-                {
-                    "sentence_id": s.sentence_id,
-                    "original_sentence": s.sentence,
-                    "audio_base64": "fake_audio",
-                }
-                for s in sentences
-            ]
-
-            resp = await client.post("/speaking/submit/", json={
-                "idToken": "test-token", "child_id": "child-1",
-                "grade": grade, "submissions": submissions,
-            })
-        assert resp.status_code == 200
-        data = resp.json()
-
-        assert data["percentage"] < 50.0, f"{grade}: expected <50%, got {data['percentage']}"
-        assert len(data["dear_parent_tags"]) > 0, f"{grade}: no tags on weak"
-        growth_tags = [t for t in data["dear_parent_tags"] if t["polarity"] == "growth_edge"]
-        assert len(growth_tags) > 0, f"{grade}: no growth_edge tags"
-
-    @pytest.mark.parametrize("grade", GRADE_STR)
-    async def test_complete_result_fields(self, client, mock_firebase_auth, seed_user, mock_speech, grade):
-        """complete_result returns all expected fields."""
-        engine = registry.speaking_engine()
-        grade_enum = Grade.parse(grade)
-        sentences = engine.get_items(grade_enum)
-
-        submissions = [
-            {
-                "sentence_id": s.sentence_id,
-                "original_sentence": s.sentence,
-                "audio_base64": "fake_audio",
+                payload = empty_sentence_metrics(
+                    submission.reference_text, "no_audio", "No recording.")
+                payload["sentence_id"] = submission.sentence_id
+                return payload
+            words = len(submission.reference_text.split())
+            return {
+                "sentence_id": submission.sentence_id,
+                "status": "answered",
+                "reference": submission.reference_text,
+                "recognized": submission.reference_text,
+                "verbatim": submission.reference_text.lower(),
+                "channel_agreement": 1.0,
+                "scores": dict(scores),
+                "reading": ReadingMetrics(
+                    words, words, scores["accuracy"], 60.0, 5.0, "in_band"
+                ).as_dict(),
+                "timing": {**TimingMetrics(100.0, 1, 0, 200.0, 200.0, 200.0,
+                                           5000.0).as_dict(),
+                           "time_to_speak_ms": 700.0},
+                "disfluency": DisfluencyMetrics([], 0, 0.0, 0, []).as_dict(),
+                "phonics": {n: scores["accuracy"] for n in PHONICS_FEATURES},
+                "errors": {"omission": 0, "insertion": 0, "mispronunciation": 0,
+                           "unexpected_break": 0, "missing_break": 0,
+                           "monotone": 0, "clear_error": 0,
+                           "needs_attention": 0, "prolonged": 0,
+                           "words_flagged": 0},
+                "findings": [],
+                "words": [],
+                "attempt": 1,
             }
-            for s in sentences[:1]
+
+        return patch(
+            "app.engines.speaking.pipeline.SpeakingPipeline.analyse_sentence",
+            new=fake,
+        )
+
+    @staticmethod
+    async def _submit(client, grade):
+        engine = registry.speaking_engine()
+        sentences = engine.get_items(Grade.parse(grade))
+        submissions = [
+            {"sentence_id": s.sentence_id, "original_sentence": s.sentence,
+             "audio_base64": "cmVjb3JkaW5n", "audio_format": "wav",
+             "time_to_speak_ms": 700, "attempt": 1}
+            for s in sentences
         ]
-        await client.post("/speaking/submit/", json={
+        resp = await client.post("/speaking/submit/", json={
             "idToken": "test-token", "child_id": "child-1",
             "grade": grade, "submissions": submissions,
         })
+        return sentences, resp
 
-        resp = await client.post("/speaking/complete_result/", json={
-            "idToken": "test-token", "child_id": "child-1", "grade": grade,
-        })
+    @pytest.mark.parametrize("grade", GRADE_STR)
+    async def test_perfect_score(self, client, mock_firebase_auth, seed_user, grade):
+        """A strong reading scores high and reports strengths."""
+        with self._pipeline_returning(accuracy=97.0, fluency=95.0,
+                                      completeness=100.0, prosody=93.0,
+                                      pron_score=95.2):
+            sentences, resp = await self._submit(client, grade)
+
         assert resp.status_code == 200
         data = resp.json()
+        assert data["success"] is True
+        assert data["answered_count"] == len(sentences)
+        assert data["percentage"] >= 90.0, (
+            f"{grade}: expected >=90%, got {data['percentage']}")
+        assert data["level"] == "Excellent Speaker"
+        strengths = [t for t in data["dear_parent_tags"]
+                     if t["polarity"] == "strength"]
+        assert strengths, f"{grade}: no strength tags on a strong reading"
 
-        assert "parent_summary" in data
-        assert "all_results" in data
-        assert "dear_parent_tags" in data
-        assert len(data["all_results"]) >= 1
+    @pytest.mark.parametrize("grade", GRADE_STR)
+    async def test_weak_score(self, client, mock_firebase_auth, seed_user, grade):
+        """A struggling reading scores low and reports growth edges."""
+        with self._pipeline_returning(accuracy=48.0, fluency=45.0,
+                                      completeness=60.0, prosody=42.0,
+                                      pron_score=46.8):
+            sentences, resp = await self._submit(client, grade)
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["percentage"] < 60.0, (
+            f"{grade}: expected <60%, got {data['percentage']}")
+        growth = [t for t in data["dear_parent_tags"]
+                  if t["polarity"] == "growth_edge"]
+        assert growth, f"{grade}: no growth edge on a weak reading"
+
+    @pytest.mark.parametrize("grade", GRADE_STR)
+    async def test_nothing_recorded_scores_zero(
+        self, client, mock_firebase_auth, seed_user, grade
+    ):
+        engine = registry.speaking_engine()
+        sentences = engine.get_items(Grade.parse(grade))
+        submissions = [
+            {"sentence_id": s.sentence_id, "original_sentence": s.sentence,
+             "audio_base64": "", "audio_format": "wav"}
+            for s in sentences
+        ]
+        resp = await client.post("/speaking/submit/", json={
+            "idToken": "test-token", "child_id": "child-1",
+            "grade": grade, "submissions": submissions,
+        })
+        data = resp.json()
+        assert data["user_score"] == 0.0
+        assert data["answered_count"] == 0
+        assert data["percentage"] == 0.0
+        assert not data["dear_parent_tags"]
+        assert all(r["status"] == "Not Attempted" for r in data["results"])
+
+    @pytest.mark.parametrize("grade", GRADE_STR)
+    async def test_complete_result_fields(
+        self, client, mock_firebase_auth, seed_user, grade
+    ):
+        with self._pipeline_returning(accuracy=88.0, fluency=85.0,
+                                      completeness=95.0, prosody=80.0,
+                                      pron_score=84.4):
+            sentences, resp = await self._submit(client, grade)
+        assert resp.status_code == 200
+
+        result = await client.post("/speaking/complete_result/", json={
+            "idToken": "test-token", "child_id": "child-1", "grade": grade,
+        })
+        assert result.status_code == 200
+        data = result.json()
+        for key in ("parent_summary", "dear_parent_tags",
+                    "per_sentence_tags", "teacher_admin_detail"):
+            assert key in data, key
 
 
-# ===========================================================================
-# COMPREHENSION (Story Explorer)
-# ===========================================================================
 class TestComprehensionScores:
     """Verify Comprehension scores and results for every grade."""
 

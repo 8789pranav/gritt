@@ -173,23 +173,65 @@ def mock_tts():
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def mock_speech():
-    """Patch HybridSpeechProvider.analyze_with_audio."""
-    analysis_result = {
-        "success": True,
-        "analysis": {
-            "pronunciation": {"score": 85, "feedback": "Good pronunciation."},
-            "speaking_rate": {"score": 80, "wpm": 120, "status": "Perfect", "feedback": "Good pace."},
-            "fluency": {"score": 75, "long_pauses_count": 0, "feedback": "Smooth delivery."},
-            "prosody": {"score": 70, "monotony_score": 0.6, "feedback": "Good expression."},
-            "grammar": {"score": 90, "issues": [], "feedback": "No grammar issues."},
-            "overall": {"score": 82, "status": "At", "level": "Good Speaker", "recommendation": "Keep practicing!", "parent_tip": "Read aloud daily.", "strengths": ["Pronunciation"], "areas_to_improve": ["Fluency"]},
-        },
-        "transcribed_text": "The cat sat on the mat.",
-        "word_timestamps": [{"word": "The", "start": 0.0, "end": 0.3}],
-        "duration": 3.5,
-    }
+    """Stand in for the Azure signal chain.
 
-    with patch("app.infrastructure.hybrid_speech.HybridSpeechProvider.analyze_with_audio", new_callable=AsyncMock, return_value=analysis_result):
+    Patches SpeakingPipeline.analyse_sentence, which is the seam between the
+    service and the chain. Returns a measurement set in the real shape, so the
+    service wiring is tested without a key, a network, or real audio.
+    """
+    from app.engines.speaking.metrics import (
+        DisfluencyMetrics,
+        PHONICS_FEATURES,
+        ReadingMetrics,
+        TimingMetrics,
+    )
+
+    async def fake_analyse_sentence(self, submission, grade):
+        if not (submission.audio_base64 or "").strip():
+            from app.engines.speaking.metrics import empty_sentence_metrics
+
+            payload = empty_sentence_metrics(
+                submission.reference_text, "no_audio", "No recording received."
+            )
+            payload["sentence_id"] = submission.sentence_id
+            return payload
+
+        words = submission.reference_text.rstrip(".").split()
+        return {
+            "sentence_id": submission.sentence_id,
+            "status": "answered",
+            "reference": submission.reference_text,
+            "recognized": submission.reference_text,
+            "verbatim": submission.reference_text.lower(),
+            "channel_agreement": 1.0,
+            "scores": {
+                "accuracy": 88.0, "fluency": 82.0, "completeness": 100.0,
+                "prosody": 79.0, "pron_score": 84.4,
+            },
+            "reading": ReadingMetrics(
+                len(words), len(words), 100.0, 62.0, 4.0, "in_band"
+            ).as_dict(),
+            "timing": {
+                **TimingMetrics(120.0, 1, 0, 210.0, 210.0, 210.0, 4000.0).as_dict(),
+                "time_to_speak_ms": submission.time_to_speak_ms or 800.0,
+            },
+            "disfluency": DisfluencyMetrics([], 0, 0.0, 0, []).as_dict(),
+            "phonics": {name: 90.0 for name in PHONICS_FEATURES},
+            "errors": {
+                "omission": 0, "insertion": 0, "mispronunciation": 0,
+                "unexpected_break": 0, "missing_break": 0, "monotone": 0,
+                "clear_error": 0, "needs_attention": 0, "prolonged": 0,
+                "words_flagged": 0,
+            },
+            "findings": [],
+            "words": [],
+            "attempt": submission.attempt,
+        }
+
+    with patch(
+        "app.engines.speaking.pipeline.SpeakingPipeline.analyse_sentence",
+        new=fake_analyse_sentence,
+    ):
         yield
 
 

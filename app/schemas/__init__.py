@@ -176,13 +176,22 @@ class SpeakingAnalyzeRequest(BaseModel):
     original_sentence: str
     audio_base64: str
     audio_format: str = "mp3"
+    time_to_speak_ms: Optional[float] = None
 
 
 class SpeakingSubmissionItem(BaseModel):
     sentence_id: str
     original_sentence: str
     audio_base64: str
-    audio_format: str = "mp3"
+    audio_format: str = "wav"
+    #: Milliseconds between pressing record and the first sound. Only the
+    #: client can measure this - it is gone by the time the audio arrives.
+    #: An absent field here silently discards whatever the client sent, which
+    #: is exactly how Story Explorer lost its response times.
+    time_to_speak_ms: Optional[float] = None
+    #: How many times this sentence was recorded. The last attempt measures
+    #: ability; the count measures confidence.
+    attempt: int = 1
 
 
 class SpeakingSubmitRequest(BaseModel):

@@ -80,6 +80,42 @@ def _restore_per_item_tags(stored):
     ]
 
 
+def _sentence_tags(measured: Dict[str, Any]) -> List[str]:
+    """Per-sentence observations, from the measurements rather than a model."""
+    if measured.get("status") == "not_attempted":
+        return []
+    if measured.get("status") == "needs_review":
+        return ["needs_review"]
+
+    tags: List[str] = []
+    scores = measured.get("scores", {})
+    errors = measured.get("errors", {})
+    timing = measured.get("timing", {})
+    disfluency = measured.get("disfluency", {})
+
+    if (scores.get("accuracy") or 0) >= 85:
+        tags.append("read_accurately")
+    elif (scores.get("accuracy") or 0) < 70:
+        tags.append("decoding_difficulty")
+
+    if errors.get("clear_error"):
+        tags.append("mispronounced_words")
+    if errors.get("prolonged"):
+        tags.append("stretched_sounds")
+    if errors.get("omission"):
+        tags.append("skipped_words")
+    if timing.get("long_pause_count"):
+        tags.append("long_pauses")
+    if disfluency.get("filler_count"):
+        tags.append("filler_used")
+    if disfluency.get("repetitions"):
+        tags.append("repeated_words")
+    if (scores.get("prosody") or 0) and scores["prosody"] < 60:
+        tags.append("flat_delivery")
+
+    return tags
+
+
 def _per_item_tags_to_dicts(per_items):
     """Serialise ``PerItemTags`` into plain dicts."""
     return [
@@ -661,35 +697,58 @@ class AssessmentService:
     # =====================================================================
     async def speaking_analyze(self, id_token: str, child_id: str, grade: str,
                                original_sentence: str, audio_base64: str,
-                               audio_format: str = "mp3") -> Dict[str, Any]:
+                               audio_format: str = "wav",
+                               time_to_speak_ms: Optional[float] = None) -> Dict[str, Any]:
+        """Score a single sentence. Same chain as a full submission."""
         verify_paid_child(id_token, child_id)
-        from app.infrastructure.hybrid_speech import HybridSpeechProvider
 
-        speech = HybridSpeechProvider()
+        from app.engines.speaking.pipeline import SentenceSubmission, SpeakingPipeline
 
-        result = await speech.analyze_with_audio(
-            audio_base64, audio_format, original_sentence, grade
+        measured = await SpeakingPipeline().analyse_sentence(
+            SentenceSubmission(
+                sentence_id="single",
+                reference_text=original_sentence,
+                audio_base64=audio_base64,
+                audio_format=audio_format or "wav",
+                time_to_speak_ms=time_to_speak_ms,
+            ),
+            grade,
         )
-        if not result["success"] or not result["analysis"]:
+
+        if measured.get("status") == "not_attempted":
             from app.core.exceptions import AnalysisError
 
-            raise AnalysisError(result.get("error", "Analysis failed"))
+            raise AnalysisError(
+                measured.get("message") or "No speech was detected in the recording."
+            )
 
-        analysis = result["analysis"]
+        scores = measured.get("scores", {})
         return {
             "original_sentence": original_sentence,
-            "transcribed_text": result.get("transcribed_text", ""),
-            "duration_seconds": result.get("duration", 0),
-            "word_timestamps": result.get("word_timestamps", []),
-            "analysis_method": "hybrid_wav2vec2_gpt4",
-            "pronunciation": analysis.get("pronunciation", {}),
-            "speaking_rate": analysis.get("speaking_rate", {}),
-            "fluency": analysis.get("fluency", {}),
-            "prosody": analysis.get("prosody", {}),
-            "grammar": analysis.get("grammar", {}),
-            "overall": analysis.get("overall", {}),
-            "recommendation": analysis.get("overall", {}).get("recommendation", ""),
-            "parent_tip": analysis.get("overall", {}).get("parent_tip", ""),
+            "transcribed_text": measured.get("recognized", ""),
+            "verbatim_text": measured.get("verbatim", ""),
+            "status": measured.get("status"),
+            "duration_seconds": round(
+                (measured.get("timing", {}).get("speaking_span_ms") or 0) / 1000.0, 2
+            ),
+            "analysis_method": "azure_pronunciation_assessment",
+            "pronunciation": {
+                "score": scores.get("accuracy", 0.0),
+                "words": measured.get("words", []),
+                "findings": measured.get("findings", []),
+            },
+            "fluency": {
+                "fluency_score": scores.get("fluency", 0.0),
+                **measured.get("timing", {}),
+            },
+            "prosody": {"score": scores.get("prosody") or 0.0},
+            "completeness": {"score": scores.get("completeness", 0.0)},
+            "reading": measured.get("reading", {}),
+            "disfluency": measured.get("disfluency", {}),
+            "phonics": measured.get("phonics", {}),
+            "errors": measured.get("errors", {}),
+            "overall": {"score": scores.get("pron_score", 0.0)},
+            "channel_agreement": measured.get("channel_agreement"),
         }
 
     async def speaking_submit(self, id_token: str, child_id: str, grade: str,
@@ -698,139 +757,144 @@ class AssessmentService:
                               audio_base64: Optional[str] = None,
                               audio_format: Optional[str] = "mp3",
                               submissions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Score a whole speaking submission through the Azure signal chain.
+
+        Sentences are analysed concurrently: App Runner enforces a fixed
+        120-second request timeout, and eight sentences one after another do
+        not fit inside it.
+        """
         uid, _ = verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = speaking_engine()
 
-        from app.infrastructure.hybrid_speech import HybridSpeechProvider
-
-        speech = HybridSpeechProvider()
+        from app.engines.speaking.pipeline import (
+            SentenceSubmission,
+            SpeakingPipeline,
+            aggregate,
+        )
 
         all_sentences = engine.get_items(grade_enum)
-        sentence_map = {s.sentence_id: s for s in all_sentences}
 
         submitted: Dict[str, Dict[str, Any]] = {}
         if submissions:
             for item in submissions:
-                sid = item.get("sentence_id") if isinstance(item, dict) else item.sentence_id
-                submitted[sid] = item
+                data = item if isinstance(item, dict) else item.model_dump()
+                submitted[data.get("sentence_id")] = data
         elif sentence_id:
             submitted[sentence_id] = {
                 "sentence_id": sentence_id,
                 "original_sentence": original_sentence or "",
                 "audio_base64": audio_base64 or "",
-                "audio_format": audio_format or "mp3",
+                "audio_format": audio_format or "wav",
             }
 
-        domain_responses: List[SpeakingResponse] = []
-        analyses: Dict[str, Any] = {}
+        pipeline_input: List[SentenceSubmission] = []
+        for sent in all_sentences:
+            item = submitted.get(sent.sentence_id) or {}
+            pipeline_input.append(SentenceSubmission(
+                sentence_id=sent.sentence_id,
+                reference_text=sent.sentence,
+                audio_base64=item.get("audio_base64") or "",
+                audio_format=item.get("audio_format") or "wav",
+                time_to_speak_ms=item.get("time_to_speak_ms"),
+                attempt=int(item.get("attempt") or 1),
+            ))
+
+        measured = await SpeakingPipeline().analyse(pipeline_input, grade)
+        signals = aggregate(measured, grade)
+
+        by_id = {m["sentence_id"]: m for m in measured}
         results: List[Dict[str, Any]] = []
+        domain_responses: List[SpeakingResponse] = []
         total_score = 0.0
         answered_count = 0
 
         for sent in all_sentences:
-            sid = sent.sentence_id
-            item = submitted.get(sid)
+            m = by_id[sent.sentence_id]
+            status = m.get("status", "not_attempted")
+            scores = m.get("scores", {})
+            overall = scores.get("pron_score", 0.0) or 0.0
 
-            if item is None or not (
-                item.get("audio_base64") if isinstance(item, dict) else getattr(item, "audio_base64", "")
-            ):
-                results.append({
-                    "sentence_id": sid,
-                    "original_sentence": sent.sentence,
-                    "transcribed_text": "",
-                    "duration_seconds": 0,
-                    "pronunciation": {},
-                    "speaking_rate": {},
-                    "fluency": {},
-                    "grammar": {},
-                    "overall": {"score": 0, "status": "Not Attempted", "level": "Not Attempted"},
-                    "recommendation": "Not attempted.",
-                    "analysis_method": "",
-                    "status": "Not Attempted",
-                })
-                domain_responses.append(SpeakingResponse(
-                    item_id=sid,
-                    sentence_id=sid,
-                    original_sentence=sent.sentence,
-                ))
-                continue
-
-            audio_b64 = item.get("audio_base64", "") if isinstance(item, dict) else getattr(item, "audio_base64", "")
-            audio_fmt = item.get("audio_format", "mp3") if isinstance(item, dict) else getattr(item, "audio_format", "mp3")
-
-            ai_result = await speech.analyze_with_audio(
-                audio_b64, audio_fmt, sent.sentence, grade
-            )
-
-            if ai_result["success"] and ai_result["analysis"]:
-                analysis = ai_result["analysis"]
-                from app.engines.speaking.analyzer import SpeechAnalysis
-
-                speech_analysis = SpeechAnalysis.from_provider_payload(analysis)
-                analyses[sid] = speech_analysis
-
-                overall = analysis.get("overall", {})
-                overall_score = overall.get("score", 0)
-                total_score += overall_score
+            if status == "answered":
+                total_score += overall
                 answered_count += 1
 
-                results.append({
-                    "sentence_id": sid,
-                    "original_sentence": sent.sentence,
-                    "transcribed_text": ai_result.get("transcribed_text", ""),
-                    "duration_seconds": ai_result.get("duration", 0),
-                    "pronunciation": analysis.get("pronunciation", {}),
-                    "speaking_rate": analysis.get("speaking_rate", {}),
-                    "fluency": analysis.get("fluency", {}),
-                    "prosody": analysis.get("prosody", {}),
-                    "grammar": analysis.get("grammar", {}),
-                    "overall": overall,
-                    "recommendation": overall.get("recommendation", "Keep practicing!"),
-                    "analysis_method": "hybrid_wav2vec2_gpt4",
-                    "status": "Answered",
-                })
-                domain_responses.append(SpeakingResponse(
-                    item_id=sid,
-                    sentence_id=sid,
-                    original_sentence=sent.sentence,
-                    audio_base64=audio_b64,
-                    audio_format=audio_fmt,
-                ))
-            else:
-                results.append({
-                    "sentence_id": sid,
-                    "original_sentence": sent.sentence,
-                    "transcribed_text": ai_result.get("transcribed_text", ""),
-                    "analysis": None,
-                    "status": "Analysis Error",
-                })
-                domain_responses.append(SpeakingResponse(
-                    item_id=sid,
-                    sentence_id=sid,
-                    original_sentence=sent.sentence,
-                ))
+            results.append({
+                "sentence_id": sent.sentence_id,
+                "original_sentence": sent.sentence,
+                "transcribed_text": m.get("recognized", ""),
+                "verbatim_text": m.get("verbatim", ""),
+                "status": {
+                    "answered": "Answered",
+                    "not_attempted": "Not Attempted",
+                    "needs_review": "Needs Review",
+                }.get(status, "Not Attempted"),
+                "duration_seconds": round(
+                    (m.get("timing", {}).get("speaking_span_ms") or 0) / 1000.0, 2
+                ),
+                "pronunciation": {
+                    "score": scores.get("accuracy", 0.0),
+                    "words": m.get("words", []),
+                    "findings": m.get("findings", []),
+                },
+                "fluency": {
+                    "fluency_score": scores.get("fluency", 0.0),
+                    **m.get("timing", {}),
+                },
+                "prosody": {"score": scores.get("prosody") or 0.0},
+                "completeness": {"score": scores.get("completeness", 0.0)},
+                "reading": m.get("reading", {}),
+                "disfluency": m.get("disfluency", {}),
+                "phonics": m.get("phonics", {}),
+                "errors": m.get("errors", {}),
+                "overall": {
+                    "score": overall,
+                    "status": engine.scorer.status_for(overall)
+                    if hasattr(engine.scorer, "status_for") else "",
+                    "level": "",
+                },
+                "message": m.get("message", ""),
+                "analysis_method": "azure_pronunciation_assessment",
+            })
 
-        result = engine.evaluate_with_analyses(child_id, grade_enum, domain_responses, analyses)
+            domain_responses.append(SpeakingResponse(
+                item_id=sent.sentence_id,
+                sentence_id=sent.sentence_id,
+                original_sentence=sent.sentence,
+                audio_base64=(submitted.get(sent.sentence_id) or {}).get("audio_base64", ""),
+                audio_format=(submitted.get(sent.sentence_id) or {}).get("audio_format", "wav"),
+            ))
 
-        tag_dicts = _tag_outputs_to_dicts(result.tags)
-        per_item_dicts = _per_item_tags_to_dicts(result.per_item_tags)
+        # The tag engine reads the aggregate signals directly - the chain has
+        # already done every measurement the old deriver used to approximate.
+        from app.tagging.emitter import emit_tags
 
-        speaking_tag_map = {p["item_id"]: p.get("tags", []) for p in per_item_dicts}
+        tags = emit_tags(TestType.SPEAKING, signals)
+        tag_dicts = _tag_outputs_to_dicts(tags)
+
+        per_item_dicts = [
+            {
+                "item_id": m["sentence_id"],
+                "answered": m.get("status") == "answered",
+                "is_correct": None,
+                "tags": _sentence_tags(m),
+            }
+            for m in measured
+        ]
+        sentence_tag_map = {p["item_id"]: p["tags"] for p in per_item_dicts}
         for r in results:
-            sid = r.get("sentence_id", "")
-            r["tags"] = speaking_tag_map.get(sid, [])
+            r["tags"] = sentence_tag_map.get(r["sentence_id"], [])
 
         max_score = len(all_sentences) * 100
         user_score = round(total_score, 1)
         percentage = round((user_score / max_score) * 100, 1) if max_score else 0
-        avg_score = round(total_score / len(all_sentences), 1) if all_sentences else 0
+        avg_score = round(total_score / answered_count, 1) if answered_count else 0
 
-        if percentage >= 90:
+        if avg_score >= 90:
             level = "Excellent Speaker"
-        elif percentage >= 75:
+        elif avg_score >= 75:
             level = "Good Speaker"
-        elif percentage >= 50:
+        elif avg_score >= 50:
             level = "Developing Speaker"
         else:
             level = "Needs Improvement"
@@ -846,6 +910,7 @@ class AssessmentService:
                 "average_score": avg_score,
                 "percentage": percentage,
                 "level": level,
+                "signals": sanitize_data(signals),
                 "dear_parent_tags": tag_dicts,
                 "per_sentence_tags": per_item_dicts,
                 "timestamp": self._utc_now(),
@@ -865,6 +930,7 @@ class AssessmentService:
             "percentage": percentage,
             "level": level,
             "results": results,
+            "signals": signals,
             "dear_parent_tags": tag_dicts,
             "per_sentence_tags": per_item_dicts,
             "message": (

@@ -696,3 +696,197 @@ class TestWordFindings:
         assert counts["clear_error"] == 1
         assert counts["words_flagged"] == 1
         assert counts["mispronunciation"] == 1
+
+
+# ---------------------------------------------------------------------------
+# The guarantee: nothing said, or the wrong thing said -> no score
+# ---------------------------------------------------------------------------
+class TestNoScoreGuarantee:
+    """Verified live: a reading of "Elephants migrate across the savannah"
+    against the reference "The cat sat on the mat." came back scored 32.5 with
+    the transcript "The cat the sat cat the on." Azure aligns its recognition
+    to the reference, so a child who read something else entirely produced a
+    plausible number and a transcript full of reference words. Marking the
+    item needs_review was not enough - the score was still returned."""
+
+    LEAK_WORDS = ("purple", "wizards", "juggle", "bananas")
+    REF = "Purple wizards juggle bananas."
+
+    def _silent_wav(self, seconds=2.0):
+        raw = bytearray(base64.b64decode(make_wav(seconds, 16000, 1)))
+        raw[44:] = b"\x00" * (len(raw) - 44)
+        return base64.b64encode(bytes(raw)).decode()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("audio_name", [
+        "silent", "empty", "not_base64", "truncated",
+    ])
+    async def test_nothing_said_scores_zero(self, audio_name):
+        audio = {
+            "silent": self._silent_wav(),
+            "empty": "",
+            "not_base64": "!!!! nope !!!!",
+            "truncated": base64.b64encode(b"RIFF" + b"\x00" * 60).decode(),
+        }[audio_name]
+        azure = FakeAzure()
+        out = await SpeakingPipeline(azure, FakeTranscriber()).analyse_sentence(
+            SentenceSubmission("s1", self.REF, audio), "First")
+
+        assert out["status"] == "not_attempted"
+        assert azure.calls == 0, "a silent recording reached a paid service"
+        for key, value in out["scores"].items():
+            assert value == 0.0, f"{key} was {value}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("audio_name", ["silent", "empty"])
+    async def test_nothing_said_never_echoes_the_reference(self, audio_name):
+        audio = self._silent_wav() if audio_name == "silent" else ""
+        out = await SpeakingPipeline(FakeAzure(), FakeTranscriber()).analyse_sentence(
+            SentenceSubmission("s1", self.REF, audio), "First")
+        blob = str({k: v for k, v in out.items() if k != "reference"}).lower()
+        for word in self.LEAK_WORDS:
+            assert word not in blob, f"{word!r} leaked into the result"
+
+    @pytest.mark.asyncio
+    async def test_the_wrong_sentence_is_not_scored(self):
+        """Not merely labelled needs_review - the numbers are withheld."""
+        pipeline = SpeakingPipeline(
+            FakeAzure(), FakeTranscriber("elephants migrate across the savannah"))
+        out = await pipeline.analyse_sentence(
+            SentenceSubmission("s1", REFERENCE, loud_wav()), "First")
+
+        assert out["status"] == "needs_review"
+        for key, value in out["scores"].items():
+            assert value == 0.0, f"{key} was still {value} on a disagreement"
+        assert out["recognized"] == ""
+        assert out["reading"]["wcpm"] == 0.0
+        assert all(v is None for v in out["phonics"].values())
+
+    @pytest.mark.asyncio
+    async def test_the_withheld_numbers_are_kept_for_diagnosis(self):
+        pipeline = SpeakingPipeline(
+            FakeAzure(), FakeTranscriber("elephants migrate across the savannah"))
+        out = await pipeline.analyse_sentence(
+            SentenceSubmission("s1", REFERENCE, loud_wav()), "First")
+        assert out["withheld"]["reason"] == "channel_disagreement"
+        assert out["withheld"]["scores"]["pron_score"] > 0
+
+    @pytest.mark.asyncio
+    async def test_a_withheld_sentence_does_not_move_the_test_average(self):
+        pipeline = SpeakingPipeline(
+            FakeAzure(), FakeTranscriber("elephants migrate across the savannah"))
+        good = SpeakingPipeline(FakeAzure(), FakeTranscriber())
+        wrong = await pipeline.analyse_sentence(
+            SentenceSubmission("s1", REFERENCE, loud_wav()), "First")
+        right = await good.analyse_sentence(
+            SentenceSubmission("s2", REFERENCE, loud_wav()), "First")
+
+        signals = aggregate([right, wrong], "First")
+        assert signals["sentences_answered"] == 1
+        assert signals["sentences_needs_review"] == 1
+        assert signals["avg_pron_score"] == right["scores"]["pron_score"]
+
+    @pytest.mark.asyncio
+    async def test_a_real_reading_still_scores(self):
+        """The guarantee must not be a blanket refusal to score."""
+        out = await SpeakingPipeline(FakeAzure(), FakeTranscriber()).analyse_sentence(
+            SentenceSubmission("s1", REFERENCE, loud_wav()), "First")
+        assert out["status"] == "answered"
+        assert out["scores"]["pron_score"] > 0
+
+
+# ---------------------------------------------------------------------------
+# What the child actually said, when no transcript will tell you
+# ---------------------------------------------------------------------------
+class TestSpokenPhonemes:
+    """Verified live. Azure's recognised text reads "The brown dog likes to
+    play." whether the child said dog, doy or dot, because scripted
+    recognition aligns to the reference. NBestPhonemeCount asks a different
+    question - what sound was actually produced here - and answers it:
+
+        said 'dog'  expected /dɑg/  actually /dɑg/
+        said 'doy'  expected /dɔg/  actually /dɔɪɔɪ/
+        said 'dot'  expected /dɑg/  actually /dɑt/
+    """
+
+    def _payload(self, spoken_for_g):
+        payload = azure_payload()
+        payload["NBest"][0]["Words"] = [{
+            "Word": "dog",
+            "Offset": ticks(600), "Duration": ticks(220),
+            "PronunciationAssessment": {"AccuracyScore": 40.0,
+                                        "ErrorType": "Mispronunciation"},
+            "Phonemes": [
+                {"Phoneme": "d", "Offset": ticks(600), "Duration": ticks(60),
+                 "PronunciationAssessment": {
+                     "AccuracyScore": 100.0,
+                     "NBestPhonemes": [{"Phoneme": "d", "Score": 100.0}]}},
+                {"Phoneme": "ɑ", "Offset": ticks(660), "Duration": ticks(80),
+                 "PronunciationAssessment": {
+                     "AccuracyScore": 95.0,
+                     "NBestPhonemes": [{"Phoneme": "ɑ", "Score": 100.0}]}},
+                {"Phoneme": "g", "Offset": ticks(740), "Duration": ticks(80),
+                 "PronunciationAssessment": {
+                     "AccuracyScore": 0.0,
+                     "NBestPhonemes": [
+                         {"Phoneme": spoken_for_g, "Score": 100.0},
+                         {"Phoneme": "ɑ", "Score": 99.0},
+                     ]}},
+            ],
+        }]
+        return payload
+
+    def test_the_expected_sounds_are_reported(self):
+        word = parse_result(self._payload("g")).words[0]
+        assert word.expected_ipa == "dɑg"
+
+    def test_the_actually_spoken_sounds_are_reported(self):
+        """The "dot" case: a /t/ where the word needs a /g/."""
+        word = parse_result(self._payload("t")).words[0]
+        assert word.spoken_ipa == "dɑt"
+        assert word.expected_ipa == "dɑg"
+
+    def test_a_correct_reading_shows_no_substitution(self):
+        word = parse_result(self._payload("g")).words[0]
+        assert word.spoken_ipa == word.expected_ipa
+        assert word.substituted_sounds == []
+
+    def test_the_substituted_sound_is_named(self):
+        word = parse_result(self._payload("t")).words[0]
+        subs = word.substituted_sounds
+        assert len(subs) == 1
+        assert subs[0].ipa == "g"
+        assert subs[0].actually_said == "t"
+
+    def test_a_phoneme_without_candidates_falls_back_to_expected(self):
+        """Older responses, or a service that returns no NBestPhonemes."""
+        word = parse_result(azure_payload()).words[1]
+        assert word.spoken_ipa == word.expected_ipa
+        assert word.substituted_sounds == []
+
+    def test_findings_carry_both_spellings(self):
+        from app.engines.speaking.metrics import word_findings
+
+        words = parse_result(self._payload("t")).words
+        finding = word_findings(words)[0]
+        assert finding["expected_ipa"] == "dɑg"
+        assert finding["spoken_ipa"] == "dɑt"
+        assert finding["substitutions"] == [
+            {"expected": "g", "said": "t", "accuracy": 0.0}
+        ]
+        assert "sound_substituted" in finding["flags"]
+
+    def test_the_weakest_sound_says_what_replaced_it(self):
+        from app.engines.speaking.metrics import word_findings
+
+        weakest = word_findings(parse_result(self._payload("t")).words)[0]["weakest_sound"]
+        assert weakest["ipa"] == "g"
+        assert weakest["actually_said"] == "t"
+
+    def test_the_request_asks_for_spoken_phonemes(self):
+        import json
+
+        client = AzurePronunciationClient(key="k", region="eastus")
+        config = json.loads(base64.b64decode(client.build_config_header("hi")))
+        assert config["NBestPhonemeCount"] >= 1
+        assert config["PhonemeAlphabet"] == "IPA"

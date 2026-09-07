@@ -179,6 +179,26 @@ class SpeakingPipeline:
                 "The two transcriptions of this recording disagree, so it has "
                 "not been scored."
             )
+            # Withhold the numbers, do not merely label them. Azure aligns its
+            # recognition to the reference sentence, so a child who read
+            # something else entirely can come back with a plausible-looking
+            # score and a transcript containing the reference words. Measured:
+            # a reading of "Elephants migrate across the savannah" scored 32.5
+            # and transcribed as "The cat the sat cat the on."
+            payload["withheld"] = {
+                "reason": "channel_disagreement",
+                "scores": dict(payload["scores"]),
+                "azure_recognized": azure_result.recognized_text,
+            }
+            payload["scores"] = {
+                "accuracy": 0.0, "fluency": 0.0, "completeness": 0.0,
+                "prosody": 0.0, "pron_score": 0.0,
+            }
+            payload["recognized"] = ""
+            payload["reading"] = empty_sentence_metrics(
+                reference, "channel_disagreement", payload["message"]
+            )["reading"]
+            payload["phonics"] = {k: None for k in payload.get("phonics", {})}
         else:
             payload["status"] = "answered"
 

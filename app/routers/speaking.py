@@ -44,6 +44,7 @@ async def analyze_speaking(request: SpeakingAnalyzeRequest):
         request.original_sentence,
         request.audio_base64,
         request.audio_format,
+        request.time_to_speak_ms,
     )
 
 

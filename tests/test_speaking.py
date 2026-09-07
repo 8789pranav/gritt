@@ -61,7 +61,7 @@ async def test_speaking_analyze(client, mock_firebase_auth, seed_user, mock_spee
     assert "pronunciation" in data
     assert "fluency" in data
     assert "overall" in data
-    assert data["overall"]["score"] == 82
+    assert data["overall"]["score"] == 84.4
 
 
 @pytest.mark.asyncio

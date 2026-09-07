@@ -562,102 +562,187 @@ class TestSpellingPerItemTags:
 # SPEAKING: test-level tags
 # ---------------------------------------------------------------------------
 class TestSpeakingTags:
-    """Verify Voice Challenge tag emission across all grades."""
+    """Voice Challenge tags, driven the way production drives them.
+
+    The service no longer routes speaking through SpeakingSignalDeriver: the
+    Azure signal chain measures everything the deriver used to approximate, and
+    pipeline.aggregate produces the signal block the tag config reads. These
+    tests exercise that path, not the retired one.
+
+    Note the scale. The old deriver emitted avg_fluency as a 0-1 ratio; the
+    chain emits it as Azure does, 0-100. Same name, different units - which is
+    exactly the kind of collision that fires no tag and raises no error.
+    """
 
     EXPECTED_TAG_IDS = {
-        "expressive_fluency_strong",
-        "expressive_fluency_emerging",
-        "pronunciation_accurate",
-        "pronunciation_developing",
-        "prosody_strong",
-        "prosody_emerging",
-        "complex_syntax_confident",
+        "decoding_accurate", "decoding_emerging",
+        "reading_rate_on_track", "reading_rate_slow",
+        "phrasing_smooth", "phrasing_choppy",
+        "expression_present", "expression_flat",
+        "reads_every_word", "skips_words",
+        "hesitates_before_starting", "stretches_words",
+        "filler_habit_emerging", "self_corrects_while_reading",
+        "vowel_sounds_secure", "short_vowel_emerging", "long_vowel_emerging",
+        "blends_secure", "blends_emerging",
+        "digraphs_secure", "digraphs_emerging",
+        "ending_sounds_emerging",
+        "recording_needs_review",
     }
 
     def test_all_tag_ids_match_config(self):
-        actual = all_tag_ids_for_test(TestType.SPEAKING)
-        assert actual == self.EXPECTED_TAG_IDS
+        assert all_tag_ids_for_test(TestType.SPEAKING) == self.EXPECTED_TAG_IDS
 
-    @pytest.mark.parametrize("grade", list(Grade))
-    def test_strong_delivery_emits_strength_tags(self, grade: Grade):
-        engine = registry.speaking_engine()
-        sentences = engine.get_items(grade)
-        responses = [
-            SpeakingResponse(
-                item_id=s.sentence_id,
-                sentence_id=s.sentence_id,
-                original_sentence=s.sentence,
-                audio_base64="",
-            )
-            for s in sentences
-        ]
-        analyses = {s.sentence_id: _analysis(95.0) for s in sentences}
-        result = engine.evaluate_with_analyses("child", grade, responses, analyses)
+    # -- helpers ---------------------------------------------------------
+    @staticmethod
+    def _sentence(accuracy=90.0, fluency=90.0, prosody=85.0, completeness=100.0,
+                  wcpm=60.0, band="in_band", omissions=0, fillers=0,
+                  repetitions=0, prolonged=0, clear_errors=0,
+                  time_to_speak=800.0, phonics=90.0, words=8):
+        from app.engines.speaking.metrics import PHONICS_FEATURES
 
-        assert len(result.strengths) > 0, f"{grade.value}: no strength tags on strong delivery"
-        emitted = tag_ids(result.tags)
-        unknown = emitted - self.EXPECTED_TAG_IDS
-        assert not unknown, f"{grade.value}: unknown tags: {unknown}"
+        return {
+            "status": "answered",
+            "scores": {
+                "accuracy": accuracy, "fluency": fluency, "prosody": prosody,
+                "completeness": completeness,
+                "pron_score": round(min(accuracy, fluency, prosody) * 0.4
+                                    + accuracy * 0.2 + fluency * 0.2
+                                    + prosody * 0.2, 1),
+            },
+            "reading": {"correct_words": words, "total_words": words,
+                        "wcpm": wcpm, "accuracy_pct": accuracy},
+            "timing": {"speaking_span_ms": round(words / wcpm * 60000, 1)
+                       if wcpm else 0.0,
+                       "time_to_speak_ms": time_to_speak,
+                       "time_to_first_word_ms": 120.0,
+                       "pause_count": 1, "long_pause_count": 0},
+            "disfluency": {"filler_count": fillers, "repetitions": repetitions},
+            "errors": {"omission": omissions, "insertion": 0,
+                       "mispronunciation": clear_errors, "monotone": 0,
+                       "unexpected_break": 0, "missing_break": 0,
+                       "clear_error": clear_errors, "needs_attention": 0,
+                       "prolonged": prolonged, "words_flagged": clear_errors},
+            "phonics": {name: phonics for name in PHONICS_FEATURES},
+        }
 
-        # Strong delivery should flag fluency, pronunciation, prosody
-        assert "expressive_fluency_strong" in emitted, f"{grade.value}: expected expressive_fluency_strong"
-        assert "pronunciation_accurate" in emitted, f"{grade.value}: expected pronunciation_accurate"
-        assert "prosody_strong" in emitted, f"{grade.value}: expected prosody_strong"
+    def _tags(self, sentences, grade="First"):
+        from app.engines.speaking.pipeline import aggregate
+        from app.tagging.emitter import emit_tags
 
-    @pytest.mark.parametrize("grade", list(Grade))
-    def test_weak_delivery_emits_growth_edge_tags(self, grade: Grade):
-        engine = registry.speaking_engine()
-        sentences = engine.get_items(grade)
-        responses = [
-            SpeakingResponse(
-                item_id=s.sentence_id,
-                sentence_id=s.sentence_id,
-                original_sentence=s.sentence,
-                audio_base64="",
-            )
-            for s in sentences
-        ]
-        analyses = {s.sentence_id: _analysis(35.0) for s in sentences}
-        result = engine.evaluate_with_analyses("child", grade, responses, analyses)
+        signals = aggregate(sentences, grade)
+        return signals, {t.tag for t in emit_tags(TestType.SPEAKING, signals)}
 
-        assert len(result.growth_edges) > 0, f"{grade.value}: no growth_edge tags on weak delivery"
-        emitted = tag_ids(result.tags)
-        assert "pronunciation_developing" in emitted, f"{grade.value}: expected pronunciation_developing"
-        assert "expressive_fluency_emerging" in emitted or "pronunciation_developing" in emitted
+    # -- the shape of the dictionary --------------------------------------
+    def test_every_strength_has_an_emerging_partner(self):
+        ids = all_tag_ids_for_test(TestType.SPEAKING)
+        for strong, emerging in (
+            ("decoding_accurate", "decoding_emerging"),
+            ("phrasing_smooth", "phrasing_choppy"),
+            ("expression_present", "expression_flat"),
+            ("reads_every_word", "skips_words"),
+            ("blends_secure", "blends_emerging"),
+            ("digraphs_secure", "digraphs_emerging"),
+        ):
+            assert strong in ids and emerging in ids, (strong, emerging)
 
-    @pytest.mark.parametrize("grade", list(Grade))
-    def test_medium_delivery_emits_emerging_tags(self, grade: Grade):
-        engine = registry.speaking_engine()
-        sentences = engine.get_items(grade)
-        responses = [
-            SpeakingResponse(
-                item_id=s.sentence_id,
-                sentence_id=s.sentence_id,
-                original_sentence=s.sentence,
-                audio_base64="",
-            )
-            for s in sentences
-        ]
-        analyses = {s.sentence_id: _analysis(65.0) for s in sentences}
-        result = engine.evaluate_with_analyses("child", grade, responses, analyses)
+    # -- behaviour --------------------------------------------------------
+    def test_a_strong_reader(self):
+        _, tags = self._tags([self._sentence() for _ in range(8)])
+        assert "decoding_accurate" in tags
+        assert "phrasing_smooth" in tags
+        assert "expression_present" in tags
+        assert "reads_every_word" in tags
+        assert "reading_rate_on_track" in tags
 
-        # 65% → fluency between 0.6 and 0.8 → emerging
-        emitted = tag_ids(result.tags)
-        assert "expressive_fluency_emerging" in emitted, f"{grade.value}: expected expressive_fluency_emerging at 65%, got {emitted}"
+    def test_a_struggling_reader_gets_growth_edges(self):
+        _, tags = self._tags([
+            self._sentence(accuracy=55, fluency=52, prosody=45, completeness=70,
+                           wcpm=15, band="below_band", omissions=1,
+                           clear_errors=2, phonics=60)
+            for _ in range(8)
+        ])
+        assert "decoding_emerging" in tags
+        assert "phrasing_choppy" in tags
+        assert "expression_flat" in tags
+        assert "skips_words" in tags
+        assert "decoding_accurate" not in tags
 
-    @pytest.mark.parametrize("grade", list(Grade))
-    def test_empty_submission_minimal_tags(self, grade: Grade):
-        engine = registry.speaking_engine()
-        result = engine.evaluate_with_analyses("child", grade, [], {})
-        # Empty submission may emit some tags due to zero-score triggers
-        # (e.g. avg_pronunciation < 0.7 → pronunciation_developing)
-        # but should NOT emit strength tags
-        assert len(result.strengths) == 0, f"{grade.value}: unexpected strength tags on empty"
+    def test_below_60_fluency_still_produces_a_tag(self):
+        """The old config only fired between 0.6 and 0.8, so the weakest
+        readers produced no fluency tag at all."""
+        _, tags = self._tags([self._sentence(fluency=40) for _ in range(8)])
+        assert "phrasing_choppy" in tags
+
+    def test_a_slow_reader_is_named(self):
+        _, tags = self._tags([self._sentence(wcpm=12) for _ in range(8)])
+        assert "reading_rate_slow" in tags
+        assert "reading_rate_on_track" not in tags
+
+    def test_fillers_reach_the_rollup(self):
+        _, tags = self._tags([self._sentence(fillers=2) for _ in range(8)])
+        assert "filler_habit_emerging" in tags
+
+    def test_stretched_sounds_reach_the_rollup(self):
+        _, tags = self._tags([self._sentence(prolonged=1) for _ in range(8)])
+        assert "stretches_words" in tags
+
+    def test_hesitation_before_starting(self):
+        _, tags = self._tags([self._sentence(time_to_speak=6000) for _ in range(8)])
+        assert "hesitates_before_starting" in tags
+
+    def test_repetition_reads_as_self_correction(self):
+        _, tags = self._tags([self._sentence(repetitions=1) for _ in range(8)])
+        assert "self_corrects_while_reading" in tags
+
+    # -- phonics, shared vocabulary with Word Wizard ----------------------
+    def test_phonics_strengths(self):
+        _, tags = self._tags([self._sentence(phonics=92) for _ in range(8)])
+        assert "vowel_sounds_secure" in tags
+        assert "blends_secure" in tags
+        assert "digraphs_secure" in tags
+
+    def test_phonics_weaknesses(self):
+        _, tags = self._tags([self._sentence(phonics=55) for _ in range(8)])
+        assert "short_vowel_emerging" in tags
+        assert "blends_emerging" in tags
+        assert "ending_sounds_emerging" in tags
+
+    def test_a_feature_never_exercised_is_silent(self):
+        """A sound the sentences never contained is not a weakness."""
+        rows = [self._sentence() for _ in range(8)]
+        for row in rows:
+            row["phonics"]["consonant_digraph"] = None
+        signals, tags = self._tags(rows)
+        assert signals["phonics_consonant_digraph"] is None
+        assert "digraphs_emerging" not in tags
+        assert "digraphs_secure" not in tags
+
+    # -- guards -----------------------------------------------------------
+    def test_two_sentences_are_not_enough_to_characterise_a_reader(self):
+        _, tags = self._tags([self._sentence() for _ in range(2)])
+        assert not tags, tags
+
+    def test_an_empty_submission_emits_nothing(self):
+        _, tags = self._tags([])
+        assert not tags, tags
+
+    def test_unassessable_recordings_are_reported_not_scored(self):
+        rows = [self._sentence() for _ in range(4)]
+        rows += [{"status": "needs_review", "scores": {}, "reading": {},
+                  "timing": {}, "disfluency": {}, "errors": {}, "phonics": {}}
+                 for _ in range(2)]
+        signals, tags = self._tags(rows)
+        assert signals["sentences_needs_review"] == 2
+        assert signals["sentences_answered"] == 4
+        assert "recording_needs_review" in tags
+
+    def test_every_tag_has_parent_copy(self):
+        from app.services.report_service import ReportService
+
+        missing = self.EXPECTED_TAG_IDS - set(ReportService._TAG_SENTENCE_MAP)
+        assert not missing, missing
 
 
-# ---------------------------------------------------------------------------
-# SPEAKING: per-item tags
-# ---------------------------------------------------------------------------
 class TestSpeakingPerItemTags:
     """Verify per-sentence tags for speaking across all grades."""
 

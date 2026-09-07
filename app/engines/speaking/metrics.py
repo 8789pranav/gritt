@@ -380,13 +380,27 @@ def word_findings(words: Sequence[Word]) -> List[Dict[str, Any]]:
             flags.append("monotone")
 
         weakest = min(word.phonemes, key=lambda p: p.accuracy) if word.phonemes else None
+        substitutions = [
+            {"expected": p.ipa, "said": p.actually_said, "accuracy": p.accuracy}
+            for p in word.substituted_sounds
+        ]
+        if substitutions:
+            flags.append("sound_substituted")
         findings.append({
             "word": word.word,
             "accuracy": word.accuracy,
             "azure_error_type": word.error_type,
             "flags": flags,
+            "expected_ipa": word.expected_ipa,
+            "spoken_ipa": word.spoken_ipa,
+            "substitutions": substitutions,
             "weakest_sound": (
-                {"ipa": weakest.ipa, "accuracy": weakest.accuracy} if weakest else None
+                {
+                    "ipa": weakest.ipa,
+                    "accuracy": weakest.accuracy,
+                    "actually_said": weakest.actually_said,
+                }
+                if weakest else None
             ),
             "ms_per_sound": (
                 round(word.duration_ms / len(word.phonemes), 1) if word.phonemes else 0.0
@@ -464,8 +478,20 @@ def build_sentence_metrics(
                 "error_type": w.error_type,
                 "offset_ms": w.offset_ms,
                 "duration_ms": w.duration_ms,
+                # What the word should sound like, and what it actually did.
+                "expected_ipa": w.expected_ipa,
+                "spoken_ipa": w.spoken_ipa,
                 "phonemes": [
-                    {"ipa": p.ipa, "accuracy": p.accuracy} for p in w.phonemes
+                    {
+                        "ipa": p.ipa,
+                        "accuracy": p.accuracy,
+                        "actually_said": p.actually_said,
+                        "substituted": p.is_substitution,
+                        "candidates": [
+                            {"ipa": c.ipa, "score": c.score} for c in p.spoken[:3]
+                        ],
+                    }
+                    for p in w.phonemes
                 ],
             }
             for w in result.words

@@ -3,63 +3,198 @@
   "test": "speaking",
   "test_key": "voice_challenge",
   "display_name": "Voice Challenge (Speaking)",
-  "description": "Cognitive tag definitions for the Voice Challenge speaking assessment.",
+  "description": "Cognitive tag definitions for the Voice Challenge speaking assessment, built on the Azure pronunciation signal chain.",
   "derived_signals": [
+    "sentences_answered",
+    "sentences_needs_review",
+    "attempted_ratio",
+    "avg_accuracy",
     "avg_fluency",
-    "avg_pronunciation",
+    "avg_completeness",
     "avg_prosody",
-    "flat_delivery",
-    "hard_band_avg"
+    "avg_pron_score",
+    "wcpm",
+    "wcpm_band",
+    "avg_accuracy_pct",
+    "words_read",
+    "avg_time_to_speak_ms",
+    "total_long_pause_count",
+    "filler_rate_per_100w",
+    "repetition_count",
+    "omission_count",
+    "monotone_count",
+    "prolonged_count",
+    "clear_error_count",
+    "needs_attention_count",
+    "phonics_short_vowel",
+    "phonics_long_vowel",
+    "phonics_other_vowel_pattern",
+    "phonics_consonant_blend",
+    "phonics_consonant_digraph",
+    "phonics_beginning_consonant",
+    "phonics_ending_consonant"
   ],
   "tags": [
     {
-      "id": "expressive_fluency_strong",
-      "trigger": "avg_fluency >= 0.8",
+      "id": "decoding_accurate",
+      "trigger": "avg_accuracy >= 85 AND sentences_answered >= 3",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child reads aloud with smooth, natural-sounding fluency."
+      "description": "Your child reads the words on the page accurately."
     },
     {
-      "id": "expressive_fluency_emerging",
-      "trigger": "avg_fluency >= 0.6 AND avg_fluency < 0.8",
+      "id": "decoding_emerging",
+      "trigger": "avg_accuracy < 70 AND sentences_answered >= 3",
       "confidence": "high",
       "polarity": "growth_edge",
-      "description": "Child's fluency is developing but not yet consistently smooth."
+      "description": "Your child is still working out some of the words. Reading the same passage a second time usually helps."
     },
     {
-      "id": "pronunciation_accurate",
-      "trigger": "avg_pronunciation >= 0.85",
+      "id": "reading_rate_on_track",
+      "trigger": "wcpm_band == in_band AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "strength",
+      "description": "Your child reads at a comfortable pace for their grade."
+    },
+    {
+      "id": "reading_rate_slow",
+      "trigger": "wcpm_band == below_band AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "growth_edge",
+      "description": "Your child reads more slowly than is typical for their grade. Short daily reading aloud is the most effective thing that helps."
+    },
+    {
+      "id": "phrasing_smooth",
+      "trigger": "avg_fluency >= 85 AND sentences_answered >= 3",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child pronounces words accurately and clearly."
+      "description": "Your child reads in smooth phrases rather than word by word."
     },
     {
-      "id": "pronunciation_developing",
-      "trigger": "avg_pronunciation < 0.7",
+      "id": "phrasing_choppy",
+      "trigger": "avg_fluency < 70 AND sentences_answered >= 3",
       "confidence": "high",
       "polarity": "growth_edge",
-      "description": "Child has notable pronunciation gaps that affect intelligibility."
+      "description": "Your child pauses often mid-sentence. Reading a familiar book aloud builds the habit of reading in phrases."
     },
     {
-      "id": "prosody_strong",
-      "trigger": "avg_prosody >= 0.8",
+      "id": "expression_present",
+      "trigger": "avg_prosody >= 80 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "strength",
+      "description": "Your child reads with expression and natural rhythm."
+    },
+    {
+      "id": "expression_flat",
+      "trigger": "avg_prosody < 60 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "growth_edge",
+      "description": "Your child reads in a fairly flat voice. Taking turns reading character voices makes this fun to practise."
+    },
+    {
+      "id": "reads_every_word",
+      "trigger": "avg_completeness >= 95 AND sentences_answered >= 3",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child uses appropriate intonation, stress, and rhythm."
+      "description": "Your child reads the whole sentence without skipping words."
     },
     {
-      "id": "prosody_emerging",
-      "trigger": "flat_delivery == true",
+      "id": "skips_words",
+      "trigger": "omission_count >= 3 AND sentences_answered >= 3",
       "confidence": "high",
       "polarity": "growth_edge",
-      "description": "Child reads in a flat, monotone manner without natural expression."
+      "description": "Your child skips over some words while reading. Following the line with a finger helps at this stage."
     },
     {
-      "id": "complex_syntax_confident",
-      "trigger": "hard_band_avg >= 0.8",
-      "confidence": "high",
+      "id": "hesitates_before_starting",
+      "trigger": "avg_time_to_speak_ms >= 4000 AND sentences_answered >= 3",
+      "confidence": "low",
+      "polarity": "neutral",
+      "description": "Your child takes a moment to gather themselves before reading aloud."
+    },
+    {
+      "id": "stretches_words",
+      "trigger": "prolonged_count >= 2 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "neutral",
+      "description": "Your child holds some sounds while working out a word, which is a normal decoding strategy at this stage."
+    },
+    {
+      "id": "filler_habit_emerging",
+      "trigger": "filler_rate_per_100w >= 8 AND sentences_answered >= 3",
+      "confidence": "low",
+      "polarity": "neutral",
+      "description": "Your child uses filler sounds like \"um\" fairly often while reading."
+    },
+    {
+      "id": "self_corrects_while_reading",
+      "trigger": "repetition_count >= 2 AND sentences_answered >= 3",
+      "confidence": "medium",
       "polarity": "strength",
-      "description": "Child handles complex sentence structures with confidence."
+      "description": "Your child goes back and repeats words to get them right, which shows they are listening to their own reading."
+    },
+    {
+      "id": "vowel_sounds_secure",
+      "trigger": "phonics_short_vowel >= 85 AND phonics_long_vowel >= 85 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "strength",
+      "description": "Your child produces short and long vowel sounds clearly."
+    },
+    {
+      "id": "short_vowel_emerging",
+      "trigger": "phonics_short_vowel < 70 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "growth_edge",
+      "description": "Short vowel sounds are still settling in your child’s reading."
+    },
+    {
+      "id": "long_vowel_emerging",
+      "trigger": "phonics_long_vowel < 70 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "growth_edge",
+      "description": "Long vowel sounds are still settling in your child’s reading."
+    },
+    {
+      "id": "blends_secure",
+      "trigger": "phonics_consonant_blend >= 85 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "strength",
+      "description": "Your child says consonant clusters like st and br clearly."
+    },
+    {
+      "id": "blends_emerging",
+      "trigger": "phonics_consonant_blend < 70 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "growth_edge",
+      "description": "Consonant clusters like st and br are still tricky for your child."
+    },
+    {
+      "id": "digraphs_secure",
+      "trigger": "phonics_consonant_digraph >= 85 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "strength",
+      "description": "Your child says letter pairs like sh, ch and th clearly."
+    },
+    {
+      "id": "digraphs_emerging",
+      "trigger": "phonics_consonant_digraph < 70 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "growth_edge",
+      "description": "Letter pairs like sh, ch and th are still tricky for your child."
+    },
+    {
+      "id": "ending_sounds_emerging",
+      "trigger": "phonics_ending_consonant < 70 AND sentences_answered >= 3",
+      "confidence": "medium",
+      "polarity": "growth_edge",
+      "description": "Your child sometimes drops the sound at the end of a word."
+    },
+    {
+      "id": "recording_needs_review",
+      "trigger": "sentences_needs_review >= 2",
+      "confidence": "low",
+      "polarity": "neutral",
+      "description": "Some recordings could not be assessed reliably and were left out of the result."
     }
   ]
 }
