@@ -54,6 +54,14 @@ class HybridSpeechProvider:
     def is_configured(self) -> bool:
         return self._openai is not None
 
+    #: Biases Whisper towards a verbatim transcript. Whisper is trained to
+    #: produce clean readable text and silently removes "um", "uh" and false
+    #: starts; seeding it with disfluencies makes it keep them. Deliberately
+    #: contains no content words - nothing here can hint at any sentence.
+    _VERBATIM_PROMPT = (
+        "Um, uh, er... I— I mean, hmm, uh, the— the, um, er, ah, mm-hmm."
+    )
+
     def _transcribe_blind(self, audio_bytes: bytes, audio_format: str) -> str:
         """Transcribe WITHOUT telling the model what the child was meant to say.
 
@@ -75,7 +83,12 @@ class HybridSpeechProvider:
                 model="whisper-1",
                 file=buffer,
                 response_format="text",
-                # No `prompt=` argument: any hint here would re-open the leak.
+                # The prompt biases the transcriber towards keeping
+                # disfluencies, which it otherwise cleans away - measured:
+                # a spoken "um" was dropped entirely without this. It contains
+                # ONLY filler tokens and never the target sentence, so it
+                # cannot reintroduce the leak this method exists to close.
+                prompt=self._VERBATIM_PROMPT,
                 temperature=0.0,
             )
             return (result if isinstance(result, str) else getattr(result, "text", "")).strip()
