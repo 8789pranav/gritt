@@ -57,11 +57,19 @@ async def test_speaking_analyze(client, mock_firebase_auth, seed_user, mock_spee
     })
     assert resp.status_code == 200
     data = resp.json()
-    assert data["transcribed_text"] == "The cat sat on the mat."
-    assert "pronunciation" in data
-    assert "fluency" in data
-    assert "overall" in data
-    assert data["overall"]["score"] == 84.4
+    # analyze returns the same object submit returns per sentence, so a client
+    # written against one endpoint reads the other unchanged.
+    assert data["sentence"] == "The cat sat on the mat."
+    assert data["transcription"]["heard"] == "The cat sat on the mat."
+    assert data["answered"] is True
+    analysis = data["analysis"]
+    assert analysis["overall"]["score"] == 84.4
+    assert analysis["pronunciation"]["feedback"]
+    assert analysis["fluency"]["feedback"]
+    # The per-word and per-phoneme detail produces the scores but is not
+    # carried in the response; /lab exposes it for diagnosis.
+    assert "findings" not in analysis
+    assert "words" not in analysis
 
 
 @pytest.mark.asyncio

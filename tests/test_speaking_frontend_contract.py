@@ -459,3 +459,46 @@ class TestTeacherTable:
         assert row["error_type"] is None
         assert row["correct"] is True
         assert row["icon"] == "Correct"
+
+
+class TestNoRawDetailInTheResponse:
+    """The per-word and per-phoneme detail produces every score and is what
+    the feedback quotes, but it is not carried in the response. Twenty phoneme
+    accuracies per sentence bury the number and the one thing to do about it.
+    /lab still exposes the detail for diagnosis."""
+
+    async def test_no_findings_or_words_on_a_sentence(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, data = await _run(client)
+        for sentence in data["sentences"]:
+            analysis = sentence["analysis"]
+            assert "findings" not in analysis
+            assert "words" not in analysis
+            assert "findings" not in analysis.get("pronunciation", {})
+            assert "words" not in analysis.get("pronunciation", {})
+
+    async def test_pronunciation_is_a_score_and_a_line(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, data = await _run(client)
+        for sentence in data["sentences"]:
+            block = sentence["analysis"]["pronunciation"]
+            assert set(block) == {"score", "feedback"}, set(block)
+
+    async def test_the_sounds_the_child_made_are_still_reported(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        """Dropping the detail must not drop what was actually said."""
+        _, data = await _run(client)
+        for sentence in data["sentences"]:
+            assert "spoken_sounds" in sentence["transcription"]
+
+    async def test_the_teacher_table_carries_no_raw_detail_either(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        _, data = await _run(client)
+        for row in data["teacher_admin_detail"]["table_data"]:
+            assert "findings" not in row
+            assert "words" not in row
+            assert "phonemes" not in row

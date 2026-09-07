@@ -757,59 +757,11 @@ class AssessmentService:
                 measured.get("message") or "No speech was detected in the recording."
             )
 
-        from app.engines.speaking.feedback import build as build_feedback
-        from app.engines.speaking.feedback import level_for as feedback_level
+        from app.engines.speaking.result import build_sentence
 
-        scores = measured.get("scores", {})
-        fb = build_feedback(measured)
-        return {
-            "original_sentence": original_sentence,
-            "transcribed_text": measured.get("recognized", ""),
-            "verbatim_text": measured.get("verbatim", ""),
-            "status": measured.get("status"),
-            "duration_seconds": round(
-                (measured.get("timing", {}).get("speaking_span_ms") or 0) / 1000.0, 2
-            ),
-            "analysis_method": "azure_pronunciation_assessment",
-            "pronunciation": {
-                "score": scores.get("accuracy", 0.0),
-                "feedback": fb["pronunciation_feedback"],
-                "words": measured.get("words", []),
-                "findings": measured.get("findings", []),
-            },
-            "fluency": {
-                "score": scores.get("fluency", 0.0),
-                "fluency_score": scores.get("fluency", 0.0),
-                "feedback": fb["fluency_feedback"],
-                **measured.get("timing", {}),
-            },
-            "prosody": {
-                "score": scores.get("prosody") or 0.0,
-                "feedback": fb["prosody_feedback"],
-            },
-            "completeness": {
-                "score": scores.get("completeness", 0.0),
-                "feedback": fb["completeness_feedback"],
-            },
-            "grammar": {
-                "score": scores.get("completeness", 0.0),
-                "feedback": fb["completeness_feedback"],
-                "issues": [],
-            },
-            "reading": measured.get("reading", {}),
-            "disfluency": measured.get("disfluency", {}),
-            "phonics": measured.get("phonics", {}),
-            "errors": measured.get("errors", {}),
-            "overall": {
-                "score": scores.get("pron_score", 0.0),
-                "level": feedback_level(scores.get("pron_score", 0.0)),
-                "strengths": fb["strengths"],
-                "areas_to_improve": fb["areas_to_improve"],
-                "recommendation": fb["parent_tip"],
-                "parent_tip": fb["parent_tip"],
-            },
-            "channel_agreement": measured.get("channel_agreement"),
-        }
+        # The same object /speaking/submit/ returns per sentence, so a client
+        # written against one endpoint reads the other unchanged.
+        return build_sentence(measured, original_sentence)
 
     async def speaking_submit(self, id_token: str, child_id: str, grade: str,
                               sentence_id: Optional[str] = None,
