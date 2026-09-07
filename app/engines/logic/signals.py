@@ -86,6 +86,7 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
     ) -> Dict[str, Any]:
         items_by_id = {item.item_id: item for item in items}
         load_item_types = set(self.config.item_type_groups.get("load", []))
+        rule_item_types = set(self.config.item_type_groups.get("rule_application", []))
 
         # Skill accumulators. Each construct tracks how many items were SHOWN
         # as well as how many were correct, so the rollup can use a proportion
@@ -99,7 +100,8 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
 
         # Difficulty / behaviour accumulators.
         load_fails = 0
-        rule_maintenance_fails = 0
+        rule_maintenance_fails = rule_maintenance_shown = 0
+        slow_and_correct_count = 0
         multiple_attempts_count = 0
         fast_and_wrong_count = 0
         self_corrected_to_right_count = 0
@@ -145,9 +147,17 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
                 if not is_correct or latency > expected * SLOW_RESPONSE_MULTIPLIER:
                     load_fails += 1
 
-            # --- rule maintenance: failed a multi-step rule application -----
-            if item.item_type in {"two_step", "rule_application"} and not is_correct:
-                rule_maintenance_fails += 1
+            # --- rule maintenance: held a stated rule, or dropped it --------
+            # The item types come from the config so every grade has some;
+            # the hardcoded pair only existed at Grade 1.
+            if item.item_type in rule_item_types:
+                rule_maintenance_shown += 1
+                if not is_correct:
+                    rule_maintenance_fails += 1
+
+            # --- pace: worked slowly and still got it right -----------------
+            if is_correct and latency > expected * SLOW_RESPONSE_MULTIPLIER:
+                slow_and_correct_count += 1
 
             # --- behavioural signals ---------------------------------------
             if response.attempts > 1:
@@ -201,6 +211,12 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
             "load_accuracy": self.ratio(load_success_count, load_shown),
             "load_items_count": load_shown,
             "rule_maintenance_fails": rule_maintenance_fails,
+            "rule_maintenance_items_count": rule_maintenance_shown,
+            "rule_maintenance_accuracy": self.ratio(
+                rule_maintenance_shown - rule_maintenance_fails,
+                rule_maintenance_shown,
+            ),
+            "slow_and_correct_count": slow_and_correct_count,
             # L-D5: shift_result and rule_inferred are still derived above, so
             # wiring the sort task back up stays a one-line change, but they
             # are no longer published as signals - the API never populates the

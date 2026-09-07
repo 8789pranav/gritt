@@ -77,6 +77,7 @@ class TestLogicTags:
         "reasoning_under_load",
         "reasoning_under_load_emerging",
         "rule_maintenance_difficulty",
+        "deliberate_pace",
         "trial_and_error_strategy",
         "impulsive_response",
         "self_correction_present",

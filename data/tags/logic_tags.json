@@ -43,6 +43,15 @@
       "multi_step_quantity",
       "two_step",
       "transitive_reasoning"
+    ],
+    "rule_application": [
+      "conditional_logic",
+      "rule_application",
+      "two_step",
+      "rule_boundary",
+      "dual_rule",
+      "dual_rule_arithmetic",
+      "dual_condition"
     ]
   },
   "derived_signals": [
@@ -61,7 +70,10 @@
     "rule_maintenance_fails",
     "multiple_attempts_count",
     "fast_and_wrong_count",
-    "self_corrected_to_right_count"
+    "self_corrected_to_right_count",
+    "rule_maintenance_items_count",
+    "rule_maintenance_accuracy",
+    "slow_and_correct_count"
   ],
   "tags": [
     {
@@ -136,10 +148,17 @@
     },
     {
       "id": "rule_maintenance_difficulty",
-      "trigger": "rule_maintenance_fails >= 2",
-      "confidence": "low",
+      "trigger": "rule_maintenance_accuracy < 0.75 AND rule_maintenance_items_count >= 1",
+      "confidence": "medium",
       "polarity": "growth_edge",
       "description": "Your child is still learning to apply a single rule consistently. This is common at this stage and will improve with sorting games."
+    },
+    {
+      "id": "deliberate_pace",
+      "trigger": "slow_and_correct_count >= 2",
+      "confidence": "medium",
+      "polarity": "neutral",
+      "description": "Your child takes their time on the harder questions and works them out rather than guessing."
     },
     {
       "id": "trial_and_error_strategy",

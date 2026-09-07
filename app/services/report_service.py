@@ -415,6 +415,7 @@ class ReportService:
         "flexible_strategy_emerging": "Child tends to stay with the first approach they try.",
         "reasoning_under_load": "Child holds several pieces of information in mind at once and works through them.",
         "reasoning_under_load_emerging": "Child can handle simple logic but struggles with multi-step or high-load problems.",
+        "deliberate_pace": "Child takes their time on harder questions and works them out rather than guessing.",
         "trial_and_error_strategy": "Child tends to guess rather than plan, trying options until one fits.",
         "impulsive_response": "Child answers too quickly without thinking through the problem.",
         "self_correction_present": "Child notices and corrects their own mistakes during the test.",
