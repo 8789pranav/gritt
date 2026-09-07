@@ -255,8 +255,15 @@ def reading_metrics(
     wcpm = round(correct / (seconds / 60.0), 1) if seconds > 0 else 0.0
 
     low, high = GRADE_WCPM_BANDS.get(grade, DEFAULT_WCPM_BAND)
-    if wcpm <= 0:
+    # "no_reading" has to mean nothing was said. It used to be reported for
+    # any wcpm of zero, and wcpm counts only CORRECT words - so a child who
+    # read the sentence aloud but got every word wrong was described as not
+    # having read at all, next to a transcript of what they said.
+    spoke = seconds > 0 and any(w.was_spoken and w.duration_ms > 0 for w in words)
+    if not spoke:
         band = "no_reading"
+    elif wcpm <= 0:
+        band = "no_words_correct"
     elif wcpm < low:
         band = "below_band"
     elif wcpm > high:

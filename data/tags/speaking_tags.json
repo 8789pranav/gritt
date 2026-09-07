@@ -58,7 +58,7 @@
     },
     {
       "id": "reading_rate_slow",
-      "trigger": "wcpm_band == below_band AND sentences_answered >= 3",
+      "trigger": "wcpm_band == below_band AND sentences_answered >= 3 OR wcpm_band == no_words_correct AND sentences_answered >= 3",
       "confidence": "medium",
       "polarity": "growth_edge",
       "description": "Your child reads more slowly than is typical for their grade. Short daily reading aloud is the most effective thing that helps."

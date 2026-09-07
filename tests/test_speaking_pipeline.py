@@ -906,3 +906,54 @@ class TestSpokenPhonemes:
         config = json.loads(base64.b64decode(client.build_config_header("hi")))
         assert config["NBestPhonemeCount"] >= 1
         assert config["PhonemeAlphabet"] == "IPA"
+
+
+class TestRateBandMeansWhatItSays:
+    """Reported from a real run: a child read for 2.66 seconds, the transcript
+    showed "Bright stars at night.", and the result said rate_band
+    "no_reading" with wcpm 0. wcpm counts only CORRECT words, so a child who
+    read aloud and got every word wrong was described as not having read."""
+
+    def _word(self, word, error, offset_ms, duration_ms):
+        from app.infrastructure.azure_pronunciation import Phoneme, Word as W
+
+        return W(word=word, accuracy=0.0 if error != "None" else 95.0,
+                 error_type=error, offset_ms=offset_ms, duration_ms=duration_ms,
+                 phonemes=[Phoneme(ipa="x", accuracy=50.0,
+                                   offset_ms=offset_ms, duration_ms=10)])
+
+    def test_spoke_but_nothing_correct(self):
+        from app.engines.speaking.metrics import reading_metrics
+
+        words = [
+            self._word("bright", "Mispronunciation", 100, 400),
+            self._word("stars", "Mispronunciation", 520, 380),
+            self._word("at", "Omission", 0, 0),
+            self._word("night", "Mispronunciation", 940, 420),
+        ]
+        result = reading_metrics(words, "First")
+        assert result.rate_band == "no_words_correct"
+        assert result.rate_band != "no_reading", "a reading was reported as silence"
+        assert result.elapsed_seconds > 0
+
+    def test_said_nothing_at_all(self):
+        from app.engines.speaking.metrics import reading_metrics
+
+        assert reading_metrics([], "First").rate_band == "no_reading"
+
+    def test_omissions_alone_are_not_a_reading(self):
+        """Every word omitted means the child said none of them."""
+        from app.engines.speaking.metrics import reading_metrics
+
+        words = [self._word("bright", "Omission", 0, 0),
+                 self._word("night", "Omission", 0, 0)]
+        assert reading_metrics(words, "First").rate_band == "no_reading"
+
+    def test_a_correct_reading_is_banded_normally(self):
+        from app.engines.speaking.metrics import reading_metrics
+
+        words = [self._word("bright", "None", 100, 400),
+                 self._word("night", "None", 520, 380)]
+        result = reading_metrics(words, "First")
+        assert result.rate_band in ("in_band", "above_band", "below_band")
+        assert result.wcpm > 0
