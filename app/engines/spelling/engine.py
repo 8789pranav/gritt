@@ -146,11 +146,17 @@ class SpellingEngine(AssessmentEngine[SpellingWord, SpellingResponse]):
         return focus
 
     def strengths(self, signals: Dict[str, float]) -> List[str]:
-        """Features the child reached mastery on."""
+        """Features the child reached mastery on.
+
+        #78: A feature belongs in strengths only when its accuracy is at
+        or above threshold AND at least 2 words carried it. A feature
+        tested on just 1 word (100% accuracy) is not evidence of mastery.
+        """
         mastered: List[str] = []
         for feature in PhonicsFeature:
             accuracy = signals.get(f"{feature.value}_accuracy", 0.0)
-            if accuracy >= MASTERY_THRESHOLD:
+            attempted = signals.get(f"{feature.value}_attempted", 0)
+            if accuracy >= MASTERY_THRESHOLD and attempted >= 2:
                 mastered.append(feature.display_name)
         return mastered
 

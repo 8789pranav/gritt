@@ -27,7 +27,7 @@
   "tags": [
     {
       "id": "phonetic_strategy_strong",
-      "trigger": "beginning_accuracy >= 0.8 AND final_accuracy >= 0.8 AND vowel_accuracy >= 0.75",
+      "trigger": "beginning_accuracy >= 0.8 AND final_accuracy >= 0.8 AND vowel_accuracy >= 0.8",
       "confidence": "high",
       "polarity": "strength",
       "description": "Child decodes words using solid phonetic knowledge across all positions."

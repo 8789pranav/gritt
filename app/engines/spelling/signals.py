@@ -206,6 +206,14 @@ class SpellingSignalDeriver(SignalDeriver[SpellingWord, SpellingResponse]):
                 for feature, tally in tallies.items()
             }
         )
+        # #78: per-feature attempted count, so strengths() can require
+        # a minimum number of words before calling a feature "mastered".
+        signals.update(
+            {
+                f"{feature.value}_attempted": tally.attempted
+                for feature, tally in tallies.items()
+            }
+        )
 
         return signals
 
