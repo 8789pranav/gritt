@@ -275,3 +275,12 @@ class FinalReportRequest(BaseModel):
     idToken: str
     child_id: str
     grade: str
+
+
+# ---------------------------------------------------------------------------
+# Learning Snapshot
+# ---------------------------------------------------------------------------
+class SnapshotRequest(BaseModel):
+    idToken: str
+    child_id: str
+    grade: str

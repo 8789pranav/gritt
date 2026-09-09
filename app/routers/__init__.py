@@ -9,6 +9,7 @@ from app.routers.admin import router as admin_router
 from app.routers.report import router as report_router
 from app.routers.payment import router as payment_router
 from app.routers.speech_lab import router as speech_lab_router
+from app.routers.snapshot import router as snapshot_router
 
 all_routers = [
     auth_router,
@@ -21,6 +22,7 @@ all_routers = [
     payment_router,
     # Diagnostic harness. Every route 404s unless SPEECH_LAB_ENABLED is set.
     speech_lab_router,
+    snapshot_router,
 ]
 
 __all__ = ["all_routers"]
