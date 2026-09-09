@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "test": "logic",
   "grade": "2-3",
-  "count": 8,
+  "count": 15,
   "items": [
     {
       "item_id": "logic_2_1",
@@ -259,13 +259,125 @@
       "primary_tag": "systematic_problem_solving",
       "difficulty": "hard",
       "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_2_9",
+      "item_number": "2-9",
+      "item_type": "pattern",
+      "question_text": "What number comes next? \n 5, 10, 15, 20, ___",
+      "options": [
+        {"index": 0, "text": "22", "image_url": null},
+        {"index": 1, "text": "23", "image_url": null},
+        {"index": 2, "text": "25", "image_url": null},
+        {"index": 3, "text": "30", "image_url": null}
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "pattern_detection_strong",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_2_10",
+      "item_number": "2-10",
+      "item_type": "analogy",
+      "question_text": "A wheel is to a car as a wing is to a ___",
+      "options": [
+        {"index": 0, "text": "Bird", "image_url": null},
+        {"index": 1, "text": "Plane", "image_url": null},
+        {"index": 2, "text": "Building", "image_url": null},
+        {"index": 3, "text": "Cloud", "image_url": null}
+      ],
+      "correct_answer_index": 1,
+      "primary_tag": "relational_reasoning_present",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_2_11",
+      "item_number": "2-11",
+      "item_type": "odd_one_out",
+      "question_text": "Which one does NOT belong? \n Apple, Banana, Carrot, Orange",
+      "options": [
+        {"index": 0, "text": "Apple", "image_url": null},
+        {"index": 1, "text": "Banana", "image_url": null},
+        {"index": 2, "text": "Carrot", "image_url": null},
+        {"index": 3, "text": "Orange", "image_url": null}
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "relational_reasoning_present",
+      "difficulty": "medium",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_2_12",
+      "item_number": "2-12",
+      "item_type": "combining",
+      "question_text": "Ravi has 6 stickers. He gives 2 to Sam and 1 to Priya. How many stickers does Ravi have left?",
+      "options": [
+        {"index": 0, "text": "2", "image_url": null},
+        {"index": 1, "text": "3", "image_url": null},
+        {"index": 2, "text": "4", "image_url": null},
+        {"index": 3, "text": "5", "image_url": null}
+      ],
+      "correct_answer_index": 1,
+      "primary_tag": "systematic_problem_solving",
+      "difficulty": "medium",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_2_13",
+      "item_number": "2-13",
+      "item_type": "two_step",
+      "question_text": "There are 5 birds on a wire. 2 fly away. Then 3 land. How many birds are on the wire?",
+      "options": [
+        {"index": 0, "text": "4", "image_url": null},
+        {"index": 1, "text": "5", "image_url": null},
+        {"index": 2, "text": "6", "image_url": null},
+        {"index": 3, "text": "7", "image_url": null}
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "reasoning_under_load",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_2_14",
+      "item_number": "2-14",
+      "item_type": "strategy",
+      "question_text": "You're trying to solve a maze but keep hitting dead ends. What should you try?",
+      "options": [
+        {"index": 0, "text": "Go faster", "image_url": null},
+        {"index": 1, "text": "Try a different path", "image_url": null},
+        {"index": 2, "text": "Close your eyes", "image_url": null},
+        {"index": 3, "text": "Give up", "image_url": null}
+      ],
+      "correct_answer_index": 1,
+      "primary_tag": "flexible_strategy_use",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_2_15",
+      "item_number": "2-15",
+      "item_type": "strategy",
+      "question_text": "You're building a Lego tower but it keeps falling. What should you try?",
+      "options": [
+        {"index": 0, "text": "Use more pieces", "image_url": null},
+        {"index": 1, "text": "Use a wider base", "image_url": null},
+        {"index": 2, "text": "Build it taller", "image_url": null},
+        {"index": 3, "text": "Try the same way again", "image_url": null}
+      ],
+      "correct_answer_index": 1,
+      "primary_tag": "flexible_strategy_use",
+      "difficulty": "medium",
+      "expected_latency_seconds": 30
     }
   ],
   "tag_coverage": {
-    "flexible_strategy_use": 2,
-    "pattern_detection_strong": 2,
-    "reasoning_under_load": 2,
-    "relational_reasoning_present": 1,
-    "systematic_problem_solving": 1
+    "pattern_detection_strong": 3,
+    "relational_reasoning_present": 3,
+    "systematic_problem_solving": 3,
+    "reasoning_under_load": 3,
+    "flexible_strategy_use": 3
   }
 }

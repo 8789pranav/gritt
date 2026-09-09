@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "test": "logic",
   "grade": "K-1",
-  "count": 8,
+  "count": 15,
   "items": [
     {
       "item_id": "logic_k_1",
@@ -259,12 +259,125 @@
       "primary_tag": "systematic_problem_solving",
       "difficulty": "medium",
       "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_9",
+      "item_number": "K-9",
+      "item_type": "combining",
+      "question_text": "Sam has 2 red blocks and 2 blue blocks. He uses all of them to build a tower. How many blocks are in the tower?",
+      "options": [
+        {"index": 0, "text": "2", "image_url": null},
+        {"index": 1, "text": "3", "image_url": null},
+        {"index": 2, "text": "4", "image_url": null},
+        {"index": 3, "text": "5", "image_url": null}
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "systematic_problem_solving",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_10",
+      "item_number": "K-10",
+      "item_type": "two_step",
+      "question_text": "There are 2 birds on a fence. 1 flies away. Then 2 more land. How many birds are on the fence?",
+      "options": [
+        {"index": 0, "text": "1", "image_url": null},
+        {"index": 1, "text": "2", "image_url": null},
+        {"index": 2, "text": "3", "image_url": null},
+        {"index": 3, "text": "4", "image_url": null}
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "reasoning_under_load",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_11",
+      "item_number": "K-11",
+      "item_type": "multi_step_quantity",
+      "question_text": "Sam has 2 red blocks and 3 blue blocks. How many blocks does Sam have?",
+      "options": [
+        {"index": 0, "text": "3", "image_url": null},
+        {"index": 1, "text": "4", "image_url": null},
+        {"index": 2, "text": "5", "image_url": null},
+        {"index": 3, "text": "6", "image_url": null}
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "reasoning_under_load",
+      "difficulty": "medium",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_12",
+      "item_number": "K-12",
+      "item_type": "two_step",
+      "question_text": "A box has 4 toys. You take out 1. Then you put 2 more in. How many toys are in the box?",
+      "options": [
+        {"index": 0, "text": "3", "image_url": null},
+        {"index": 1, "text": "4", "image_url": null},
+        {"index": 2, "text": "5", "image_url": null},
+        {"index": 3, "text": "6", "image_url": null}
+      ],
+      "correct_answer_index": 2,
+      "primary_tag": "reasoning_under_load",
+      "difficulty": "medium",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_13",
+      "item_number": "K-13",
+      "item_type": "strategy",
+      "question_text": "You're trying to draw a straight line but your hand keeps slipping. What should you try?",
+      "options": [
+        {"index": 0, "text": "Press harder", "image_url": null},
+        {"index": 1, "text": "Use a ruler", "image_url": null},
+        {"index": 2, "text": "Draw faster", "image_url": null},
+        {"index": 3, "text": "Give up", "image_url": null}
+      ],
+      "correct_answer_index": 1,
+      "primary_tag": "flexible_strategy_use",
+      "difficulty": "easy",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_14",
+      "item_number": "K-14",
+      "item_type": "strategy",
+      "question_text": "You're building a bridge with blocks but it keeps falling. What should you try?",
+      "options": [
+        {"index": 0, "text": "Use more blocks", "image_url": null},
+        {"index": 1, "text": "Use wider blocks at the bottom", "image_url": null},
+        {"index": 2, "text": "Build it taller", "image_url": null},
+        {"index": 3, "text": "Give up", "image_url": null}
+      ],
+      "correct_answer_index": 1,
+      "primary_tag": "flexible_strategy_use",
+      "difficulty": "medium",
+      "expected_latency_seconds": 30
+    },
+    {
+      "item_id": "logic_k_15",
+      "item_number": "K-15",
+      "item_type": "strategy",
+      "question_text": "You're trying to reach a toy on a high shelf but can't reach it. What should you try?",
+      "options": [
+        {"index": 0, "text": "Jump higher", "image_url": null},
+        {"index": 1, "text": "Use a stool", "image_url": null},
+        {"index": 2, "text": "Try again later", "image_url": null},
+        {"index": 3, "text": "Ask a taller friend", "image_url": null}
+      ],
+      "correct_answer_index": 1,
+      "primary_tag": "flexible_strategy_use",
+      "difficulty": "medium",
+      "expected_latency_seconds": 30
     }
   ],
   "tag_coverage": {
     "pattern_detection_strong": 3,
-    "reasoning_under_load": 1,
-    "relational_reasoning_present": 2,
-    "systematic_problem_solving": 2
+    "relational_reasoning_present": 3,
+    "systematic_problem_solving": 3,
+    "reasoning_under_load": 3,
+    "flexible_strategy_use": 3
   }
 }

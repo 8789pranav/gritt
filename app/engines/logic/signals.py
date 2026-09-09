@@ -228,7 +228,10 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
             # any trigger.
             "total_items": score.total_items,
             "correct_answers": score.correct_answers,
-            "overall_accuracy": self.ratio(score.correct_answers, score.total_items),
+            # L-D10: use the 0-100 scale everywhere, not 0-1.
+            "overall_accuracy": round(
+                self.ratio(score.correct_answers, score.total_items) * 100, 1
+            ),
         }
 
     def per_item_tags(

@@ -78,77 +78,77 @@
   "tags": [
     {
       "id": "pattern_detection_strong",
-      "trigger": "pattern_accuracy >= 0.75 AND pattern_items_count >= 1",
+      "trigger": "pattern_accuracy >= 0.75 AND pattern_items_count >= 3",
       "confidence": "high",
       "polarity": "strength",
       "description": "Your child recognises patterns confidently."
     },
     {
       "id": "pattern_detection_emerging",
-      "trigger": "pattern_accuracy < 0.75 AND pattern_items_count >= 1",
+      "trigger": "pattern_accuracy < 0.75 AND pattern_items_count >= 3",
       "confidence": "high",
       "polarity": "growth_edge",
       "description": "Your child is beginning to recognise patterns. With more practice they will tackle harder ones too."
     },
     {
       "id": "relational_reasoning_present",
-      "trigger": "relational_accuracy >= 0.75 AND relational_items_count >= 1",
+      "trigger": "relational_accuracy >= 0.75 AND relational_items_count >= 3",
       "confidence": "high",
       "polarity": "strength",
       "description": "Your child connects ideas and sees how different concepts relate to each other."
     },
     {
       "id": "relational_reasoning_emerging",
-      "trigger": "relational_accuracy < 0.75 AND relational_items_count >= 1",
+      "trigger": "relational_accuracy < 0.75 AND relational_items_count >= 3",
       "confidence": "high",
       "polarity": "growth_edge",
       "description": "Your child is starting to see how ideas connect. Comparing and sorting everyday objects together will help."
     },
     {
       "id": "systematic_problem_solving",
-      "trigger": "systematic_accuracy >= 0.75 AND systematic_items_count >= 1",
+      "trigger": "systematic_accuracy >= 0.75 AND systematic_items_count >= 3",
       "confidence": "high",
       "polarity": "strength",
       "description": "Your child breaks down complex problems into manageable steps."
     },
     {
       "id": "systematic_problem_solving_emerging",
-      "trigger": "systematic_accuracy < 0.75 AND systematic_items_count >= 1",
+      "trigger": "systematic_accuracy < 0.75 AND systematic_items_count >= 3",
       "confidence": "high",
       "polarity": "growth_edge",
       "description": "Your child is learning to work through problems one step at a time rather than jumping to an answer."
     },
     {
       "id": "flexible_strategy_use",
-      "trigger": "flexibility_accuracy >= 0.75 AND flexibility_items_count >= 1",
+      "trigger": "flexibility_accuracy >= 0.75 AND flexibility_items_count >= 3",
       "confidence": "medium",
       "polarity": "strength",
       "description": "Your child tries different strategies and adapts their approach when needed."
     },
     {
       "id": "flexible_strategy_emerging",
-      "trigger": "flexibility_accuracy < 0.75 AND flexibility_items_count >= 1",
+      "trigger": "flexibility_accuracy < 0.75 AND flexibility_items_count >= 3",
       "confidence": "medium",
       "polarity": "growth_edge",
       "description": "Your child tends to stay with the first approach they try. Puzzles with more than one route to the answer will help."
     },
     {
       "id": "reasoning_under_load",
-      "trigger": "load_accuracy >= 0.75 AND load_items_count >= 1",
+      "trigger": "load_accuracy >= 0.75 AND load_items_count >= 3",
       "confidence": "high",
       "polarity": "strength",
       "description": "Your child holds several pieces of information in mind at once and works through them."
     },
     {
       "id": "reasoning_under_load_emerging",
-      "trigger": "load_accuracy < 0.75 AND load_items_count >= 1 AND load_fails >= 1",
+      "trigger": "load_accuracy < 0.75 AND load_items_count >= 3 AND load_fails >= 1",
       "confidence": "high",
       "polarity": "growth_edge",
       "description": "Your child is developing the ability to hold several pieces of information in mind at once. Practice with multi-step puzzles will help."
     },
     {
       "id": "rule_maintenance_difficulty",
-      "trigger": "rule_maintenance_accuracy < 0.75 AND rule_maintenance_items_count >= 1",
+      "trigger": "rule_maintenance_accuracy < 0.75 AND rule_maintenance_items_count >= 3",
       "confidence": "medium",
       "polarity": "growth_edge",
       "description": "Your child is still learning to apply a single rule consistently. This is common at this stage and will improve with sorting games."

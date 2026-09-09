@@ -253,20 +253,21 @@ print(f"  Grade 1 pattern_score={g1_signals['pattern_score']}, pattern_hard_coun
 g1_tag_ids = [t.tag for t in g1_result_correct.tags]
 print(f"  Grade 1 tags: {g1_tag_ids}")
 
-# pattern_detection_emerging should fire (pattern_score >= 2, no hard items)
-# pattern_detection_strong should NOT fire (needs hard_count >= 1)
-check("G5: pattern_detection_emerging fires (score >= 2, no hard)",
-      "pattern_detection_emerging" in g1_tag_ids,
+# pattern_detection_strong fires on accuracy >= 0.75 with count >= 3,
+# regardless of hard items (L-D8: trigger no longer checks hard_count).
+# pattern_detection_emerging fires on accuracy < 0.75 with count >= 3.
+check("G5: pattern_detection_strong fires (score >= 0.75, count >= 3)",
+      "pattern_detection_strong" in g1_tag_ids,
       f"tags={g1_tag_ids}")
-check("G5: pattern_detection_strong does NOT fire (no hard items)",
-      "pattern_detection_strong" not in g1_tag_ids,
+check("G5: pattern_detection_emerging does NOT fire (accuracy >= 0.75)",
+      "pattern_detection_emerging" not in g1_tag_ids,
       f"tags={g1_tag_ids}")
 
-# Check the emerging description doesn't claim inconsistency on hard items
-emerging_tag = next(t for t in g1_result_correct.tags if t.tag == "pattern_detection_emerging")
-check("G5: emerging description doesn't mention 'not yet consistent'",
-      "not yet consistent" not in emerging_tag.description.lower(),
-      f"desc={emerging_tag.description}")
+# Check the strong description doesn't claim inconsistency on hard items
+strong_tag = next(t for t in g1_result_correct.tags if t.tag == "pattern_detection_strong")
+check("G5: strong description doesn't mention 'not yet consistent'",
+      "not yet consistent" not in strong_tag.description.lower(),
+      f"desc={strong_tag.description}")
 
 # Grade 3 should have hard pattern items
 g3_items = engine.get_items(Grade.THIRD)
