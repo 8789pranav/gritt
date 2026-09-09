@@ -38,6 +38,9 @@ class ComprehensionSignalDeriver(
         correct: Dict[QuestionType, int] = {qt: 0 for qt in QuestionType}
 
         for item in score.scored_items:
+            # S2: skip unanswered questions entirely. They carry no signal.
+            if not item.detail.get("answered", True):
+                continue
             try:
                 question_type = QuestionType(item.detail.get("question_type", "literal"))
             except ValueError:
@@ -56,11 +59,15 @@ class ComprehensionSignalDeriver(
         vocabulary_accuracy = self.ratio(
             correct[QuestionType.VOCABULARY], attempted[QuestionType.VOCABULARY]
         )
-        overall_accuracy = self.ratio(score.correct_answers, score.total_items)
+        # S2: overall_accuracy uses only answered questions.
+        overall_accuracy = self.ratio(score.correct_answers, score.answered_items)
 
         # C11: one story near zero while another scored well, same sitting.
         story_scores = {}
         for item in score.scored_items:
+            # S2: skip unanswered questions.
+            if not item.detail.get("answered", True):
+                continue
             story_id = str(item.detail.get("story_id", ""))
             bucket = story_scores.setdefault(story_id, [0, 0])
             bucket[1] += 1
@@ -111,7 +118,8 @@ class ComprehensionSignalDeriver(
             "literal_attempted": attempted[QuestionType.LITERAL],
             "inferential_attempted": attempted[QuestionType.INFERENTIAL],
             "vocabulary_attempted": attempted[QuestionType.VOCABULARY],
-            "total_questions": score.total_items,
+            # S2: total_questions counts only answered questions.
+            "total_questions": score.answered_items,
             "questions_answered": score.answered_items,
             # D4: Data capture for pattern detection (not used at launch).
             "repeating_pattern_detected": repeating_pattern_detected,

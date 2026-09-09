@@ -56,7 +56,7 @@
             "The memories and stories"
           ],
           "correct_index": 3,
-          "question_type": "inferential"
+          "question_type": "literal"
         },
         {
           "question_id": "s1_q5",
@@ -66,6 +66,30 @@
             "To share her childhood memories with Sophie someday",
             "Because she forgot where she put her things",
             "To test Sophie's math skills"
+          ],
+          "correct_index": 1,
+          "question_type": "inferential"
+        },
+        {
+          "question_id": "s1_q6",
+          "question": "In the story, what does 'rust' mean when Sophie found a metal box covered in rust?",
+          "options": [
+            "A type of treasure inside the box",
+            "A reddish-brown coating that forms on old metal",
+            "A kind of lock on the box",
+            "A label on the box"
+          ],
+          "correct_index": 1,
+          "question_type": "vocabulary"
+        },
+        {
+          "question_id": "s1_q7",
+          "question": "Why do you think Sophie's grandmother kept the treasure map instead of throwing it away?",
+          "options": [
+            "Because she forgot about it",
+            "Because it held memories of her childhood and she wanted to share them someday",
+            "Because it was worth a lot of money",
+            "Because she didn't want anyone else to find it"
           ],
           "correct_index": 1,
           "question_type": "inferential"
@@ -137,9 +161,21 @@
           ],
           "correct_index": 1,
           "question_type": "inferential"
+        },
+        {
+          "question_id": "s2_q6",
+          "question": "In the story, what does 'erupt' mean when Marcus made a volcano that would actually erupt?",
+          "options": [
+            "To stay quiet and still",
+            "To burst out or explode",
+            "To slowly disappear",
+            "To change color"
+          ],
+          "correct_index": 1,
+          "question_type": "vocabulary"
         }
       ]
     }
   ],
-  "total_questions": 10
+  "total_questions": 13
 }

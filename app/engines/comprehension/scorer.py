@@ -53,17 +53,19 @@ class ComprehensionScorer(Scorer[ComprehensionStory, ComprehensionResponse]):
 
         for story in items:
             for question in story.questions:
-                total += 1
                 response = responses_by_question.get(question.question_id)
 
                 if response is None:
+                    # S2: unanswered questions are recorded but do NOT count
+                    # in any numerator or denominator. They are tracked only
+                    # so the teacher table can show "Not answered".
                     scored.append(
                         ScoredItem(
                             item_id=question.question_id,
                             label=question.question,
                             is_correct=False,
                             points=0.0,
-                            max_points=1.0,
+                            max_points=0.0,
                             status=ResponseStatus.NOT_ATTEMPTED,
                             detail={
                                 "story_id": story.story_id,
@@ -75,11 +77,14 @@ class ComprehensionScorer(Scorer[ComprehensionStory, ComprehensionResponse]):
                                 ),
                                 "selected_index": None,
                                 "selected_answer": None,
+                                "answered": False,
                             },
                         )
                     )
                     continue
 
+                # S2: only answered questions count toward the denominator.
+                total += 1
                 answered += 1
                 is_correct = question.is_correct(response.selected_index)
                 if is_correct:
@@ -106,6 +111,7 @@ class ComprehensionScorer(Scorer[ComprehensionStory, ComprehensionResponse]):
                                 question.correct_index
                             ),
                             "response_time_seconds": response.response_time_seconds,
+                            "answered": True,
                         },
                     )
                 )
@@ -143,9 +149,11 @@ class ComprehensionScorer(Scorer[ComprehensionStory, ComprehensionResponse]):
                     "questions": [],
                 },
             )
-            bucket["total"] = int(bucket["total"]) + 1
-            if item.is_correct:
-                bucket["correct"] = int(bucket["correct"]) + 1
+            # S2: only answered questions count toward story totals.
+            if item.detail.get("answered", True):
+                bucket["total"] = int(bucket["total"]) + 1
+                if item.is_correct:
+                    bucket["correct"] = int(bucket["correct"]) + 1
 
             questions = bucket["questions"]
             assert isinstance(questions, list)
@@ -158,6 +166,8 @@ class ComprehensionScorer(Scorer[ComprehensionStory, ComprehensionResponse]):
                     "correct_index": item.detail.get("correct_index"),
                     "correct_answer": item.detail.get("correct_answer"),
                     "is_correct": item.is_correct,
+                    # S7: mark unanswered questions explicitly.
+                    "answered": item.detail.get("answered", True),
                     # C5: every other activity reports a per-item time.
                     "response_time_seconds": item.detail.get(
                         "response_time_seconds", 0.0
@@ -168,6 +178,8 @@ class ComprehensionScorer(Scorer[ComprehensionStory, ComprehensionResponse]):
         for bucket in buckets.values():
             total = int(bucket["total"])
             correct = int(bucket["correct"])
+            # S2: percentage based on answered questions only.
+            # Unanswered questions have max_points=0 in the scored item.
             bucket["percentage"] = round(correct / total * 100, 1) if total else 0.0
 
         return list(buckets.values())

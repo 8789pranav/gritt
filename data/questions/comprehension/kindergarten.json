@@ -7,7 +7,7 @@
     {
       "story_id": "k_story1",
       "title": "The Friendly Dog",
-      "story_text": "Once upon a time, there was a small brown dog named Max. \nHe lived in a cozy red house with a little boy named Tom.\nEvery morning, Max would wake up early and stretch his legs. Yaaawn!\nHe loved to run around in the yard. Zoom, zoom, zoom!\nTom would throw a bright yellow ball, and Max would catch it. Good boy, Max!\nMax had a soft, fluffy bed near the window. It was his favorite spot.\nHe loved to sleep there after playing. Zzzzz...\nOne sunny day, Max found a new friend! Oh, how exciting!\nIt was a fluffy white cat named Fluffy. Meow!\nThey played together all day long. Chase, chase, chase!\nMax was SO happy! He wagged his tail super fast and barked with joy. Woof woof!\nTom smiled and gave them both yummy treats. Munch, munch!\nAnd from that day on, Max and Fluffy became the very best of friends. Forever and ever!\nThe End.",
+      "story_text": "Once upon a time, there was a small brown dog named Max. \nHe lived in a cozy red house with a little boy named Tom. The house was warm and snug inside, even when it was cold outside.\nEvery morning, Max would wake up early and stretch his legs. Yaaawn!\nHe loved to run around in the yard. Zoom, zoom, zoom!\nTom would throw a bright yellow ball, and Max would catch it. Good boy, Max!\nMax had a soft, fluffy bed near the window. It was his favorite spot because he could watch the birds and feel the warm sun.\nHe loved to sleep there after playing. Zzzzz...\nOne sunny day, Max found a new friend! Oh, how exciting!\nIt was a fluffy white cat named Fluffy. Meow!\nThey played together all day long. Chase, chase, chase!\nMax was SO happy! He wagged his tail super fast and barked with joy. Woof woof!\nTom smiled and gave them both yummy treats because they were playing so nicely together. Munch, munch!\nAnd from that day on, Max and Fluffy became the very best of friends. Forever and ever!\nThe End.",
       "duration_estimate": "60 seconds",
       "questions": [
         {
@@ -81,6 +81,18 @@
           ],
           "correct_index": 3,
           "question_type": "inferential"
+        },
+        {
+          "question_id": "k1_q7",
+          "question": "In the story, what does 'zooming' mean when Max goes 'Zoom, zoom, zoom!' around the yard?",
+          "options": [
+            "Moving very slowly",
+            "Moving very fast",
+            "Sleeping quietly",
+            "Eating food"
+          ],
+          "correct_index": 1,
+          "question_type": "vocabulary"
         }
       ]
     },
@@ -149,9 +161,21 @@
           ],
           "correct_index": 2,
           "question_type": "inferential"
+        },
+        {
+          "question_id": "k2_q6",
+          "question": "In the story, what does 'flutter' mean when the butterfly goes 'Flutter, flutter!'?",
+          "options": [
+            "Sitting still on a leaf",
+            "Flying with quick, light wing movements",
+            "Crawling on the ground",
+            "Sleeping in a flower"
+          ],
+          "correct_index": 1,
+          "question_type": "vocabulary"
         }
       ]
     }
   ],
-  "total_questions": 11
+  "total_questions": 13
 }

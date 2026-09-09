@@ -1025,36 +1025,15 @@ class AssessmentService:
             t.description for t in result.tags if t.polarity.value == "growth_edge"
         ]
 
-        # C4: Fallback copy for sparse reports.
-        if not strengths and not focus_areas:
-            strengths = ["There wasn't quite enough here to say something specific yet. That's normal, and worth trying again in a few months."]
-        elif focus_areas and not strengths:
-            strengths = ["Your child is working on these skills and making progress."]
-
-        percentage = result.score.percentage
-        if percentage >= 90:
-            placement = "Above Grade Level"
-            next_step = "Consider more advanced reading materials"
-        elif percentage >= 75:
-            placement = "At Grade Level"
-            next_step = "Continue with current grade level materials"
-        else:
-            placement = "Below Grade Level"
-            next_step = "Practice with guided reading and comprehension activities"
-
+        # S6: no labels, scores, percentages, grade levels or placement.
         test_id = self._scores.save(
             uid, child_id, TestType.COMPREHENSION.storage_key,
             {
                 "grade": grade,
                 "results": sanitize_data(story_breakdown),
-                # C8: a question count is a whole number, not 11.0.
-                "total_questions": int(result.score.max_points),
+                # S2: total_questions counts only answered questions.
+                "total_questions": int(result.score.answered_items),
                 "correct_answers": result.score.correct_answers,
-                "score": result.score.correct_answers,
-                "max_score": int(result.score.max_points),
-                "percentage": result.score.percentage,
-                "level": result.score.level,
-                "status": status,
                 "recommendation": result.recommendation,
                 "dear_parent_tags": tag_dicts,
                 "per_question_tags": per_item_dicts,
@@ -1070,23 +1049,13 @@ class AssessmentService:
             "child_id": child_id,
             "grade": grade,
             "test_id": test_id,
-            "total_questions": int(result.score.max_points),
+            "total_questions": int(result.score.answered_items),
             "correct_answers": result.score.correct_answers,
-            "score": result.score.correct_answers,
-            "max_score": int(result.score.max_points),
-            "percentage": result.score.percentage,
-            "level": result.score.level,
-            "status": status,
             "recommendation": result.recommendation,
             "results": story_breakdown,
             "parent_summary": {
-                "overall_score": f"{result.score.correct_answers}/{int(result.score.max_points)}",
-                "percentage": result.score.percentage,
-                "level": result.score.level,
                 "strengths": strengths,
                 "focus_areas": focus_areas,
-                "grade_placement": placement,
-                "next_step": next_step,
                 "recommendation": result.recommendation,
                 "note": "Assessment is instructional and not a clinical diagnosis.",
             },
@@ -1104,17 +1073,6 @@ class AssessmentService:
         if not latest:
             raise ResultNotFoundError("comprehension", child_id, grade)
 
-        percentage = latest.get("percentage", 0)
-        if percentage >= 90:
-            placement = "Above Grade Level"
-            next_step = "Consider more advanced reading materials"
-        elif percentage >= 75:
-            placement = "At Grade Level"
-            next_step = "Continue with current grade level materials"
-        else:
-            placement = "Below Grade Level"
-            next_step = "Practice with guided reading and comprehension activities"
-
         story_breakdown = latest.get("results", [])
         per_question_tags = latest.get("per_question_tags", [])
         dear_parent_tags = latest.get("dear_parent_tags", [])
@@ -1127,6 +1085,9 @@ class AssessmentService:
         scored_items = latest.get("scored_items", [])
 
         def _error_type_for(item: Dict[str, Any]) -> Optional[str]:
+            # S7: unanswered questions show "Not answered", not "Incorrect".
+            if not item.get("detail", {}).get("answered", True):
+                return "Not answered"
             if item.get("is_correct"):
                 return None
             tags = per_question_map.get(item.get("item_id", ""), [])
@@ -1146,7 +1107,9 @@ class AssessmentService:
                 "error_type": _error_type_for(s),
                 # C5: the scorer has always held this; the view dropped it.
                 "time": s.get("detail", {}).get("response_time_seconds", 0.0),
-                "icon": "Correct" if s.get("is_correct") else "Incorrect",
+                # S7: "Not answered" icon for unanswered questions.
+                "icon": "Not answered" if not s.get("detail", {}).get("answered", True)
+                        else ("Correct" if s.get("is_correct") else "Incorrect"),
             }
             for s in scored_items
         ]
@@ -1161,9 +1124,6 @@ class AssessmentService:
         ]
 
         # C4: If no tags fired, show warm fallback copy instead of blank lists.
-        # C7: this used to fire on a child with nine tagged errors, because no
-        # growth-edge tag existed to carry them. With the _emerging partners in
-        # place it should now only appear on a genuinely empty submission.
         if not strengths and not focus_areas:
             strengths = ["There wasn't quite enough here to say something specific yet. That's normal, and worth trying again in a few months."]
         elif focus_areas and not strengths:
@@ -1174,21 +1134,9 @@ class AssessmentService:
             "child_id": child_id,
             "grade": latest.get("grade"),
             "test_timestamp": latest.get("timestamp"),
-            "summary": {
-                "total_questions": int(latest.get("max_score", 8) or 0),
-                "correct_answers": latest.get("correct_answers", 0),
-                "percentage": percentage,
-                "level": latest.get("level", "Below grade level"),
-                "status": latest.get("status", "Below"),
-            },
             "parent_summary": {
-                "overall_score": f"{latest.get('correct_answers', 0)}/{int(latest.get('max_score', 8))}",
-                "percentage": percentage,
-                "level": latest.get("level", "Below grade level"),
                 "strengths": strengths,
                 "focus_areas": focus_areas,
-                "grade_placement": placement,
-                "next_step": next_step,
                 "recommendation": latest.get("recommendation", ""),
                 "note": "Assessment is instructional and not a clinical diagnosis.",
             },
@@ -1199,7 +1147,6 @@ class AssessmentService:
                 "test_level": latest.get("grade", grade),
                 "questions": len(scored_items),
                 "correct": sum(1 for s in scored_items if s.get("is_correct")),
-                "instructional_level": latest.get("level", ""),
                 "table_data": table_data,
             },
         }
