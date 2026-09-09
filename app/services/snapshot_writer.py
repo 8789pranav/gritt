@@ -100,10 +100,13 @@ _FORBIDDEN_PATTERNS = [
     (re.compile(r"\bdeficit\b", re.I), "clinical language"),
     (re.compile(r"\bdelay(ed)?\b", re.I), "clinical language"),
     (re.compile(r"\btherapy\b", re.I), "clinical language"),
-    (re.compile(r"\bcompared to\b", re.I), "comparison"),
+    # Only block comparisons to other children/peers/standards, not the
+    # word "compared" in general (e.g. "compared to last week" is fine).
+    (re.compile(r"\bcompared to (other|most|the average|peers|classmates|similar)", re.I), "comparison"),
     (re.compile(r"\bother children\b", re.I), "comparison"),
     (re.compile(r"\bmost children\b", re.I), "comparison"),
     (re.compile(r"\bpeers\b", re.I), "comparison"),
+    (re.compile(r"\bclassmates\b", re.I), "comparison"),
 ]
 
 _GENERIC_LETTER = {
