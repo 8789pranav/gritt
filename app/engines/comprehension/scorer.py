@@ -161,6 +161,10 @@ class ComprehensionScorer(Scorer[ComprehensionStory, ComprehensionResponse]):
                 {
                     "question_id": item.item_id,
                     "question": item.label,
+                    # The Learning Snapshot needs to say what KIND of
+                    # question a child worked out or missed, in words rather
+                    # than tag names.
+                    "question_type": item.detail.get("question_type", ""),
                     "selected_index": item.detail.get("selected_index"),
                     "selected_answer": item.detail.get("selected_answer"),
                     "correct_index": item.detail.get("correct_index"),

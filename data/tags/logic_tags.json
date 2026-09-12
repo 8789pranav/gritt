@@ -58,6 +58,10 @@
     "pattern_accuracy",
     "pattern_items_count",
     "pattern_hard_count",
+    "relational_hard_count",
+    "systematic_hard_count",
+    "flexibility_hard_count",
+    "load_hard_count",
     "relational_accuracy",
     "relational_items_count",
     "systematic_accuracy",
@@ -67,12 +71,9 @@
     "load_accuracy",
     "load_items_count",
     "load_fails",
-    "rule_maintenance_fails",
     "multiple_attempts_count",
     "fast_and_wrong_count",
     "self_corrected_to_right_count",
-    "rule_maintenance_items_count",
-    "rule_maintenance_accuracy",
     "slow_and_correct_count"
   ],
   "tags": [
@@ -145,13 +146,6 @@
       "confidence": "high",
       "polarity": "growth_edge",
       "description": "Your child is developing the ability to hold several pieces of information in mind at once. Practice with multi-step puzzles will help."
-    },
-    {
-      "id": "rule_maintenance_difficulty",
-      "trigger": "rule_maintenance_accuracy < 0.75 AND rule_maintenance_items_count >= 3",
-      "confidence": "medium",
-      "polarity": "growth_edge",
-      "description": "Your child is still learning to apply a single rule consistently. This is common at this stage and will improve with sorting games."
     },
     {
       "id": "deliberate_pace",

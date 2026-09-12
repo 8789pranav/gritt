@@ -421,9 +421,9 @@ class TestSpeakingScores:
         data = resp.json()
         assert data["success"] is True
         assert data["answered_count"] == len(sentences)
-        assert data["percentage"] >= 90.0, (
-            f"{grade}: expected >=90%, got {data['percentage']}")
-        assert data["level"] == "Excellent Speaker"
+        assert data["average_score"] >= 90.0, (
+            f"{grade}: expected >=90, got {data['average_score']}")
+        assert "level" not in data
         strengths = [t for t in data["dear_parent_tags"]
                      if t["polarity"] == "strength"]
         assert strengths, f"{grade}: no strength tags on a strong reading"
@@ -438,8 +438,8 @@ class TestSpeakingScores:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert data["percentage"] < 60.0, (
-            f"{grade}: expected <60%, got {data['percentage']}")
+        assert data["average_score"] < 60.0, (
+            f"{grade}: expected <60, got {data['average_score']}")
         growth = [t for t in data["dear_parent_tags"]
                   if t["polarity"] == "growth_edge"]
         assert growth, f"{grade}: no growth edge on a weak reading"
@@ -460,9 +460,8 @@ class TestSpeakingScores:
             "grade": grade, "submissions": submissions,
         })
         data = resp.json()
-        assert data["user_score"] == 0.0
         assert data["answered_count"] == 0
-        assert data["percentage"] == 0.0
+        assert data["average_score"] == 0
         assert not data["dear_parent_tags"]
         assert all(s["status"] == "not_attempted" for s in data["sentences"])
         assert all(s["answered"] is False for s in data["sentences"])

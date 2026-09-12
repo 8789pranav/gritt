@@ -61,6 +61,42 @@ def _tag_outputs_to_dicts(tags):
     ]
 
 
+#: L-D12: what a missed Logic Quest question is called in the teacher table.
+#: The table used to print the raw construct tag - "systematic problem
+#: solving", "pattern detection strong" - which names a skill, not an error,
+#: and reads as praise sitting in an error column.
+_LOGIC_ERROR_LABELS = {
+    "pattern_detection_strong": "Pattern question missed",
+    "pattern_detection_emerging": "Pattern question missed",
+    "relational_reasoning_present": "Relational question missed",
+    "relational_reasoning_emerging": "Relational question missed",
+    "systematic_problem_solving": "Systematic question missed",
+    "systematic_problem_solving_emerging": "Systematic question missed",
+    "flexible_strategy_use": "Flexibility question missed",
+    "flexible_strategy_emerging": "Flexibility question missed",
+    "reasoning_under_load": "Multi-step question missed",
+    "reasoning_under_load_emerging": "Multi-step question missed",
+}
+
+
+def _logic_error_type(tags) -> str:
+    """Plain English for one missed Logic Quest question (L-D12)."""
+    if "impulsive_response" in tags:
+        return "Answered too quickly"
+    if "trial_and_error_strategy" in tags:
+        return "Trial and error"
+    for tag in tags:
+        if tag.endswith("_missed"):
+            construct = tag[: -len("_missed")]
+            return _LOGIC_ERROR_LABELS.get(
+                construct,
+                construct.replace("_", " ").capitalize() + " question missed",
+            )
+    if "reasoning_under_load" in tags:
+        return "Multi-step question missed"
+    return "Incorrect"
+
+
 def _speaking_table(sentences):
     from app.engines.speaking.result import teacher_table
 
@@ -311,17 +347,9 @@ class AssessmentService:
         def _error_type_for_submit(item_dict: Dict[str, Any]) -> Optional[str]:
             if item_dict.get("is_correct"):
                 return None
-            tags = per_item_map_submit.get(item_dict.get("item_id", ""), [])
-            if "impulsive_response" in tags:
-                return "Impulsive response"
-            if "reasoning_under_load" in tags or "reasoning_under_load_emerging" in tags:
-                return "Reasoning under load"
-            if "trial_and_error_strategy" in tags:
-                return "Trial and error"
-            for tag in tags:
-                if tag.endswith("_missed"):
-                    return tag.replace("_missed", "").replace("_", " ")
-            return "Incorrect"
+            return _logic_error_type(
+                per_item_map_submit.get(item_dict.get("item_id", ""), [])
+            )
 
         table_data_submit = [
             {
@@ -344,6 +372,10 @@ class AssessmentService:
                 "grade": grade,
                 "correct_answers": result.score.correct_answers,
                 "total_items": result.score.total_items,
+                # L-D11: complete_result reads this back for the parent-facing
+                # accuracy. It was never written, so every stored run answered
+                # the parent's only figure with 0.
+                "percentage": result.score.percentage,
                 "signals": result.signals,
                 "dear_parent_tags": tag_dicts,
                 "per_item_tags": per_item_dicts,
@@ -394,22 +426,22 @@ class AssessmentService:
         per_item_tags = _restore_per_item_tags(latest.get("per_item_tags", []))
         dear_parent_tags = latest.get("dear_parent_tags", [])
 
+        # L-D11: prefer the stored figure, but recompute it for runs saved
+        # before it was written, so an older result reads correctly too.
+        correct_answers = latest.get("correct_answers", 0)
+        total_items = latest.get("total_items", 0) or len(scored_items)
+        overall_accuracy = latest.get("percentage")
+        if not overall_accuracy:
+            overall_accuracy = (
+                round(correct_answers / total_items * 100, 1) if total_items else 0.0
+            )
+
         per_item_map = {p["item_id"]: p["tags"] for p in per_item_tags}
 
         def _error_type_for(item: Dict[str, Any]) -> Optional[str]:
             if item.get("is_correct"):
                 return None
-            tags = per_item_map.get(item.get("item_id", ""), [])
-            if "impulsive_response" in tags:
-                return "Impulsive response"
-            if "reasoning_under_load" in tags or "reasoning_under_load_emerging" in tags:
-                return "Reasoning under load"
-            if "trial_and_error_strategy" in tags:
-                return "Trial and error"
-            for tag in tags:
-                if tag.endswith("_missed"):
-                    return tag.replace("_missed", "").replace("_", " ")
-            return "Incorrect"
+            return _logic_error_type(per_item_map.get(item.get("item_id", ""), []))
 
         table_data = [
             {
@@ -446,7 +478,7 @@ class AssessmentService:
             "correct_answers": latest.get("correct_answers", 0),
             "total_items": latest.get("total_items", 0),
             "parent_summary": {
-                "overall_accuracy": latest.get("percentage", 0),
+                "overall_accuracy": overall_accuracy,
                 "strengths": strengths,
                 "focus_areas": focus_areas,
                 "recommendation": latest.get("recommendation", ""),
@@ -587,7 +619,16 @@ class AssessmentService:
         results = latest.get("results", [])
         total_words = len(results)
         correct_count = sum(1 for r in results if r.get("is_correct"))
-        overall_acc = round(
+
+        # #76: two different numbers used to share one name. The points
+        # ratio counts SOUNDS the child reproduced - a child who spelled 9 of
+        # 15 words right scored 94 on it, because 47 of his 50 sounds were
+        # right. Under the name "overall_accuracy" a parent reads that as
+        # "spelled almost every word correctly". So overall_accuracy now
+        # means what it says - whole words spelled correctly - and the sound
+        # figure keeps its own name and its own explanation.
+        overall_acc = round(correct_count / total_words * 100, 1) if total_words else 0
+        sound_acc = round(
             sum(r.get("points", 0) for r in results)
             / max(sum(r.get("max_points", 0) for r in results), 1)
             * 100, 1
@@ -689,7 +730,19 @@ class AssessmentService:
             "child_id": child_id,
             "grade": latest.get("grade", grade),
             "parent_summary": {
+                # #76: whole words spelled correctly.
                 "overall_accuracy": round(overall_acc),
+                "words_correct": correct_count,
+                "words_total": total_words,
+                # #76: the sounds the child produced, spelling aside. Named
+                # and explained, never left to be mistaken for the above.
+                "sound_accuracy": round(sound_acc),
+                "sound_accuracy_note": (
+                    "Sound accuracy counts the sounds your child wrote down "
+                    "correctly. It is usually higher than word accuracy, "
+                    "because a word can be heard perfectly and still be "
+                    "spelled by a rule your child has not met yet."
+                ),
                 "phonics_score": round(phonics_pct),
                 "sight_word_score": round(sight_pct),
                 "confidence": latest.get("confidence", "Medium"),
@@ -847,36 +900,22 @@ class AssessmentService:
             for m in measured
         ]
 
-        max_score = len(all_sentences) * 100
-        user_score = round(total_score, 1)
-        # The headline is the average of the sentences the child actually
-        # read. Dividing by every sentence in the test reported 12% for a
-        # child who read one sentence at 95.9, which describes how much of
-        # the test was attempted, not how well it was read. Attempted is
-        # reported separately, where it can be read for what it is.
+        # A11: no level, no grade placement, no percentage, no raw score
+        # totals. Logic Quest and Story Explorer dropped theirs long ago;
+        # Voice Challenge was the last activity still labelling the child.
+        # The average of the sentences the child actually read stays, because
+        # it is a measurement rather than a verdict. Dividing by every
+        # sentence in the test reported 12% for a child who read one sentence
+        # at 95.9, which describes how much of the test was attempted.
         avg_score = round(total_score / answered_count, 1) if answered_count else 0
-        percentage = avg_score
-
-        if avg_score >= 90:
-            level = "Excellent Speaker"
-        elif avg_score >= 75:
-            level = "Good Speaker"
-        elif avg_score >= 50:
-            level = "Developing Speaker"
-        else:
-            level = "Needs Improvement"
 
         test_id = self._scores.save(
             uid, child_id, TestType.SPEAKING.storage_key,
             {
                 "grade": grade,
                 "sentences": sanitize_data(sentences),
-                "total_marks": max_score,
-                "user_score": user_score,
                 "answered_count": answered_count,
                 "average_score": avg_score,
-                "percentage": percentage,
-                "level": level,
                 "signals": sanitize_data(signals),
                 "dear_parent_tags": tag_dicts,
                 "per_sentence_tags": per_item_dicts,
@@ -890,18 +929,13 @@ class AssessmentService:
             "child_id": child_id,
             "grade": grade,
             "test_id": test_id,
-            "total_marks": max_score,
-            "user_score": user_score,
             "answered_count": answered_count,
             "average_score": avg_score,
-            "percentage": percentage,
-            "level": level,
             "sentences": sentences,
             "teacher_admin_detail": {
                 "test_level": grade,
                 "sentences": len(sentences),
                 "answered": answered_count,
-                "instructional_level": level,
                 "table_data": teacher_table(sentences),
             },
             "signals": signals,
@@ -922,14 +956,6 @@ class AssessmentService:
         if not latest:
             raise ResultNotFoundError("speaking", child_id, grade)
 
-        percentage = latest.get("percentage", 0)
-        if percentage >= 90:
-            placement = "Above Grade Level"
-        elif percentage >= 75:
-            placement = "At Grade Level"
-        else:
-            placement = "Below Grade Level"
-
         sentences = _restore_sentences(latest.get("sentences", []))
         dear_parent_tags = latest.get("dear_parent_tags", [])
 
@@ -939,21 +965,18 @@ class AssessmentService:
             "grade": latest.get("grade"),
             "timestamp": latest.get("timestamp", ""),
 
+            # A11: no total_marks, user_score, percentage, level or grade
+            # placement. Counts and the average of what was read, nothing
+            # that tells a parent what their child IS.
             "summary": {
                 "sentences": len(sentences),
                 "answered": sum(1 for s in sentences if s["answered"]),
                 "needs_review": sum(
                     1 for s in sentences if s["status"] == "needs_review"),
-                "total_marks": latest.get("total_marks", 0),
-                "user_score": latest.get("user_score", 0),
                 "average_score": latest.get("average_score", 0),
-                "percentage": percentage,
-                "level": latest.get("level", ""),
-                "grade_placement": placement,
             },
 
             "parent_summary": {
-                "level": latest.get("level", ""),
                 "strengths": [
                     t.get("description") or t.get("tag", "")
                     for t in dear_parent_tags if t.get("polarity") == "strength"
@@ -963,7 +986,6 @@ class AssessmentService:
                     for t in dear_parent_tags
                     if t.get("polarity") == "growth_edge"
                 ],
-                "grade_placement": placement,
                 "note": (
                     "Assessment is instructional and not a clinical diagnosis."
                 ),
@@ -979,7 +1001,6 @@ class AssessmentService:
                 "test_level": latest.get("grade", grade),
                 "sentences": len(sentences),
                 "answered": sum(1 for s in sentences if s["answered"]),
-                "instructional_level": placement,
                 "table_data": _speaking_table(sentences),
             },
         }

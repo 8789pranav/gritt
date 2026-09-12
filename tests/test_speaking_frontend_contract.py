@@ -57,8 +57,15 @@ TOP_FIELDS = {
 }
 
 SUMMARY_FIELDS = {
-    "sentences", "answered", "needs_review", "total_marks", "user_score",
-    "average_score", "percentage", "level", "grade_placement",
+    "sentences", "answered", "needs_review", "average_score",
+}
+
+#: A11: Voice Challenge was the last activity still labelling the child and
+#: reporting a raw score. Logic Quest and Story Explorer dropped theirs long
+#: ago. Nothing in this set may come back in any section.
+REMOVED_FIELDS = {
+    "level", "grade_placement", "instructional_level", "percentage",
+    "user_score", "total_marks",
 }
 
 
@@ -192,7 +199,7 @@ class TestUnattempted:
     ):
         _, data = await _run(client, audio="")
         assert data["summary"]["answered"] == 0
-        assert data["summary"]["percentage"] == 0
+        assert data["summary"]["average_score"] == 0
         assert not data["dear_parent_tags"]
         for sentence in data["sentences"]:
             assert sentence["answered"] is False
@@ -219,7 +226,7 @@ class TestUnattempted:
 
 
 class TestHeadlineIsOneNumber:
-    async def test_percentage_matches_the_average(
+    async def test_the_average_is_of_what_was_actually_read(
         self, client, mock_firebase_auth, seed_user, mock_speech
     ):
         """A child who read one sentence at 95.9 was reported at both 95.9 and
@@ -227,7 +234,23 @@ class TestHeadlineIsOneNumber:
         well it was read."""
         _, data = await _run(client)
         summary = data["summary"]
-        assert summary["percentage"] == summary["average_score"]
+        assert summary["average_score"] > 0
+        assert summary["answered"] > 0
+
+    async def test_no_label_score_or_placement_survives(
+        self, client, mock_firebase_auth, seed_user, mock_speech
+    ):
+        """A11: this is the bug, checked on every section at once."""
+        _, data = await _run(client)
+        for section in ("summary", "parent_summary", "teacher_admin_detail"):
+            present = REMOVED_FIELDS & set(data.get(section) or {})
+            assert not present, f"{section}: {sorted(present)}"
+        import json as _json
+
+        text = _json.dumps(data)
+        for label in ("Excellent Speaker", "Good Speaker", "Developing Speaker",
+                      "Above Grade Level", "At Grade Level", "Below Grade Level"):
+            assert label not in text, label
 
     async def test_attempted_is_reported_separately(
         self, client, mock_firebase_auth, seed_user, mock_speech
@@ -277,12 +300,10 @@ class TestReportDerivation:
         self, client, mock_firebase_auth, seed_user, mock_speech
     ):
         summary, _, _ = await self._rows(client)
-        for key in ("total_marks", "user_score", "answered",
-                    "average_score", "level"):
+        for key in ("sentences", "answered", "needs_review", "average_score"):
             assert key in summary, key
         # .toFixed(1) on the score would throw if this were undefined
-        assert isinstance(summary["user_score"], (int, float))
-        assert summary["level"]
+        assert isinstance(summary["average_score"], (int, float))
 
     async def test_one_row_per_sentence_with_text_and_level(
         self, client, mock_firebase_auth, seed_user, mock_speech
@@ -358,8 +379,7 @@ class TestTeacherTable:
         self, client, mock_firebase_auth, seed_user, mock_speech
     ):
         _, detail = await self._table(client)
-        for key in ("test_level", "sentences", "answered",
-                    "instructional_level", "table_data"):
+        for key in ("test_level", "sentences", "answered", "table_data"):
             assert key in detail, key
 
     async def test_one_row_per_sentence(

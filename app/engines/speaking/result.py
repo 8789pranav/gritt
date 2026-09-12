@@ -176,6 +176,28 @@ _STATUS_LABEL = {
 #: A sentence at or above this reads as correct in the table.
 TABLE_CORRECT_AT = 85.0
 
+#: A9: errors that mean a sentence was not read correctly, however high the
+#: overall number came out. A sentence with a word missing was not read; a
+#: sentence with a word a listener would not recognise was not read either.
+#: The old rule was the score alone, so a run with one skipped word and three
+#: mispronunciations came back with every row marked correct.
+_DISQUALIFYING_ERRORS = ("skipped", "mispronounced")
+
+
+def sentence_is_correct(analysis: Dict[str, Any], answered: bool) -> bool:
+    """Whether one spoken sentence reads as correct (A9).
+
+    One definition, used by the row, the icon and the error type, so the
+    three cannot disagree with each other.
+    """
+    if not answered:
+        return False
+    score = (analysis.get("overall") or {}).get("score", 0.0) or 0.0
+    if score < TABLE_CORRECT_AT:
+        return False
+    errors = analysis.get("errors") or {}
+    return not any(errors.get(key) for key in _DISQUALIFYING_ERRORS)
+
 
 def teacher_table(sentences: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """One row per sentence, for the teacher view.
@@ -191,12 +213,13 @@ def teacher_table(sentences: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
         score = overall.get("score", 0.0) or 0.0
         answered = bool(sentence.get("answered"))
         status = sentence.get("status", NOT_ATTEMPTED)
+        correct = sentence_is_correct(analysis, answered)
 
         if not answered:
             error_type = (
                 "Needs review" if status == NEEDS_REVIEW else "Not attempted"
             )
-        elif score >= TABLE_CORRECT_AT:
+        elif correct:
             error_type = None
         else:
             # Name the biggest thing that went wrong, rather than "incorrect".
@@ -217,7 +240,7 @@ def teacher_table(sentences: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "sentence": sentence.get("sentence", ""),
             "heard": (sentence.get("transcription") or {}).get("heard", ""),
             "status": _STATUS_LABEL.get(status, "Not Attempted"),
-            "correct": answered and score >= TABLE_CORRECT_AT,
+            "correct": correct,
             "overall_score": score,
             "level": overall.get("level", ""),
             "pronunciation": (analysis.get("pronunciation") or {}).get("score", 0.0),
@@ -230,7 +253,7 @@ def teacher_table(sentences: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "fillers": (analysis.get("disfluency") or {}).get("filler_count", 0),
             "error_type": error_type,
             "icon": (
-                "Correct" if answered and score >= TABLE_CORRECT_AT
+                "Correct" if correct
                 else "Not answered" if status == NOT_ATTEMPTED
                 else "Incorrect"
             ),

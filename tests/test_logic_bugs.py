@@ -312,18 +312,28 @@ class TestUnusedSignals:
         }
 
     @pytest.mark.parametrize("grade", list(Grade))
-    def test_rule_maintenance_is_reachable_at_every_grade(self, grade: Grade):
-        """It counted two hardcoded item types, present only at Grade 1."""
+    def test_rule_maintenance_no_longer_doubles_a_weakness(self, grade: Grade):
+        """L-D15: it re-scored questions another construct already owned.
+
+        At Grade 2 the rule-application items ARE the systematic items, with
+        the same score, so a parent was shown one weakness twice under two
+        names. A construct needs questions of its own to be a construct.
+        """
         rule_items = self._rule_items(grade)
         assert rule_items, f"{grade.value}: no rule-application items"
         result, ids = _run(grade, wrong=rule_items)
-        assert "rule_maintenance_difficulty" in ids
+        assert "rule_maintenance_difficulty" not in ids
+        assert not [s for s in result.signals if s.startswith("rule_maintenance")]
 
     @pytest.mark.parametrize("grade", list(Grade))
-    def test_rule_maintenance_silent_when_rules_were_held(self, grade: Grade):
-        result, ids = _run(grade)
-        assert result.signals["rule_maintenance_accuracy"] == 1.0
-        assert "rule_maintenance_difficulty" not in ids
+    def test_the_items_it_scored_are_still_covered_by_another_construct(
+        self, grade: Grade
+    ):
+        """Removing it must not leave those questions unmeasured."""
+        rule_items = self._rule_items(grade)
+        result, ids = _run(grade, wrong=rule_items)
+        growth = {i for i in ids if i.endswith("_emerging")}
+        assert growth, f"{grade.value}: missing every rule item told the parent nothing"
 
     def test_response_time_feeds_a_pace_observation(self):
         """A child who works slowly and gets the hard items right left no record."""

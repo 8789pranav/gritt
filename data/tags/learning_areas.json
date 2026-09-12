@@ -12,7 +12,8 @@
           "trial_and_error_strategy"
         ],
         "spelling": [
-          "rushed_spelling"
+          "rushed_spelling",
+          "audio_support_benefit"
         ],
         "speaking": [
           "self_corrects_while_reading",
@@ -30,8 +31,7 @@
           "systematic_problem_solving",
           "systematic_problem_solving_emerging",
           "flexible_strategy_use",
-          "flexible_strategy_emerging",
-          "rule_maintenance_difficulty"
+          "flexible_strategy_emerging"
         ],
         "spelling": [
           "phonetic_strategy_strong",
@@ -46,17 +46,20 @@
           "vowel_sounds_secure",
           "short_vowel_emerging",
           "long_vowel_emerging",
+          "vowel_sounds_developing",
           "blends_secure",
           "blends_emerging",
+          "blends_developing",
           "digraphs_secure",
           "digraphs_emerging",
+          "digraphs_developing",
           "ending_sounds_emerging"
         ]
       }
     },
     "reasoning_and_meaning": {
       "display_name": "Reasoning & Meaning",
-      "description": "Working out what a story implies, connecting ideas, and holding several things in mind at once.",
+      "description": "Working out what a story implies, holding on to what it said, working out what a new word means, and holding several things in mind at once.",
       "sources": {
         "logic": [
           "relational_reasoning_present",
@@ -66,7 +69,12 @@
         ],
         "comprehension": [
           "inferential_comprehension_strong",
-          "inferential_comprehension_emerging"
+          "inferential_comprehension_emerging",
+          "literal_comprehension_strong",
+          "literal_comprehension_emerging",
+          "vocabulary_in_context_strong",
+          "vocabulary_in_context_emerging",
+          "inconsistent_across_stories"
         ]
       }
     },
@@ -77,12 +85,16 @@
         "speaking": [
           "decoding_accurate",
           "decoding_emerging",
-          "reading_rate_on_track",
-          "reading_rate_slow",
+          "decoding_developing",
+          "reading_pace_in_band",
+          "reading_pace_above_band",
+          "reading_pace_below_band",
           "phrasing_smooth",
           "phrasing_choppy",
+          "phrasing_developing",
           "expression_present",
           "expression_flat",
+          "expression_developing",
           "reads_every_word",
           "skips_words",
           "stretches_words",
@@ -94,19 +106,6 @@
           "vowel_emerging"
         ]
       }
-    },
-    "listening_channel": {
-      "display_name": "Listening Channel",
-      "description": "Following a story by ear and holding onto details across the whole passage.",
-      "sources": {
-        "comprehension": [
-          "literal_comprehension_strong",
-          "literal_comprehension_emerging",
-          "vocabulary_in_context_strong",
-          "vocabulary_in_context_emerging",
-          "inconsistent_across_stories"
-        ]
-      }
     }
   },
   "test_display_names": {
@@ -114,5 +113,70 @@
     "spelling": "Word Wizard",
     "speaking": "Voice Challenge",
     "comprehension": "Story Explorer"
+  },
+  "tag_display_names": {
+    "pattern_detection_strong": "Recognising patterns",
+    "pattern_detection_emerging": "Recognising patterns",
+    "relational_reasoning_present": "Seeing how ideas connect",
+    "relational_reasoning_emerging": "Seeing how ideas connect",
+    "systematic_problem_solving": "Working step by step",
+    "systematic_problem_solving_emerging": "Working step by step",
+    "flexible_strategy_use": "Trying another way",
+    "flexible_strategy_emerging": "Trying another way",
+    "reasoning_under_load": "Holding several things in mind",
+    "reasoning_under_load_emerging": "Holding several things in mind",
+    "deliberate_pace": "Taking thinking time",
+    "trial_and_error_strategy": "Exploring by trying",
+    "impulsive_response": "Answering quickly",
+    "self_correction_present": "Catching own mistakes",
+    "phonetic_strategy_strong": "Spelling by sound",
+    "vowel_accuracy_strong": "Vowel sounds in writing",
+    "vowel_emerging": "Vowel sounds in writing",
+    "digraph_competent": "Letter pairs in writing",
+    "digraph_emerging": "Letter pairs in writing",
+    "blend_competent": "Letter clusters in writing",
+    "blend_emerging": "Letter clusters in writing",
+    "sight_word_recognition_strong": "Words you cannot sound out",
+    "sight_word_emerging": "Words you cannot sound out",
+    "spelling_convention_emerging": "Spelling rules",
+    "audio_support_benefit": "Hearing the word again",
+    "rushed_spelling": "Writing before listening",
+    "decoding_accurate": "Working out the words",
+    "decoding_emerging": "Working out the words",
+    "decoding_developing": "Working out the words",
+    "reading_pace_in_band": "Reading pace",
+    "reading_pace_above_band": "Reading pace",
+    "reading_pace_below_band": "Reading pace",
+    "phrasing_smooth": "Reading in phrases",
+    "phrasing_choppy": "Reading in phrases",
+    "phrasing_developing": "Reading in phrases",
+    "expression_present": "Reading with expression",
+    "expression_flat": "Reading with expression",
+    "expression_developing": "Reading with expression",
+    "reads_every_word": "Reading every word",
+    "skips_words": "Reading every word",
+    "hesitates_before_starting": "Gathering up before starting",
+    "stretches_words": "Stretching a sound to work a word out",
+    "filler_habit_emerging": "Filler sounds",
+    "self_corrects_while_reading": "Going back to get it right",
+    "vowel_sounds_secure": "Vowel sounds out loud",
+    "short_vowel_emerging": "Short vowel sounds out loud",
+    "long_vowel_emerging": "Long vowel sounds out loud",
+    "vowel_sounds_developing": "Vowel sounds out loud",
+    "blends_secure": "Letter clusters out loud",
+    "blends_emerging": "Letter clusters out loud",
+    "blends_developing": "Letter clusters out loud",
+    "digraphs_secure": "Letter pairs out loud",
+    "digraphs_emerging": "Letter pairs out loud",
+    "digraphs_developing": "Letter pairs out loud",
+    "ending_sounds_emerging": "The sound at the end of a word",
+    "recording_needs_review": "Recording could not be read",
+    "literal_comprehension_strong": "Holding on to what the story said",
+    "literal_comprehension_emerging": "Holding on to what the story said",
+    "inferential_comprehension_strong": "Working out what the story means",
+    "inferential_comprehension_emerging": "Working out what the story means",
+    "vocabulary_in_context_strong": "Working out a new word",
+    "vocabulary_in_context_emerging": "Working out a new word",
+    "inconsistent_across_stories": "Different from one story to the next"
   }
 }

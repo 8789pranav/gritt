@@ -385,7 +385,7 @@ class TestLogicCompleteResult:
         rows = {
             r["question"]: r for r in data["teacher_admin_detail"]["table_data"]
         }
-        assert any(r["error_type"] == "Impulsive response" for r in rows.values())
+        assert any(r["error_type"] == "Answered too quickly" for r in rows.values())
 
     async def test_ln1_missed_skills_reach_the_parent(
         self, client, mock_firebase_auth, seed_user
@@ -401,7 +401,12 @@ class TestLogicCompleteResult:
     async def test_lb3_load_error_type_still_resolves(
         self, client, mock_firebase_auth, seed_user
     ):
-        """The item tag was renamed; the teacher table must still label it."""
+        """A missed multi-step question is labelled, once, in plain English.
+
+        L-D12: the table used to print the construct tag itself. L-D14: a
+        missed load item used to carry both the construct tag and its
+        _missed partner, so the same question read as a strength and a miss.
+        """
         engine = logic_engine()
         item = next(
             i for i in engine.get_items(Grade.SECOND) if i.item_id == "logic_2_3"
@@ -411,7 +416,13 @@ class TestLogicCompleteResult:
             client, "Second", wrong={"logic_2_3"}, times={"logic_2_3": slow}
         )
         rows = data["teacher_admin_detail"]["table_data"]
-        assert any(r["error_type"] == "Reasoning under load" for r in rows), rows
+        assert any(r["error_type"] == "Multi-step question missed" for r in rows), rows
+
+        tags = {
+            p["item_id"]: set(p["tags"]) for p in data["per_item_tags"]
+        }["logic_2_3"]
+        assert "reasoning_under_load_missed" in tags
+        assert "reasoning_under_load" not in tags
 
     async def test_every_emitted_tag_has_parent_copy(
         self, client, mock_firebase_auth, seed_user

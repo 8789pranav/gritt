@@ -17,10 +17,12 @@ async def generate_snapshot(request: SnapshotRequest):
 
     Stage A (deterministic) fetches the latest result for every assessment,
     maps the fired tags to the five learning areas, and computes the evidence
-    package. Stage B asks GPT-4o to write the letter, then validates it
+    package - including the words the child actually wrote and read. Stage B
+    asks the model to write the letter in Eko's voice, then validates it
     against hard guardrails: no scores, no labels, no clinical language, no
-    comparison to other children. If the guardrails fail or the LLM is
-    unavailable, a warm generic letter is returned instead.
+    comparison to other children, no praise headline over a growth edge, and
+    no quoted misspelling that reads as a correction. If the guardrails fail
+    or the LLM is unavailable, a warm generic letter is returned instead.
     """
     service = get_snapshot_service()
     writer = get_snapshot_writer()

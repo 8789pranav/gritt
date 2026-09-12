@@ -76,7 +76,6 @@ class TestLogicTags:
         "flexible_strategy_emerging",
         "reasoning_under_load",
         "reasoning_under_load_emerging",
-        "rule_maintenance_difficulty",
         "deliberate_pace",
         "trial_and_error_strategy",
         "impulsive_response",
@@ -575,16 +574,18 @@ class TestSpeakingTags:
     """
 
     EXPECTED_TAG_IDS = {
-        "decoding_accurate", "decoding_emerging",
-        "reading_rate_on_track", "reading_rate_slow",
-        "phrasing_smooth", "phrasing_choppy",
-        "expression_present", "expression_flat",
+        "decoding_accurate", "decoding_emerging", "decoding_developing",
+        "reading_pace_in_band", "reading_pace_above_band",
+        "reading_pace_below_band",
+        "phrasing_smooth", "phrasing_choppy", "phrasing_developing",
+        "expression_present", "expression_flat", "expression_developing",
         "reads_every_word", "skips_words",
         "hesitates_before_starting", "stretches_words",
         "filler_habit_emerging", "self_corrects_while_reading",
         "vowel_sounds_secure", "short_vowel_emerging", "long_vowel_emerging",
-        "blends_secure", "blends_emerging",
-        "digraphs_secure", "digraphs_emerging",
+        "vowel_sounds_developing",
+        "blends_secure", "blends_emerging", "blends_developing",
+        "digraphs_secure", "digraphs_emerging", "digraphs_developing",
         "ending_sounds_emerging",
         "recording_needs_review",
     }
@@ -642,6 +643,13 @@ class TestSpeakingTags:
             ("reads_every_word", "skips_words"),
             ("blends_secure", "blends_emerging"),
             ("digraphs_secure", "digraphs_emerging"),
+            # Part 5: the middle band between the two, which used to be a
+            # dead zone where nothing fired in either direction.
+            ("decoding_accurate", "decoding_developing"),
+            ("phrasing_smooth", "phrasing_developing"),
+            ("expression_present", "expression_developing"),
+            ("blends_secure", "blends_developing"),
+            ("digraphs_secure", "digraphs_developing"),
         ):
             assert strong in ids and emerging in ids, (strong, emerging)
 
@@ -652,7 +660,8 @@ class TestSpeakingTags:
         assert "phrasing_smooth" in tags
         assert "expression_present" in tags
         assert "reads_every_word" in tags
-        assert "reading_rate_on_track" in tags
+        # Pace is reported, never judged (Part 5).
+        assert "reading_pace_in_band" in tags
 
     def test_a_struggling_reader_gets_growth_edges(self):
         _, tags = self._tags([
@@ -675,8 +684,8 @@ class TestSpeakingTags:
 
     def test_a_slow_reader_is_named(self):
         _, tags = self._tags([self._sentence(wcpm=12) for _ in range(8)])
-        assert "reading_rate_slow" in tags
-        assert "reading_rate_on_track" not in tags
+        assert "reading_pace_below_band" in tags
+        assert "reading_pace_in_band" not in tags
 
     def test_fillers_reach_the_rollup(self):
         _, tags = self._tags([self._sentence(fillers=2) for _ in range(8)])

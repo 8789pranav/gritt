@@ -56,6 +56,7 @@ class LogicScorer(Scorer[LogicItem, LogicResponse]):
                             "item_type": item.item_type,
                             "difficulty": item.difficulty.value,
                             "primary_tag": item.primary_tag.value,
+                            "question_text": item.question_text,
                             "correct_answer_index": item.correct_answer_index,
                         },
                     )
@@ -79,6 +80,9 @@ class LogicScorer(Scorer[LogicItem, LogicResponse]):
                         "item_type": item.item_type,
                         "difficulty": item.difficulty.value,
                         "primary_tag": item.primary_tag.value,
+                        # So a letter can say which puzzle, in words rather
+                        # than by item number.
+                        "question_text": item.question_text,
                         "selected_answer_index": response.selected_answer_index,
                         "correct_answer_index": item.correct_answer_index,
                         "response_time_seconds": response.response_time_seconds,

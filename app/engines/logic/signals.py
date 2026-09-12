@@ -86,21 +86,30 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
     ) -> Dict[str, Any]:
         items_by_id = {item.item_id: item for item in items}
         load_item_types = set(self.config.item_type_groups.get("load", []))
-        rule_item_types = set(self.config.item_type_groups.get("rule_application", []))
 
         # Skill accumulators. Each construct tracks how many items were SHOWN
         # as well as how many were correct, so the rollup can use a proportion
         # rather than an absolute count (G5, L-N1).
         pattern_score = pattern_shown = 0
-        pattern_hard_count = 0
         relational_score = relational_shown = 0
         systematic_score = systematic_shown = 0
         flexibility_score = flexibility_shown = 0
         load_success_count = load_shown = 0
 
+        # L-D13: how many HARD items of each kind the child was shown. The
+        # old pattern_hard_count only incremented on a correct answer, so a
+        # grade whose only hard pattern item was missed reported zero hard
+        # pattern items - it counted successes and called them items.
+        hard_shown = {
+            "pattern": 0,
+            "relational": 0,
+            "systematic": 0,
+            "flexibility": 0,
+            "load": 0,
+        }
+
         # Difficulty / behaviour accumulators.
         load_fails = 0
-        rule_maintenance_fails = rule_maintenance_shown = 0
         slow_and_correct_count = 0
         multiple_attempts_count = 0
         fast_and_wrong_count = 0
@@ -123,37 +132,35 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
             expected = item.expected_latency_seconds or 30
 
             # --- skill credit, counted against the items actually shown -----
+            construct: Optional[str] = None
             if item.primary_tag in PATTERN_TAGS:
+                construct = "pattern"
                 pattern_shown += 1
-                if is_correct:
-                    pattern_score += 1
-                    if item.difficulty is Difficulty.HARD:
-                        pattern_hard_count += 1
+                pattern_score += int(is_correct)
             elif item.primary_tag is CognitiveTag.RELATIONAL_REASONING_PRESENT:
+                construct = "relational"
                 relational_shown += 1
                 relational_score += int(is_correct)
             elif item.primary_tag is CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING:
+                construct = "systematic"
                 systematic_shown += 1
                 systematic_score += int(is_correct)
             elif item.primary_tag is CognitiveTag.FLEXIBLE_STRATEGY_USE:
+                construct = "flexibility"
                 flexibility_shown += 1
                 flexibility_score += int(is_correct)
             elif item.primary_tag in LOAD_TAGS:
+                construct = "load"
                 load_shown += 1
                 load_success_count += int(is_correct)
+
+            if construct and item.difficulty is Difficulty.HARD:
+                hard_shown[construct] += 1
 
             # --- cognitive load: wrong, or right but laboured ---------------
             if item.item_type in load_item_types:
                 if not is_correct or latency > expected * SLOW_RESPONSE_MULTIPLIER:
                     load_fails += 1
-
-            # --- rule maintenance: held a stated rule, or dropped it --------
-            # The item types come from the config so every grade has some;
-            # the hardcoded pair only existed at Grade 1.
-            if item.item_type in rule_item_types:
-                rule_maintenance_shown += 1
-                if not is_correct:
-                    rule_maintenance_fails += 1
 
             # --- pace: worked slowly and still got it right -----------------
             if is_correct and latency > expected * SLOW_RESPONSE_MULTIPLIER:
@@ -193,7 +200,11 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
 
         return {
             "pattern_score": pattern_score,
-            "pattern_hard_count": pattern_hard_count,
+            "pattern_hard_count": hard_shown["pattern"],
+            "relational_hard_count": hard_shown["relational"],
+            "systematic_hard_count": hard_shown["systematic"],
+            "flexibility_hard_count": hard_shown["flexibility"],
+            "load_hard_count": hard_shown["load"],
             "relational_score": relational_score,
             "systematic_score": systematic_score,
             "flexibility_score": flexibility_score,
@@ -210,12 +221,11 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
             "flexibility_items_count": flexibility_shown,
             "load_accuracy": self.ratio(load_success_count, load_shown),
             "load_items_count": load_shown,
-            "rule_maintenance_fails": rule_maintenance_fails,
-            "rule_maintenance_items_count": rule_maintenance_shown,
-            "rule_maintenance_accuracy": self.ratio(
-                rule_maintenance_shown - rule_maintenance_fails,
-                rule_maintenance_shown,
-            ),
+            # L-D15: rule_maintenance_* is gone. It re-scored the very items
+            # systematic_problem_solving already owns - at Grade 2 the same
+            # three questions, the same 1 of 3 - so a parent was shown one
+            # weakness twice under two names. A construct needs its own
+            # questions to be a construct.
             "slow_and_correct_count": slow_and_correct_count,
             # L-D5: shift_result and rule_inferred are still derived above, so
             # wiring the sort task back up stays a one-line change, but they
@@ -279,7 +289,15 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
             if not is_correct and cutoff > 0 and 0 < latency <= cutoff:
                 tags.append(CognitiveTag.IMPULSIVE_RESPONSE.value)
             # L-B3: the item tag names the construct; it makes no judgement.
-            if not is_correct and latency > expected * SLOW_RESPONSE_MULTIPLIER:
+            # L-D14: but never on a load item itself. A missed load question
+            # already carries reasoning_under_load_missed, and adding the
+            # bare construct tag beside it put both outcomes on one question -
+            # the teacher table then read the miss as a strength.
+            if (
+                not is_correct
+                and latency > expected * SLOW_RESPONSE_MULTIPLIER
+                and item.primary_tag not in LOAD_TAGS
+            ):
                 tags.append(CognitiveTag.REASONING_UNDER_LOAD.value)
 
             # Conditional tags declared on the item itself.

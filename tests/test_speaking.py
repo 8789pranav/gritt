@@ -142,7 +142,10 @@ async def test_speaking_submit_batch(client, mock_firebase_auth, seed_user, mock
     assert resp.status_code == 200
     data = resp.json()
     assert data["answered_count"] == 2
-    assert data["total_marks"] == len(sentences) * 100
+    # A11: no total_marks. Counts and the average of what was read, nothing
+    # that tells a parent what their child is.
+    assert len(data["sentences"]) == len(sentences)
+    assert "total_marks" not in data
 
 
 @pytest.mark.asyncio

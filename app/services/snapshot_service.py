@@ -1,10 +1,15 @@
 """Stage A of the Learning Snapshot: the deterministic evidence pipeline.
 
 Fetches the latest result for each assessment, extracts the tags, maps them
-to the five learning areas, and computes an evidence package that the LLM
-writer (Stage B) turns into a parent letter.
+to the learning areas, and computes an evidence package that the LLM writer
+(Stage B) turns into a parent letter.
 
 This stage never calls an LLM. It produces facts; the writer produces words.
+
+The single most important thing this module does is hand the writer the words
+the child actually wrote and read. A letter built from tag names could be
+about any child. A letter that quotes *fone*, *graff* and *clunck* could only
+be about one.
 """
 
 from __future__ import annotations
@@ -12,7 +17,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from app.domain.enums import TestType
 from app.core.security import verify_paid_child
@@ -24,6 +30,29 @@ _AREA_CONFIG_PATH = os.path.join("data", "tags", "learning_areas.json")
 
 _AREA_CACHE: Optional[Dict[str, Any]] = None
 
+#: A tag backed by at least this many questions was seen often enough to
+#: describe as a pattern rather than as a single observation (LS4). The count
+#: is of QUESTIONS, never of activities: fourteen comprehension questions in
+#: one activity is not "seen once".
+SEEN_REPEATEDLY_AT = 3
+
+#: Signal names that report how many items sit behind a tag. Every tag config
+#: already declares one of these beside its accuracy, so the count a parent
+#: should be told is already measured - it was simply never read.
+_COUNT_SIGNAL_SUFFIXES = (
+    "_items_count",
+    "_attempted",
+    "_words_count",
+    "_shown",
+)
+
+#: Counts that are whole-activity rather than per-construct.
+_WHOLE_ACTIVITY_COUNTS = ("sentences_answered", "stories_attempted")
+
+#: LS9: this finding is specific, actionable, and the hardest-won thing in
+#: the whole product. It is never ranked out of the letter.
+_NEVER_DROP = {"spelling_convention_emerging"}
+
 
 def _load_area_config() -> Dict[str, Any]:
     """Load and cache the learning-areas mapping."""
@@ -32,6 +61,44 @@ def _load_area_config() -> Dict[str, Any]:
         with open(_AREA_CONFIG_PATH, encoding="utf-8") as f:
             _AREA_CACHE = json.load(f)
     return _AREA_CACHE
+
+
+def _parse_evidence(evidence: str) -> Dict[str, Any]:
+    """Turn ``"pattern_accuracy=1.0, pattern_items_count=3"`` into a dict."""
+    parsed: Dict[str, Any] = {}
+    for part in (evidence or "").split(","):
+        if "=" not in part:
+            continue
+        name, _, raw = part.partition("=")
+        name = name.strip()
+        raw = raw.strip()
+        try:
+            parsed[name] = float(raw) if "." in raw else int(raw)
+        except ValueError:
+            parsed[name] = raw
+    return parsed
+
+
+def _questions_behind(evidence: str, answered_in_activity: int) -> int:
+    """How many questions produced this tag (LS4).
+
+    Prefers the construct's own item count, falls back to how much of the
+    activity the child completed. Never returns the number of activities -
+    that was the bug: one activity was reported as one observation.
+    """
+    parsed = _parse_evidence(evidence)
+    counts = [
+        int(value)
+        for name, value in parsed.items()
+        if isinstance(value, (int, float))
+        and (
+            name.endswith(_COUNT_SIGNAL_SUFFIXES)
+            or name in _WHOLE_ACTIVITY_COUNTS
+        )
+    ]
+    if counts:
+        return max(counts)
+    return answered_in_activity
 
 
 class SnapshotService:
@@ -71,142 +138,501 @@ class SnapshotService:
                 results[key] = None
 
         completed = [k for k, v in results.items() if v]
+        display = self._config["test_display_names"]
 
-        # A2-A5. Extract, map, rank.
-        observations = self._collect_observations(results)
-        strengths = [o for o in observations if o["polarity"] == "strength"]
-        growth_edges = [o for o in observations if o["polarity"] == "growth_edge"]
+        # A2. What the child actually did, in their own words (Part 4).
+        activity_detail = {
+            key: builder(results[key])
+            for key, builder in (
+                ("spelling", self._spelling_detail),
+                ("speaking", self._speaking_detail),
+                ("comprehension", self._comprehension_detail),
+                ("logic", self._logic_detail),
+            )
+            if results.get(key)
+        }
 
-        strengths.sort(key=self._observation_rank, reverse=True)
-        growth_edges.sort(key=self._observation_rank, reverse=True)
+        # A3. Every fired tag, at tag level, with the activity that fired it.
+        signals = self._collect_signals(results, activity_detail)
+
+        # LS9: every growth edge reaches the parent. No limit, and the
+        # spelling-conventions finding is pinned to the front when it fired.
+        strengths = [s for s in signals if s["polarity"] == "strength"]
+        growth_edges = [s for s in signals if s["polarity"] == "growth_edge"]
+        neutral = [s for s in signals if s["polarity"] == "neutral"]
+
+        strengths.sort(key=self._signal_rank, reverse=True)
+        growth_edges.sort(key=self._signal_rank, reverse=True)
 
         return {
             "child_name": child_name,
             "grade": grade,
             "tests_completed": completed,
-            "observations": strengths[:3],
-            "growth_edges": growth_edges[:3],
-            "full_picture_areas": [
-                {
-                    "area": o["area"],
-                    "area_display_name": o["area_display_name"],
-                    "badge": "seen_repeatedly" if o["evidence_strength"] == "seen_more_than_once" else "seen_once",
-                    "polarity": o["polarity"],
-                    "seen_in": o["seen_in"],
-                    "tags": o["tags"],
-                }
-                for o in observations
-            ],
+            "activities_completed": [display[k] for k in completed if k in display],
+            # LS6: what actually happened, so the letter cannot invent a week
+            # of sessions that never took place.
+            "session": self._session_facts(results, display),
+            # LS7: a run with nothing to fault still gets its own observation.
+            "flawless_activities": self._flawless_activities(
+                activity_detail, display
+            ),
+            "strengths": strengths,
+            "growth_edges": growth_edges,
+            "neutral_observations": neutral,
+            "areas": self._areas(signals),
+            "what_the_child_did": activity_detail,
+            # LS10: the only signal names that may appear in the letter.
+            "allowed_signal_names": sorted(
+                {s["signal_name"] for s in signals}
+            ),
         }
 
     # ------------------------------------------------------------------
-    # Stage A2/A3: extract tags per test and group them into areas
+    # Stage A3: every fired tag, one entry each
     # ------------------------------------------------------------------
-    def _collect_observations(
-        self, results: Dict[str, Optional[Dict[str, Any]]]
+    def _collect_signals(
+        self,
+        results: Dict[str, Optional[Dict[str, Any]]],
+        activity_detail: Dict[str, Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """Group the fired tags into learning areas with evidence counts."""
+        """One entry per fired tag, carrying the activity that produced it.
+
+        Tags are matched per test rather than globally. A tag can only be
+        credited to the activity whose result actually carries it, which is
+        what LS2 is about: Word Wizard does not get credit for a pattern the
+        Logic Quest measured.
+        """
         areas = self._config["areas"]
         display = self._config["test_display_names"]
+        tag_names = self._config.get("tag_display_names", {})
 
-        # tag_id -> (test_key, polarity, description) for every fired tag
-        fired: Dict[str, List[Dict[str, Any]]] = {}
+        # Which area each tag belongs to, for the test that fired it.
+        area_of: Dict[Tuple[str, str], Dict[str, str]] = {}
+        for area_key, area_cfg in areas.items():
+            for test_key, tag_ids in area_cfg["sources"].items():
+                for tag_id in tag_ids:
+                    area_of[(test_key, tag_id)] = {
+                        "area": area_key,
+                        "area_display_name": area_cfg["display_name"],
+                    }
 
+        signals: List[Dict[str, Any]] = []
         for test_key, result in results.items():
             if not result:
                 continue
+            answered = int(
+                (activity_detail.get(test_key) or {}).get("questions_answered", 0)
+            )
             for tag in result.get("dear_parent_tags", []):
                 tag_id = tag.get("id") or tag.get("tag", "")
                 if not tag_id:
                     continue
-                fired.setdefault(tag_id, []).append(
+                placement = area_of.get((test_key, tag_id))
+                if placement is None:
+                    # A tag no area claims still happened; it simply has no
+                    # section to sit in. Silence is better than a made-up home.
+                    continue
+                evidence = tag.get("evidence", "")
+                count = _questions_behind(evidence, answered)
+                signals.append(
                     {
-                        "test": test_key,
+                        "tag": tag_id,
+                        # LS10: the agreed name, never one the writer invents.
+                        "signal_name": tag_names.get(tag_id, tag_id),
                         "polarity": tag.get("polarity", "neutral"),
+                        "confidence": tag.get("confidence", "medium"),
                         "description": tag.get("description", ""),
+                        "seen_in": display.get(test_key, test_key),
+                        "activity": test_key,
+                        # LS4: questions, not activities.
+                        "questions_behind": count,
+                        "badge": (
+                            "seen_repeatedly"
+                            if count >= SEEN_REPEATEDLY_AT
+                            else "seen_once"
+                        ),
+                        "measurements": _parse_evidence(evidence),
+                        **placement,
                     }
                 )
+        return signals
 
-        observations: List[Dict[str, Any]] = []
-        for area_key, area_cfg in areas.items():
-            per_test_tags: Dict[str, List[str]] = {}
-            polarities: List[str] = []
-            evidence_detail: Dict[str, Any] = {}
+    def _areas(self, signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """The merged picture, one entry per area that has evidence.
 
-            for test_key, tag_ids in area_cfg["sources"].items():
-                matched: List[str] = []
-                for tag_id in tag_ids:
-                    if tag_id in fired:
-                        hits = fired[tag_id]
-                        matched.append(tag_id)
-                        for hit in hits:
-                            polarities.append(hit["polarity"])
-                if matched:
-                    per_test_tags[test_key] = matched
-                    result = results.get(test_key)
-                    if result:
-                        detail: Dict[str, Any] = {
-                            "tags": [
-                                {
-                                    "id": t,
-                                    "polarity": next(
-                                        (h["polarity"] for h in fired.get(t, [])), "neutral"
-                                    ),
-                                    "description": next(
-                                        (h["description"] for h in fired.get(t, [])), ""
-                                    ),
-                                }
-                                for t in matched
-                            ]
-                        }
-                        signals = result.get("signals", {})
-                        if signals:
-                            detail["signals"] = signals
-                        per_items = result.get("per_item_tags") or result.get(
-                            "per_word_tags"
-                        ) or result.get("per_question_tags"
-                        ) or []
-                        if per_items:
-                            detail["per_item_tags"] = per_items
-                        scored = result.get("scored_items") or []
-                        if scored:
-                            detail["scored_items"] = scored
-                        evidence_detail[test_key] = detail
-
-            if not per_test_tags:
-                continue  # no evidence for this area
-
-            seen_in = [display[k] for k in per_test_tags if k in display]
-            evidence_strength = (
-                "seen_more_than_once" if len(per_test_tags) >= 2 else "seen_once"
-            )
-            # The area's polarity is whatever its tags lean towards.
-            polarity = (
-                "strength"
-                if polarities.count("strength") >= polarities.count("growth_edge")
-                else "growth_edge"
-            )
-
-            observations.append(
+        LS2: ``seen_in`` lists only the activities that actually fired one of
+        the tags in this area.
+        """
+        grouped: Dict[str, Dict[str, Any]] = {}
+        for signal in signals:
+            bucket = grouped.setdefault(
+                signal["area"],
                 {
-                    "area": area_key,
-                    "area_display_name": area_cfg["display_name"],
-                    "polarity": polarity,
-                    "evidence_strength": evidence_strength,
-                    "seen_in": seen_in,
-                    "tags": per_test_tags,
-                    "evidence_detail": evidence_detail,
+                    "area": signal["area"],
+                    "area_display_name": signal["area_display_name"],
+                    "seen_in": [],
+                    "signals": [],
+                    "questions_behind": 0,
+                },
+            )
+            if signal["seen_in"] not in bucket["seen_in"]:
+                bucket["seen_in"].append(signal["seen_in"])
+            bucket["signals"].append(
+                {
+                    "tag": signal["tag"],
+                    "signal_name": signal["signal_name"],
+                    "polarity": signal["polarity"],
+                    "description": signal["description"],
+                    "seen_in": signal["seen_in"],
+                }
+            )
+            bucket["questions_behind"] += signal["questions_behind"]
+
+        areas: List[Dict[str, Any]] = []
+        for bucket in grouped.values():
+            polarities = [s["polarity"] for s in bucket["signals"]]
+            # LS1: the headline must follow the tags underneath it. An area
+            # with more growth edges than strengths is a growth area, and the
+            # writer is told so rather than left to guess from the prose.
+            strengths = polarities.count("strength")
+            growth = polarities.count("growth_edge")
+            bucket["polarity"] = (
+                "strength" if strengths > growth
+                else "growth_edge" if growth > strengths
+                else "mixed"
+            )
+            bucket["badge"] = (
+                "seen_repeatedly"
+                if bucket["questions_behind"] >= SEEN_REPEATEDLY_AT
+                else "seen_once"
+            )
+            areas.append(bucket)
+
+        areas.sort(key=lambda a: (len(a["signals"]), a["questions_behind"]), reverse=True)
+        return areas
+
+    # ------------------------------------------------------------------
+    # Part 4: what the child actually did, per activity
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _spelling_detail(result: Dict[str, Any]) -> Dict[str, Any]:
+        """The words, and what the child wrote instead. THE BIG ONE."""
+        rows = result.get("results") or []
+        words: List[Dict[str, Any]] = []
+        convention: List[Dict[str, str]] = []
+
+        for row in rows:
+            detail = row.get("detail") or {}
+            attempt = (detail.get("user_input") or "").strip()
+            mistakes = detail.get("mistakes") or {}
+            entry = {
+                "word": row.get("label", "") or row.get("item_id", ""),
+                "attempt": attempt,
+                "correct": bool(row.get("is_correct")),
+                "answered": bool(attempt),
+                "word_type": detail.get("type", ""),
+                "seconds": detail.get("time", 0.0),
+            }
+            if not entry["correct"] and attempt:
+                entry["what_changed"] = sorted(mistakes)
+            words.append(entry)
+            if "spelling_convention" in mistakes and attempt:
+                convention.append({"word": entry["word"], "attempt": attempt})
+
+        answered = [w for w in words if w["answered"]]
+        return {
+            "activity": "Word Wizard",
+            "words": words,
+            # The three that carry the whole letter: heard right, spelled by
+            # a rule the child has not met yet.
+            "heard_right_spelled_by_another_rule": convention,
+            "misspellings": [
+                {"word": w["word"], "attempt": w["attempt"]}
+                for w in answered
+                if not w["correct"]
+            ],
+            "words_correct": sum(1 for w in words if w["correct"]),
+            "words_total": len(words),
+            "questions_answered": len(answered),
+            "key_error_patterns": [
+                {"pattern": name, "count": count}
+                for name, count in (result.get("error_analysis") or {}).items()
+                if count
+            ],
+            "strengths": result.get("strengths") or [],
+            "focus_areas": result.get("focus_areas") or [],
+        }
+
+    @staticmethod
+    def _speaking_detail(result: Dict[str, Any]) -> Dict[str, Any]:
+        """The sentences, the tips already written, and the reading pace."""
+        sentences = result.get("sentences") or []
+        signals = result.get("signals") or {}
+
+        rows: List[Dict[str, Any]] = []
+        tips: List[str] = []
+        stretched_on: List[str] = []
+        different_on: List[Dict[str, str]] = []
+
+        for sentence in sentences:
+            if not sentence.get("answered"):
+                continue
+            analysis = sentence.get("analysis") or {}
+            errors = analysis.get("errors") or {}
+            text = sentence.get("sentence", "")
+            tip = (analysis.get("parent_tip") or "").strip()
+            pronunciation = (
+                (analysis.get("pronunciation") or {}).get("feedback") or ""
+            ).strip()
+
+            rows.append(
+                {
+                    "sentence": text,
+                    "wcpm": (analysis.get("reading") or {}).get("wcpm", 0.0),
+                    "seconds": (analysis.get("timing") or {}).get(
+                        "duration_seconds", 0.0
+                    ),
+                    "stretched_sounds": errors.get("stretched", 0),
+                    "skipped_words": errors.get("skipped", 0),
+                    "words_that_came_out_differently": errors.get(
+                        "mispronounced", 0
+                    ),
+                    # Ready-written and concrete. These used to be generated
+                    # and thrown away.
+                    "parent_tip": tip,
+                    "pronunciation_feedback": pronunciation,
+                }
+            )
+            if tip and tip not in tips:
+                tips.append(tip)
+            if errors.get("stretched"):
+                stretched_on.append(text)
+            if errors.get("mispronounced") and pronunciation:
+                different_on.append({"sentence": text, "feedback": pronunciation})
+
+        return {
+            "activity": "Voice Challenge",
+            "sentences": rows,
+            "parent_tips": tips,
+            "sentences_where_a_sound_was_stretched": stretched_on,
+            "words_that_came_out_differently": different_on,
+            "questions_answered": len(rows),
+            # The strongest conference currency in the whole payload, and
+            # until now invisible in the letter.
+            "words_correct_per_minute": signals.get("wcpm", 0.0),
+            "pace_against_the_usual_band": signals.get("wcpm_band", ""),
+            "read_every_word_score": signals.get("avg_completeness", 0.0),
+            "words_skipped": signals.get("omission_count", 0),
+            "sounds_stretched": signals.get("prolonged_count", 0),
+            "words_read": signals.get("words_read", 0),
+        }
+
+    @staticmethod
+    def _comprehension_detail(result: Dict[str, Any]) -> Dict[str, Any]:
+        """The stories, and what the child worked out or missed, in words."""
+        stories = result.get("results") or []
+        rows: List[Dict[str, Any]] = []
+        worked_out: List[Dict[str, str]] = []
+        missed: List[Dict[str, str]] = []
+        answered = 0
+
+        for story in stories:
+            questions: List[Dict[str, Any]] = []
+            for question in story.get("questions") or []:
+                if not question.get("answered", True):
+                    continue
+                answered += 1
+                entry = {
+                    "question": question.get("question", ""),
+                    "kind": question.get("question_type", ""),
+                    "chose": question.get("selected_answer", ""),
+                    "answer": question.get("correct_answer", ""),
+                    "correct": bool(question.get("is_correct")),
+                    "seconds": question.get("response_time_seconds", 0.0),
+                }
+                questions.append(entry)
+                target = worked_out if entry["correct"] else missed
+                target.append(
+                    {
+                        "story": story.get("story_title", ""),
+                        "question": entry["question"],
+                        "kind": entry["kind"],
+                        "chose": entry["chose"],
+                        "answer": entry["answer"],
+                    }
+                )
+            rows.append(
+                {
+                    "story_title": story.get("story_title", ""),
+                    "questions": questions,
                 }
             )
 
-        return observations
+        return {
+            "activity": "Story Explorer",
+            "stories": rows,
+            "worked_out": worked_out,
+            "missed": missed,
+            "questions_answered": answered,
+        }
 
     @staticmethod
-    def _observation_rank(observation: Dict[str, Any]) -> float:
-        """More tests, then more tags, rank higher."""
-        tag_count = sum(len(v) for v in observation["tags"].values())
-        strength_bonus = 1.0 if observation["evidence_strength"] == "seen_more_than_once" else 0.0
-        return len(observation["tags"]) * 2 + tag_count + strength_bonus
+    def _logic_detail(result: Dict[str, Any]) -> Dict[str, Any]:
+        """What kind of puzzle, how hard, and how long the child took."""
+        items = result.get("scored_items") or []
+        rows: List[Dict[str, Any]] = []
+        answered = 0
+        for item in items:
+            detail = item.get("detail") or {}
+            status = str(item.get("status") or "answered").lower()
+            if "not" in status or status == "error":
+                continue
+            answered += 1
+            rows.append(
+                {
+                    # The puzzle itself. "2-4" is an item number and means
+                    # nothing to a parent.
+                    "question": detail.get("question_text")
+                    or item.get("label", ""),
+                    "item_number": item.get("label", ""),
+                    "kind": (detail.get("item_type") or "").replace("_", " "),
+                    "difficulty": detail.get("difficulty", ""),
+                    "correct": bool(item.get("is_correct")),
+                    "seconds": detail.get("response_time_seconds", 0.0),
+                    "missed_skill": [
+                        t for t in (detail.get("tags") or [])
+                        if t.endswith("_missed")
+                    ],
+                }
+            )
+
+        return {
+            "activity": "Logic Quest",
+            "questions": rows,
+            "took_time_and_got_it_right": [
+                r for r in rows if r["correct"] and (r["seconds"] or 0) >= 10
+            ],
+            "missed": [r for r in rows if not r["correct"]],
+            "questions_answered": answered,
+        }
+
+    # ------------------------------------------------------------------
+    # LS6 / LS7 helpers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _session_facts(
+        results: Dict[str, Optional[Dict[str, Any]]],
+        display: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """When the activities actually happened, and how far apart.
+
+        The letter used to open with "This week, I had the pleasure of
+        observing...". Four activities finished five minutes apart. There was
+        no week, so the writer is handed the real span instead.
+        """
+        stamps: List[datetime] = []
+        for result in results.values():
+            raw = (result or {}).get("timestamp")
+            if not raw:
+                continue
+            try:
+                stamps.append(datetime.fromisoformat(str(raw).replace("Z", "+00:00")))
+            except ValueError:
+                continue
+
+        if not stamps:
+            return {"activities": [], "span_minutes": None, "same_sitting": None}
+
+        span = (max(stamps) - min(stamps)).total_seconds() / 60.0
+        return {
+            "activities": [display[k] for k, v in results.items() if v and k in display],
+            "span_minutes": round(span, 1),
+            # Everything inside an hour was one sitting, not a series of
+            # sessions over time.
+            "same_sitting": span <= 60.0,
+            "first_at": min(stamps).isoformat(),
+            "last_at": max(stamps).isoformat(),
+        }
+
+    @staticmethod
+    def _flawless_activities(
+        activity_detail: Dict[str, Dict[str, Any]],
+        display: Dict[str, str],
+    ) -> List[Dict[str, Any]]:
+        """Activities with nothing to fault (LS7).
+
+        Vedika spelled 15 of 15 and Word Wizard never got a headline of its
+        own. A run with no mistakes in it is itself an observation.
+        """
+        flawless: List[Dict[str, Any]] = []
+
+        spelling = activity_detail.get("spelling")
+        if spelling and spelling["words_total"] and not spelling["misspellings"]:
+            flawless.append(
+                {
+                    "activity": display["spelling"],
+                    "what_happened": (
+                        f"Spelled every one of {spelling['words_total']} words "
+                        "correctly, with nothing to correct."
+                    ),
+                }
+            )
+
+        comprehension = activity_detail.get("comprehension")
+        if comprehension and comprehension["questions_answered"] and not comprehension["missed"]:
+            flawless.append(
+                {
+                    "activity": display["comprehension"],
+                    "what_happened": (
+                        f"Answered all {comprehension['questions_answered']} "
+                        "questions about the stories correctly."
+                    ),
+                }
+            )
+
+        logic = activity_detail.get("logic")
+        if logic and logic["questions_answered"] and not logic["missed"]:
+            flawless.append(
+                {
+                    "activity": display["logic"],
+                    "what_happened": (
+                        f"Worked out all {logic['questions_answered']} puzzles, "
+                        "including the hard ones."
+                    ),
+                }
+            )
+
+        speaking = activity_detail.get("speaking")
+        if speaking and speaking["questions_answered"] and not (
+            speaking["words_skipped"] or speaking["words_that_came_out_differently"]
+        ):
+            flawless.append(
+                {
+                    "activity": display["speaking"],
+                    "what_happened": (
+                        f"Read all {speaking['questions_answered']} sentences "
+                        "without skipping a word."
+                    ),
+                }
+            )
+
+        return flawless
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _signal_rank(signal: Dict[str, Any]) -> Tuple[int, int, float]:
+        """LS9: rank by evidence strength, not by the order tags were read.
+
+        The spelling-conventions finding sorts first whenever it fired: it is
+        the most useful thing the product measures and it was the finding the
+        old cap dropped.
+        """
+        confidence_weight = {"high": 2, "medium": 1, "low": 0}
+        return (
+            1 if signal["tag"] in _NEVER_DROP else 0,
+            confidence_weight.get(str(signal.get("confidence")), 1),
+            float(signal.get("questions_behind", 0)),
+        )
 
 
 def get_snapshot_service() -> SnapshotService:
