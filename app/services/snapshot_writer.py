@@ -154,6 +154,21 @@ RULES
 - Never name a question by its number. "2-4" and "s1_q2" mean nothing to a
   parent. Say what the question actually asked, or what kind it was.
 - Use only facts that appear in the evidence. Invent nothing.
+
+BEING SPECIFIC IS NOT OPTIONAL
+
+`must_mention` lists facts this letter has to contain. A letter without them
+is rejected and you will be asked again. Quote them exactly as written.
+
+`could_mention` holds the rest of what this child actually did: the words
+they wrote, the sentences they read, the stories, the questions they worked
+out and the answers they chose. Use as many as fit naturally. Every one you
+use is a sentence a parent recognises as their own child.
+
+Never write a paragraph that would be true of any child. "They are
+developing this skill" says nothing. "They chose The oak tree when the story
+said The tomato plants" says everything. If a paragraph could be moved into
+another child's letter unchanged, rewrite it.
 """
 
 _FORBIDDEN_PATTERNS = [
@@ -446,6 +461,11 @@ _REMOVED_KEYS = ("what_helped", "full_picture")
 #: broken so far.
 _MAX_ATTEMPTS = 3
 
+#: Concrete facts about this child a letter should carry before it is called
+#: finished. Below this it reads like a letter about any child, so the writer
+#: asks again rather than settling for the first draft that breaks no rule.
+_ENOUGH_DETAIL = 6
+
 _MAX_NOTICED = 4
 _ABSOLUTE_MAX_GROWING = 12
 
@@ -463,6 +483,53 @@ def style_violations(letter: Dict[str, Any]) -> List[str]:
 
 #: Marks a violation as a matter of voice rather than of harm.
 _STYLE_PREFIX = "voice - "
+
+
+def specificity(letter: Dict[str, Any], evidence: Dict[str, Any]) -> int:
+    """How many of this child's concrete facts the draft actually used.
+
+    Not a guardrail - a ranking. Two drafts can both break no rule while one
+    quotes the words the child wrote and the other talks about "developing
+    skills". This is how the writer tells them apart instead of keeping
+    whichever arrived first.
+    """
+    text = json.dumps(letter, ensure_ascii=False).lower()
+    could = evidence.get("could_mention") or {}
+    score = 0
+    for key, facts in could.items():
+        if isinstance(facts, str):
+            facts = [facts] if facts else []
+        for fact in facts:
+            fact = str(fact).strip().lower()
+            # Long sentences count if a distinctive chunk of them appears.
+            probe = fact if len(fact) <= 40 else fact[:40]
+            if len(probe) >= 4 and probe in text:
+                score += 1
+    return score
+
+
+def missing_required_facts(
+    letter: Dict[str, Any], evidence: Dict[str, Any]
+) -> List[str]:
+    """Facts the letter had to use and did not.
+
+    This is what keeps quality from swinging between runs. Asking the model
+    to be specific produces a specific letter most of the time; checking it
+    produces one every time.
+    """
+    text = json.dumps(letter, ensure_ascii=False).lower()
+    missing: List[str] = []
+    for required in evidence.get("must_mention") or []:
+        options = [str(o).strip().lower() for o in required.get("any_of") or []]
+        options = [o for o in options if o]
+        if not options:
+            continue
+        if not any(o in text for o in options):
+            missing.append(
+                f"the letter never names {required['what']} "
+                f"({', '.join(required['any_of'][:4])}) - {required['why']}"
+            )
+    return missing
 
 
 class SnapshotWriter:
@@ -489,6 +556,7 @@ class SnapshotWriter:
             # letter, which says nothing about their child.
             seen: List[str] = []
             best: Optional[Dict[str, Any]] = None
+            best_rank: tuple = ()
             best_style: List[str] = []
 
             for attempt in range(_MAX_ATTEMPTS):
@@ -498,27 +566,52 @@ class SnapshotWriter:
                 violations = self._validate(letter, evidence)
                 harm = [v for v in violations if not v.startswith(_STYLE_PREFIX)]
                 style = [v for v in violations if v.startswith(_STYLE_PREFIX)]
+                detail = specificity(letter, evidence)
 
-                if not harm and (best is None or len(style) < len(best_style)):
-                    best, best_style = letter, style
-                if not violations:
-                    return self._finalise(letter, evidence)
+                # Rank every draft that breaks no rule: fewest voice slips
+                # first, then the one that used most of this child's own
+                # words. Keeping whichever arrived first is what made the
+                # letter good some runs and vague others.
+                rank = (-len(style), detail)
+                if not harm and (best is None or rank > best_rank):
+                    best, best_rank, best_style = letter, rank, style
 
-                logger.warning(
-                    "snapshot writer: attempt %d broke %s", attempt + 1, violations
+                logger.info(
+                    "snapshot writer: attempt %d - %d violation(s), "
+                    "specificity %d", attempt + 1, len(violations), detail,
                 )
+                if not violations and detail >= _ENOUGH_DETAIL:
+                    return self._finalise(letter, evidence, specificity=detail)
+
+                if violations:
+                    logger.warning(
+                        "snapshot writer: attempt %d broke %s", attempt + 1, violations
+                    )
                 for violation in violations:
                     if violation not in seen:
                         seen.append(violation)
+                if not violations:
+                    # Clean but thin. Ask once more for the child's own words.
+                    nudge = (
+                        "the letter breaks no rule but is not specific enough: "
+                        "quote more of what this child actually wrote, read, "
+                        "and answered, from `could_mention`"
+                    )
+                    if nudge not in seen:
+                        seen.append(nudge)
 
-            # Nothing clean. A letter that only slips on voice still belongs
-            # to this child; the generic letter belongs to no one.
+            # Nothing perfect. A letter that only slips on voice, or is a
+            # little thin, still belongs to this child; the generic letter
+            # belongs to no one.
             if best is not None:
-                logger.warning(
-                    "snapshot writer: shipping a letter with voice slips %s",
-                    best_style,
+                if best_style:
+                    logger.warning(
+                        "snapshot writer: shipping with voice slips %s", best_style
+                    )
+                return self._finalise(
+                    best, evidence, style_slips=best_style,
+                    specificity=best_rank[1] if best_rank else 0,
                 )
-                return self._finalise(best, evidence, style_slips=best_style)
 
             logger.warning("snapshot writer: no usable letter, using generic")
             return self._fallback(evidence)
@@ -560,7 +653,11 @@ class SnapshotWriter:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=0.4,
+            # The same child should get the same letter. 0.4 gave a good
+            # letter on one run and a vague one on the next from identical
+            # evidence, which is the whole problem with letting the model
+            # choose how specific to be.
+            temperature=0.15,
             # The letter got longer: every growth edge now reaches the parent,
             # and the conference section is new.
             max_tokens=5000,
@@ -644,6 +741,7 @@ class SnapshotWriter:
             if match:
                 violations.append(f"forbidden {label}: {match.group(0)!r}")
 
+        violations.extend(missing_required_facts(letter, evidence))
         violations.extend(style_violations(letter))
 
         # A quoted misspelling must never read as a correction.
@@ -776,6 +874,7 @@ class SnapshotWriter:
         evidence: Dict[str, Any],
         llm_generated: bool = True,
         style_slips: Optional[List[str]] = None,
+        specificity: int = 0,
     ) -> Dict[str, Any]:
         name = evidence.get("child_name", "your child")
         closing = letter.get("closing") or _GENERIC_LETTER["closing"]
@@ -801,6 +900,9 @@ class SnapshotWriter:
             # are reported separately: they are a matter of how it reads.
             "guardrails_passed": llm_generated,
             "voice_slips": list(style_slips or []),
+            # How many of this child's own words, sentences, stories and
+            # puzzles the letter used. A low number is a thin letter.
+            "specificity": specificity,
             # LS9: what the engine found, beside what the letter carried, so
             # a dropped growth edge is visible rather than silent.
             "growth_edges_found": len(evidence.get("growth_edges", [])),

@@ -764,6 +764,115 @@ class TestRepairRatherThanDiscard:
         assert not violations, violations
 
 
+class TestTheLetterIsSpecificEveryTime:
+    """Consistency: the same evidence should not give a good letter one run
+    and a vague one the next.
+
+    The guardrails used to check only what must NOT appear, so a letter that
+    said "they are developing this skill" about everything passed cleanly.
+    What makes the letter worth paying for - the child's own words - was
+    asked for in the prompt and never checked. Now it is checked.
+    """
+
+    def test_stage_a_names_the_facts_the_letter_must_carry(self, evidence):
+        required = evidence["must_mention"]
+        assert required
+        words = next(
+            r for r in required if "spelled by sound" in r["what"]
+        )
+        assert set(words["any_of"]) >= {"clunck", "graff", "fone"}
+
+    def test_the_story_is_named_among_them(self, evidence):
+        titles = [r for r in evidence["must_mention"] if "story" in r["what"]]
+        assert titles
+        assert "The Treasure Map" in titles[0]["any_of"]
+
+    def test_a_vague_letter_is_rejected(self, evidence):
+        """This is the run that used to reach a parent."""
+        from app.services.snapshot_writer import missing_required_facts
+
+        vague = {
+            "opening": {
+                "headline": "A good sitting.",
+                "paragraph": "They are developing their skills nicely.",
+            },
+            "what_i_noticed": [],
+            "still_growing": [
+                {
+                    "headline": g["signal_name"],
+                    "signals": [g["signal_name"]],
+                    "seen_in": [g["seen_in"]],
+                    "paragraph": "This is still growing.",
+                    "suggestion": {"because": "Because of this."},
+                }
+                for g in evidence["growth_edges"]
+            ],
+            "for_the_conference": {
+                "items": [{"point": str(i), "worth_asking": "Worth asking."}
+                          for i in range(3)]
+            },
+        }
+        assert missing_required_facts(vague, evidence)
+        assert SnapshotWriter()._validate(vague, evidence)
+
+    def test_a_specific_letter_is_accepted(self, evidence):
+        from app.services.snapshot_writer import missing_required_facts
+
+        letter = {
+            "opening": {
+                "headline": "Pranav spells by sound.",
+                "paragraph": (
+                    "Pranav wrote fone for phone and graff for graph. In "
+                    "The Treasure Map they chose The oak tree."
+                ),
+            },
+            "what_i_noticed": [],
+            "still_growing": [
+                {
+                    "headline": g["signal_name"],
+                    "signals": [g["signal_name"]],
+                    "seen_in": [g["seen_in"]],
+                    "paragraph": "x",
+                    "suggestion": {"because": "Because of this."},
+                }
+                for g in evidence["growth_edges"]
+            ],
+            "for_the_conference": {
+                "items": [{"point": str(i), "worth_asking": "Worth asking."}
+                          for i in range(3)]
+            },
+        }
+        assert not missing_required_facts(letter, evidence)
+        assert not SnapshotWriter()._validate(letter, evidence)
+
+    def test_a_specific_draft_outranks_a_vague_one(self, evidence):
+        from app.services.snapshot_writer import specificity
+
+        vague = {"opening": {"paragraph": "They are developing well."}}
+        specific = {
+            "opening": {
+                "paragraph": (
+                    "They wrote clunck for clunk and graff for graph, and in "
+                    "The Treasure Map they chose The oak tree."
+                )
+            }
+        }
+        assert specificity(specific, evidence) > specificity(vague, evidence)
+        assert specificity(vague, evidence) == 0
+
+    def test_the_meta_reports_how_specific_the_letter_was(self, evidence):
+        letter = SnapshotWriter()._finalise({"closing": "c"}, evidence, specificity=9)
+        assert letter["meta"]["specificity"] == 9
+
+    def test_a_child_with_nothing_to_quote_is_not_blocked(self, evidence):
+        """A flawless speller has no misspellings. That must not fail."""
+        from app.services.snapshot_writer import missing_required_facts
+
+        empty = dict(evidence)
+        empty["must_mention"] = []
+        assert not missing_required_facts({"opening": {"paragraph": "x"}}, empty)
+
+
 class TestVoiceSlipsNeverCostTheLetter:
     """A guardrail protects the child, not the prose.
 

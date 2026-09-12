@@ -185,6 +185,11 @@ class SnapshotService:
             "allowed_signal_names": sorted(
                 {s["signal_name"] for s in signals}
             ),
+            # The facts that make this letter about THIS child. Stage B is
+            # checked against them, so a vague letter is caught rather than
+            # hoped away.
+            "must_mention": self._must_mention(activity_detail),
+            "could_mention": self._could_mention(activity_detail),
         }
 
     # ------------------------------------------------------------------
@@ -514,6 +519,93 @@ class SnapshotService:
             ],
             "missed": [r for r in rows if not r["correct"]],
             "questions_answered": answered,
+        }
+
+    # ------------------------------------------------------------------
+    # What makes the letter unmistakably about this child
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _must_mention(activity_detail: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Facts the letter is required to use, when the child produced them.
+
+        "Sometimes good, sometimes vague" is what happens when specificity
+        is asked for but only harm is enforced. These are checked.
+        """
+        required: List[Dict[str, Any]] = []
+
+        spelling = activity_detail.get("spelling") or {}
+        heard_right = spelling.get("heard_right_spelled_by_another_rule") or []
+        if heard_right:
+            required.append(
+                {
+                    "what": "the words this child spelled by sound",
+                    "why": (
+                        "Every sound is right and only the rule is missing. "
+                        "This is the most useful finding in the run and the "
+                        "one thing no other child's letter could contain."
+                    ),
+                    "any_of": [m["attempt"] for m in heard_right],
+                }
+            )
+        elif spelling.get("misspellings"):
+            required.append(
+                {
+                    "what": "what this child actually wrote",
+                    "why": "A letter that quotes it could only be about them.",
+                    "any_of": [m["attempt"] for m in spelling["misspellings"]],
+                }
+            )
+
+        comprehension = activity_detail.get("comprehension") or {}
+        titles = [
+            s["story_title"] for s in (comprehension.get("stories") or [])
+            if s.get("story_title")
+        ]
+        if titles:
+            required.append(
+                {
+                    "what": "the story by name",
+                    "why": "A parent can talk about it at home.",
+                    "any_of": titles,
+                }
+            )
+
+        return required
+
+    @staticmethod
+    def _could_mention(activity_detail: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Concrete detail the letter is measured on, but not failed for.
+
+        The more of this a draft uses, the more it reads like someone who
+        was in the room. The writer keeps its most specific attempt.
+        """
+        spelling = activity_detail.get("spelling") or {}
+        speaking = activity_detail.get("speaking") or {}
+        comprehension = activity_detail.get("comprehension") or {}
+        logic = activity_detail.get("logic") or {}
+
+        return {
+            "words_written": [
+                m["attempt"] for m in (spelling.get("misspellings") or [])
+            ],
+            "sentences_read": [
+                s["sentence"] for s in (speaking.get("sentences") or [])
+            ],
+            "reading_pace": speaking.get("pace_against_the_usual_band", ""),
+            "story_titles": [
+                s["story_title"] for s in (comprehension.get("stories") or [])
+                if s.get("story_title")
+            ],
+            "questions_worked_out": [
+                w["question"] for w in (comprehension.get("worked_out") or [])
+            ],
+            "questions_missed": [
+                m["question"] for m in (comprehension.get("missed") or [])
+            ],
+            "answers_chosen": [
+                m["chose"] for m in (comprehension.get("missed") or []) if m.get("chose")
+            ],
+            "puzzles": [q["question"] for q in (logic.get("questions") or [])],
         }
 
     # ------------------------------------------------------------------
