@@ -353,7 +353,17 @@ class AssessmentService:
 
         table_data_submit = [
             {
-                "question": s.get("label", ""),
+                # Word Wizard has always shown the word and the attempt. The
+                # Logic table showed an item number and two indices, which
+                # reads as nothing at all.
+                "item_number": s.get("label", ""),
+                "question": s.get("detail", {}).get("question_text", "")
+                            or s.get("label", ""),
+                "item_type": (s.get("detail", {}).get("item_type") or "")
+                             .replace("_", " "),
+                "difficulty": s.get("detail", {}).get("difficulty", ""),
+                "selected_answer": s.get("detail", {}).get("selected_answer", ""),
+                "correct_answer": s.get("detail", {}).get("correct_answer", ""),
                 # L-D1: these must match the keys LogicScorer writes into
                 # ScoredItem.detail, or the teacher table reads null.
                 "selected_index": s.get("detail", {}).get("selected_answer_index"),
@@ -445,7 +455,14 @@ class AssessmentService:
 
         table_data = [
             {
-                "question": s.get("label", ""),
+                "item_number": s.get("label", ""),
+                "question": s.get("detail", {}).get("question_text", "")
+                            or s.get("label", ""),
+                "item_type": (s.get("detail", {}).get("item_type") or "")
+                             .replace("_", " "),
+                "difficulty": s.get("detail", {}).get("difficulty", ""),
+                "selected_answer": s.get("detail", {}).get("selected_answer", ""),
+                "correct_answer": s.get("detail", {}).get("correct_answer", ""),
                 # L-D1: selected_index / correct_index / time never existed
                 # in ScoredItem.detail, so every row read null, null and 0.0.
                 "selected_index": s.get("detail", {}).get("selected_answer_index"),
@@ -1122,6 +1139,11 @@ class AssessmentService:
                 "question": s.get("label", ""),
                 "story_id": s.get("detail", {}).get("story_id", ""),
                 "story_title": s.get("detail", {}).get("story_title", ""),
+                "question_type": s.get("detail", {}).get("question_type", ""),
+                # The answer a child chose is the thing worth reading. The
+                # index beside it is for the client, not for a person.
+                "selected_answer": s.get("detail", {}).get("selected_answer", ""),
+                "correct_answer": s.get("detail", {}).get("correct_answer", ""),
                 "selected_index": s.get("detail", {}).get("selected_index"),
                 "correct_index": s.get("detail", {}).get("correct_index"),
                 "correct": s.get("is_correct", False),

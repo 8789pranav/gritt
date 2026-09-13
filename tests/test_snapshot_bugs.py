@@ -228,6 +228,19 @@ def evidence(full_run):
     )
 
 
+def _required_facts_sentence(evidence) -> str:
+    """One sentence carrying every fact Stage A says the letter must name.
+
+    Test letters are skeletons, so they would otherwise fail the specificity
+    guardrail for reasons that have nothing to do with what is under test.
+    """
+    said = [
+        (required.get("any_of") or ["x"])[0]
+        for required in evidence.get("must_mention") or []
+    ]
+    return ("wrote " + ", ".join(said) + ".") if said else ""
+
+
 # ---------------------------------------------------------------------------
 # LS9 - every growth edge reaches the parent
 # ---------------------------------------------------------------------------
@@ -745,7 +758,7 @@ class TestRepairRatherThanDiscard:
 
         raw = {
             "opening": {"headline": "A good sitting.",
-                        "paragraph": "He wrote fone for phone."},
+                        "paragraph": "He " + _required_facts_sentence(evidence)},
             "what_i_noticed": [{"headline": str(i), "signals": [], "seen_in": []}
                                for i in range(9)],
             "still_growing": [
@@ -885,9 +898,16 @@ class TestVoiceSlipsNeverCostTheLetter:
 
     @staticmethod
     def _otherwise_clean(evidence, paragraph):
-        """A letter that breaks nothing except the sentence under test."""
+        """A letter that breaks nothing except the sentence under test.
+
+        It has to carry the required facts as well: since specificity became
+        a guardrail, a letter that quotes nothing is no longer clean.
+        """
         return {
-            "opening": {"headline": "A good sitting.", "paragraph": paragraph},
+            "opening": {
+                "headline": "A good sitting.",
+                "paragraph": paragraph + " " + _required_facts_sentence(evidence),
+            },
             "what_i_noticed": [],
             "still_growing": [
                 {
@@ -921,9 +941,7 @@ class TestVoiceSlipsNeverCostTheLetter:
         assert any(not v.startswith(_STYLE_PREFIX) for v in violations), violations
 
     def test_an_otherwise_clean_letter_breaks_nothing(self, evidence):
-        letter = self._otherwise_clean(
-            evidence, "They wrote fone for phone. Every sound is right."
-        )
+        letter = self._otherwise_clean(evidence, "Every sound is right.")
         assert not SnapshotWriter()._validate(letter, evidence)
 
     def test_an_exclamation_mark_is_repaired_not_reported(self, evidence):

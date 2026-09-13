@@ -749,3 +749,152 @@ class TestC5ResponseTimesAreFilled:
                     "inferential",
                     "vocabulary",
                 )
+
+
+# ---------------------------------------------------------------------------
+# Every teacher table reads like Word Wizard's: what was asked, what was given
+# ---------------------------------------------------------------------------
+class TestEveryTeacherTableIsReadable:
+    """Word Wizard has always shown the word and the attempt side by side.
+
+    Logic Quest showed an item number and two bare indices - "2-4",
+    selected_index 0, correct_index 3 - which tells a teacher nothing about
+    what the child thought. Story Explorer had the question but not the
+    answers. Voice Challenge echoed the target sentence back as "heard",
+    because Azure aligns its recognition to the reference. Each table now
+    carries the same two things: what was asked, and what the child gave.
+    """
+
+    async def test_word_wizard_shows_the_word_and_the_attempt(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        words = spelling_engine().get_items(Grade.SECOND)
+        await client.post("/submit_words/", json={
+            "idToken": "test-token", "child_id": "child-1", "grade": "Second",
+            "words": [{"word": w.word,
+                       "user_input": "clunck" if w.word == "clunk" else w.word,
+                       "type": w.word_type.value, "time": 6.0, "hints_used": 0}
+                      for w in words],
+        })
+        r = await client.post("/complete_result/", json={
+            "idToken": "test-token", "child_id": "child-1", "grade": "Second"})
+        row = next(x for x in r.json()["teacher_admin_detail"]["table_data"]
+                   if x["word"] == "clunk")
+        assert row["attempt"] == "clunck"
+
+    async def test_logic_shows_the_question_and_both_answers(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        data = await _logic_run(client, "Second",
+                                wrong_item_types=("rule_boundary",))
+        rows = data["teacher_admin_detail"]["table_data"]
+        wrong = next(r for r in rows if not r["correct"])
+
+        # The question itself, not "2-4".
+        assert wrong["question"]
+        assert wrong["question"] != wrong["item_number"]
+        assert len(wrong["question"]) > 15
+        # What the child chose and what was right, in words.
+        assert wrong["selected_answer"]
+        assert wrong["correct_answer"]
+        assert wrong["selected_answer"] != wrong["correct_answer"]
+        # And what kind of puzzle it was.
+        assert wrong["item_type"] and wrong["difficulty"]
+
+    async def test_logic_reads_the_same_from_submit_and_complete_result(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        submitted = await _logic_run(client, "Second",
+                                     wrong_item_types=("dual_rule",))
+        r = await client.post("/logic/complete_result/", json={
+            "idToken": "test-token", "child_id": "child-1", "grade": "Second"})
+        stored = r.json()
+
+        def key(rows):
+            return [(x["question"], x["selected_answer"], x["correct_answer"])
+                    for x in rows]
+
+        assert key(submitted["teacher_admin_detail"]["table_data"]) ==                key(stored["teacher_admin_detail"]["table_data"])
+
+    async def test_story_explorer_shows_both_answers(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        stories = comprehension_engine().get_items(Grade.SECOND)
+        await client.post("/comprehension/submit/", json={
+            "idToken": "test-token", "child_id": "child-1", "grade": "Second",
+            "story_answers": [{
+                "story_id": s.story_id,
+                "answers": [{"question_id": q.question_id,
+                             "selected_index": (q.correct_index + 1) % len(q.options),
+                             "response_time_seconds": 5.0}
+                            for q in s.questions],
+            } for s in stories],
+        })
+        r = await client.post("/comprehension/complete_result/", json={
+            "idToken": "test-token", "child_id": "child-1", "grade": "Second"})
+        rows = r.json()["teacher_admin_detail"]["table_data"]
+        wrong = next(x for x in rows if not x["correct"])
+        assert wrong["selected_answer"]
+        assert wrong["correct_answer"]
+        assert wrong["selected_answer"] != wrong["correct_answer"]
+        assert wrong["question_type"] in ("literal", "inferential", "vocabulary")
+
+    async def test_voice_challenge_shows_what_was_actually_said(
+        self, client, mock_firebase_auth, seed_user, mock_speech, mock_tts
+    ):
+        data = await _speaking_run(client)
+        rows = data["teacher_admin_detail"]["table_data"]
+        assert rows
+        for row in rows:
+            assert "said" in row
+            assert "spoken_sounds" in row
+            assert "matches_reference" in row
+        assert all(r["sentence"] for r in rows)
+
+    @pytest.mark.parametrize(
+        "activity,asked,given",
+        [
+            ("spelling", "word", "attempt"),
+            ("logic", "question", "selected_answer"),
+            ("comprehension", "question", "selected_answer"),
+            ("speaking", "sentence", "said"),
+        ],
+    )
+    async def test_each_table_names_what_was_asked_and_what_was_given(
+        self, client, mock_firebase_auth, seed_user, mock_speech, mock_tts,
+        activity, asked, given,
+    ):
+        """One shape across all four, so a teacher reads them the same way."""
+        if activity == "spelling":
+            words = spelling_engine().get_items(Grade.SECOND)
+            await client.post("/submit_words/", json={
+                "idToken": "test-token", "child_id": "child-1", "grade": "Second",
+                "words": [{"word": w.word, "user_input": w.word,
+                           "type": w.word_type.value, "time": 6.0, "hints_used": 0}
+                          for w in words]})
+            path = "/complete_result/"
+        elif activity == "logic":
+            await _logic_run(client, "Second", wrong_item_types=("strategy",))
+            path = "/logic/complete_result/"
+        elif activity == "comprehension":
+            stories = comprehension_engine().get_items(Grade.SECOND)
+            await client.post("/comprehension/submit/", json={
+                "idToken": "test-token", "child_id": "child-1", "grade": "Second",
+                "story_answers": [{
+                    "story_id": s.story_id,
+                    "answers": [{"question_id": q.question_id,
+                                 "selected_index": q.correct_index,
+                                 "response_time_seconds": 5.0}
+                                for q in s.questions]} for s in stories]})
+            path = "/comprehension/complete_result/"
+        else:
+            await _speaking_run(client)
+            path = "/speaking/complete_result/"
+
+        r = await client.post(path, json={
+            "idToken": "test-token", "child_id": "child-1", "grade": "Second"})
+        rows = r.json()["teacher_admin_detail"]["table_data"]
+        assert rows, activity
+        for row in rows:
+            assert asked in row, f"{activity} has no '{asked}' column"
+            assert given in row, f"{activity} has no '{given}' column"

@@ -239,6 +239,18 @@ def teacher_table(sentences: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "sentence_id": sentence.get("sentence_id", ""),
             "sentence": sentence.get("sentence", ""),
             "heard": (sentence.get("transcription") or {}).get("heard", ""),
+            # "heard" is Azure's aligned recognition, so it reads back as the
+            # target sentence however it was said - the equivalent of a
+            # spelling table printing the word twice. "spoken_sounds" is the
+            # column that survives a mispronunciation, and "verbatim" keeps
+            # the fillers. Word Wizard shows the attempt; so does this now.
+            "said": (sentence.get("transcription") or {}).get("verbatim", ""),
+            "spoken_sounds": (sentence.get("transcription") or {}).get(
+                "spoken_sounds", ""
+            ),
+            "matches_reference": (sentence.get("transcription") or {}).get(
+                "matches_reference", False
+            ),
             "status": _STATUS_LABEL.get(status, "Not Attempted"),
             "correct": correct,
             "overall_score": score,

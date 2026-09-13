@@ -369,6 +369,11 @@ class TestTeacherTable:
         "overall_score", "level", "pronunciation", "fluency", "prosody",
         "completeness", "wcpm", "time", "pauses", "fillers",
         "error_type", "icon", "tags",
+        # Word Wizard shows the word and the attempt side by side. "heard" is
+        # Azure's aligned recognition, so it reads back as the target sentence
+        # however it was said - the equivalent of printing the word twice.
+        # These three are the columns that survive a mispronunciation.
+        "said", "spoken_sounds", "matches_reference",
     }
 
     async def _table(self, client, **kwargs):
