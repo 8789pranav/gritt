@@ -115,6 +115,23 @@ class AdminService:
             "users": final_users,
         }
 
+    # -- bypass payment toggle -------------------------------------------
+    def get_bypass_payment(self, id_token: str) -> Dict[str, Any]:
+        """Return the caller's bypass-payment toggle state.
+
+        Non-admins always report ``enabled=False``.
+        """
+        decoded = verify_token(id_token)
+        uid = decoded["uid"]
+        enabled = self._users.is_admin(uid) and self._users.get_admin_bypass_payment(uid)
+        return {"isAdmin": self._users.is_admin(uid), "enabled": enabled}
+
+    def set_bypass_payment(self, id_token: str, enabled: bool) -> Dict[str, Any]:
+        """Turn the admin's bypass-payment mode on or off."""
+        uid = verify_admin(id_token)
+        self._users.set_admin_bypass_payment(uid, bool(enabled))
+        return {"enabled": bool(enabled)}
+
     # -- feedback ----------------------------------------------------------
     def get_all_feedback(self, id_token: str) -> Dict[str, Any]:
         verify_admin(id_token)

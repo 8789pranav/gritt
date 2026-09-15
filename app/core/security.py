@@ -58,9 +58,17 @@ def verify_paid_child(id_token: str, child_id: str) -> tuple[str, dict]:
 
     Returns ``(uid, child_data)``. Raises :class:`PaymentRequiredError`
     (HTTP 402) when the child has not been unlocked with a payment.
+
+    Admin accounts can bypass the payment gate, but only when they have
+    explicitly turned on "bypass payment" mode (``adminBypassPayment`` on
+    their user record). When the toggle is off, admins go through the
+    normal payment flow like any other parent.
     """
     uid, child_data = verify_child(id_token, child_id)
     if child_data.get("payment_status") != "paid":
+        user_repo = _user_repo()
+        if user_repo.is_admin(uid) and user_repo.get_admin_bypass_payment(uid):
+            return uid, child_data
         from app.core.exceptions import PaymentRequiredError
 
         raise PaymentRequiredError(child_id)

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 
 from app.schemas import (
     CreateCheckoutSessionRequest,
+    GetDetailsRequest,
     PaymentQuoteRequest,
     PaymentStatusRequest,
 )
@@ -35,6 +36,12 @@ async def create_checkout_session(request: CreateCheckoutSessionRequest):
 async def payment_status(request: PaymentStatusRequest):
     svc = PaymentService()
     return svc.get_status(request.idToken, request.payment_id, request.session_id)
+
+
+@router.post("/payment/history/")
+async def payment_history(request: GetDetailsRequest):
+    svc = PaymentService()
+    return svc.list_payments(request.idToken)
 
 
 @router.post("/stripe/webhook")

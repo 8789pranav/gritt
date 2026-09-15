@@ -10,6 +10,7 @@ from app.schemas import (
     FeedbackRequest,
     GetDetailsRequest,
     MakeAdminRequest,
+    SetBypassPaymentRequest,
 )
 from app.services.admin_service import AdminService
 
@@ -20,6 +21,18 @@ router = APIRouter(tags=["admin"])
 async def make_admin(request: MakeAdminRequest):
     svc = AdminService()
     return svc.make_admin(request.idToken, request.targetEmail)
+
+
+@router.post("/admin/bypass-payment/")
+async def get_bypass_payment(request: GetDetailsRequest):
+    svc = AdminService()
+    return svc.get_bypass_payment(request.idToken)
+
+
+@router.post("/admin/bypass-payment/set/")
+async def set_bypass_payment(request: SetBypassPaymentRequest):
+    svc = AdminService()
+    return svc.set_bypass_payment(request.idToken, request.enabled)
 
 
 @router.post("/admin/stats/")
@@ -37,19 +50,12 @@ async def get_all_feedback(request: GetDetailsRequest):
 @router.post("/feedback/")
 async def submit_feedback(feedback: FeedbackRequest):
     svc = AdminService()
+    # Only what the parent actually answered is stored, so a record is not
+    # padded with blanks for questions the form no longer asks.
     answers = {
-        "q1_grade": feedback.q1_grade,
-        "q2_prior_assessments": feedback.q2_prior_assessments,
-        "q3_spelling_confidence": feedback.q3_spelling_confidence,
-        "q4_assessment_length": feedback.q4_assessment_length,
-        "q5_difficulty_level": feedback.q5_difficulty_level,
-        "q6_engagement_level": feedback.q6_engagement_level,
-        "q7_technical_issues": feedback.q7_technical_issues,
-        "q8_results_clarity": feedback.q8_results_clarity,
-        "q9_recommendations_helpful": feedback.q9_recommendations_helpful,
-        "q10_information_amount": feedback.q10_information_amount,
-        "q11_overall_satisfaction": feedback.q11_overall_satisfaction,
-        "q12_comments": feedback.q12_comments or "",
+        key: value
+        for key, value in feedback.model_dump(exclude={"idToken", "child_id"}).items()
+        if value
     }
     return svc.submit_feedback(feedback.idToken, feedback.child_id, answers)
 

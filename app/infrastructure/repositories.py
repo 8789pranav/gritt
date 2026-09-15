@@ -64,6 +64,19 @@ class UserRepository:
         data = self.get(uid)
         return bool(data and data.get("isAdmin", False))
 
+    def get_admin_bypass_payment(self, uid: str) -> bool:
+        """Whether this admin has turned on "bypass payment" mode.
+
+        Only meaningful when :meth:`is_admin` is also true. Defaults to
+        ``False`` so admins follow the normal payment flow until they
+        explicitly opt in.
+        """
+        data = self.get(uid)
+        return bool(data and data.get("isAdmin", False) and data.get("adminBypassPayment", False))
+
+    def set_admin_bypass_payment(self, uid: str, enabled: bool) -> None:
+        self.update(uid, {"adminBypassPayment": bool(enabled)})
+
 
 class ChildRepository:
     """Read/write child profiles under ``users/{uid}/children/{child_id}``."""
@@ -188,6 +201,21 @@ class PaymentRepository:
 
     def update(self, payment_id: str, fields: Dict[str, Any]) -> None:
         self._client.ref(f"payments/{payment_id}").update(sanitize_data(fields))
+
+    def list_by_parent(self, uid: str) -> Dict[str, Dict[str, Any]]:
+        """Return all payment records owned by ``uid``, keyed by payment_id.
+
+        Payments are stored flat under ``payments/{payment_id}`` with a
+        ``parent_uid`` field, so this scans the collection and filters by
+        owner. Fine at the current scale; add a ``payments_by_user`` index
+        if the collection grows large.
+        """
+        all_payments = self._client.ref("payments").get() or {}
+        return {
+            pid: data
+            for pid, data in all_payments.items()
+            if data.get("parent_uid") == uid
+        }
 
 
 class FeedbackRepository:

@@ -274,3 +274,154 @@ async def test_get_children_includes_payment_status(client, mock_firebase_auth, 
     children = {c["child_id"]: c for c in resp.json()["children"]}
     assert children["child-1"]["payment_status"] == "paid"
     assert children["child-unpaid"]["payment_status"] == "unpaid"
+
+
+# ---------------------------------------------------------------------------
+# Admin bypass-payment toggle
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_admin_bypass_off_still_gets_402(client, mock_firebase_auth, seed_user):
+    """An admin without the bypass toggle on follows the normal payment flow."""
+    from app.infrastructure.firebase import get_firebase_client
+    get_firebase_client().ref("users/admin-uid/children/admin-child").set({
+        "name": "Admin Child",
+        "age": 7,
+        "grade": "First",
+        "payment_status": "unpaid",
+    })
+    resp = await client.post("/logic/get_test/", json={
+        "idToken": "admin-token",
+        "child_id": "admin-child",
+        "grade": "First",
+    })
+    assert resp.status_code == 402
+
+
+@pytest.mark.asyncio
+async def test_admin_bypass_on_skips_402(client, mock_firebase_auth, seed_user):
+    """With the bypass toggle on, an admin can take a test for an unpaid child."""
+    from app.infrastructure.firebase import get_firebase_client
+    get_firebase_client().ref("users/admin-uid").update({"adminBypassPayment": True})
+    get_firebase_client().ref("users/admin-uid/children/admin-child").set({
+        "name": "Admin Child",
+        "age": 7,
+        "grade": "First",
+        "payment_status": "unpaid",
+    })
+    resp = await client.post("/logic/get_test/", json={
+        "idToken": "admin-token",
+        "child_id": "admin-child",
+        "grade": "First",
+    })
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_bypass_payment_toggle_endpoints(client, mock_firebase_auth, seed_user):
+    # Default state: off.
+    resp = await client.post("/admin/bypass-payment/", json={"idToken": "admin-token"})
+    assert resp.status_code == 200
+    assert resp.json()["enabled"] is False
+
+    # Turn on.
+    resp = await client.post("/admin/bypass-payment/set/", json={
+        "idToken": "admin-token",
+        "enabled": True,
+    })
+    assert resp.status_code == 200
+    assert resp.json()["enabled"] is True
+
+    # Confirm it persisted.
+    resp = await client.post("/admin/bypass-payment/", json={"idToken": "admin-token"})
+    assert resp.json()["enabled"] is True
+
+    # Non-admin cannot set.
+    resp = await client.post("/admin/bypass-payment/set/", json={
+        "idToken": "test-token",
+        "enabled": True,
+    })
+    assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Payment history
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_payment_history_empty(client, mock_firebase_auth, seed_user):
+    resp = await client.post("/payment/history/", json={"idToken": "test-token"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 0
+    assert data["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_payment_history_lists_own_payments(client, mock_firebase_auth, seed_user):
+    from app.infrastructure.firebase import get_firebase_client
+    fb = get_firebase_client()
+    # Two payments for test-uid, one for someone else.
+    fb.ref("payments/pay-1").set({
+        "parent_uid": "test-uid",
+        "child_ids": ["child-1", "child-unpaid"],
+        "amount_cents": 1200,
+        "currency": "usd",
+        "stripe_session_id": "sess-1",
+        "status": "completed",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "completed_at": "2026-01-01T00:01:00+00:00",
+    })
+    fb.ref("payments/pay-2").set({
+        "parent_uid": "test-uid",
+        "child_ids": ["child-1"],
+        "amount_cents": 900,
+        "currency": "usd",
+        "stripe_session_id": "sess-2",
+        "status": "pending",
+        "created_at": "2026-02-01T00:00:00+00:00",
+    })
+    fb.ref("payments/pay-other").set({
+        "parent_uid": "other-uid",
+        "child_ids": ["x"],
+        "amount_cents": 900,
+        "currency": "usd",
+        "stripe_session_id": "sess-other",
+        "status": "completed",
+        "created_at": "2026-03-01T00:00:00+00:00",
+    })
+
+    resp = await client.post("/payment/history/", json={"idToken": "test-token"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    assert data["completed"] == 1
+    assert data["pending"] == 1
+    assert data["expired"] == 0
+    # Newest first.
+    assert data["items"][0]["payment_id"] == "pay-2"
+    assert data["items"][1]["payment_id"] == "pay-1"
+    # Children enriched with current status.
+    item = data["items"][1]
+    assert len(item["children"]) == 2
+    names = {c["name"] for c in item["children"]}
+    assert "Test Child" in names
+    assert "Unpaid Child" in names
+    assert item["amount_cents"] == 1200
+    assert item["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_payment_history_excludes_other_parents(client, mock_firebase_auth, seed_user):
+    from app.infrastructure.firebase import get_firebase_client
+    fb = get_firebase_client()
+    fb.ref("payments/other-only").set({
+        "parent_uid": "other-uid",
+        "child_ids": ["x"],
+        "amount_cents": 900,
+        "currency": "usd",
+        "stripe_session_id": "sess-o",
+        "status": "completed",
+        "created_at": "2026-01-01T00:00:00+00:00",
+    })
+    resp = await client.post("/payment/history/", json={"idToken": "test-token"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0

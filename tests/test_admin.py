@@ -81,6 +81,28 @@ async def test_submit_feedback(client, mock_firebase_auth, seed_user):
 
 
 @pytest.mark.asyncio
+async def test_submit_feedback_snapshot_questions_only(client, mock_firebase_auth, seed_user):
+    """The live form asks only q13-q15, so q1-q12 must stay optional."""
+    resp = await client.post("/feedback/", json={
+        "idToken": "test-token",
+        "child_id": "child-1",
+        "q1_grade": "Kindergarten",
+        "q13_sounded_like_child": "Yes, mostly",
+        "q14_new_information": "One or two things",
+        "q15_show_to_teacher": "Maybe",
+    })
+    assert resp.status_code == 200
+
+    resp = await client.post("/admin/feedback/", json={"idToken": "admin-token"})
+    answers = resp.json()["feedbacks"][-1]["answers"]
+    assert answers["q13_sounded_like_child"] == "Yes, mostly"
+    assert answers["q14_new_information"] == "One or two things"
+    assert answers["q15_show_to_teacher"] == "Maybe"
+    # Unanswered questions are not padded with blanks.
+    assert "q12_comments" not in answers
+
+
+@pytest.mark.asyncio
 async def test_submit_feedback_invalid_child(client, mock_firebase_auth, seed_user):
     resp = await client.post("/feedback/", json={
         "idToken": "test-token",

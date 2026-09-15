@@ -69,6 +69,11 @@ class MakeAdminRequest(BaseModel):
     targetEmail: str
 
 
+class SetBypassPaymentRequest(BaseModel):
+    idToken: str
+    enabled: bool
+
+
 class CompleteResultRequest(BaseModel):
     idToken: str
     child_id: str
@@ -102,20 +107,25 @@ class AudioRequest(BaseModel):
 # Feedback
 # ---------------------------------------------------------------------------
 class FeedbackRequest(BaseModel):
+    """The live form asks q13-q15 only; q1-q12 are kept for older clients."""
+
     idToken: str
     child_id: str
-    q1_grade: str
-    q2_prior_assessments: str
-    q3_spelling_confidence: str
-    q4_assessment_length: str
-    q5_difficulty_level: str
-    q6_engagement_level: str
-    q7_technical_issues: str
-    q8_results_clarity: str
-    q9_recommendations_helpful: str
-    q10_information_amount: str
-    q11_overall_satisfaction: str
+    q1_grade: Optional[str] = ""
+    q2_prior_assessments: Optional[str] = ""
+    q3_spelling_confidence: Optional[str] = ""
+    q4_assessment_length: Optional[str] = ""
+    q5_difficulty_level: Optional[str] = ""
+    q6_engagement_level: Optional[str] = ""
+    q7_technical_issues: Optional[str] = ""
+    q8_results_clarity: Optional[str] = ""
+    q9_recommendations_helpful: Optional[str] = ""
+    q10_information_amount: Optional[str] = ""
+    q11_overall_satisfaction: Optional[str] = ""
     q12_comments: Optional[str] = ""
+    q13_sounded_like_child: Optional[str] = ""
+    q14_new_information: Optional[str] = ""
+    q15_show_to_teacher: Optional[str] = ""
 
 
 # ---------------------------------------------------------------------------

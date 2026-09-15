@@ -320,3 +320,49 @@ class PaymentService:
             "status": payment.get("status", "pending"),
             "child_ids": payment.get("child_ids", []),
         }
+
+    # -- history ----------------------------------------------------------------
+    def list_payments(self, id_token: str) -> Dict[str, Any]:
+        """Return all of the caller's payment records, newest first.
+
+        Each item is enriched with the current name/grade/payment_status
+        of each child so the UI can show what was unlocked without an extra
+        round-trip.
+        """
+        decoded = verify_token(id_token)
+        uid = decoded["uid"]
+        records = self._payments.list_by_parent(uid)
+
+        items: List[Dict[str, Any]] = []
+        for payment_id, data in records.items():
+            child_ids = data.get("child_ids", []) or []
+            children: List[Dict[str, Any]] = []
+            for child_id in child_ids:
+                child = self._children.get(uid, child_id) or {}
+                children.append({
+                    "child_id": child_id,
+                    "name": child.get("name", ""),
+                    "grade": child.get("grade", ""),
+                    "payment_status": child.get("payment_status", "unpaid"),
+                })
+            items.append({
+                "payment_id": payment_id,
+                "status": data.get("status", "pending"),
+                "amount_cents": data.get("amount_cents", 0),
+                "currency": data.get("currency", "usd"),
+                "stripe_session_id": data.get("stripe_session_id", ""),
+                "created_at": data.get("created_at", ""),
+                "completed_at": data.get("completed_at", ""),
+                "children": children,
+            })
+
+        # Newest first; payments without a created_at sort last.
+        items.sort(key=lambda i: i.get("created_at") or "", reverse=True)
+
+        return {
+            "total": len(items),
+            "completed": sum(1 for i in items if i["status"] == "completed"),
+            "pending": sum(1 for i in items if i["status"] == "pending"),
+            "expired": sum(1 for i in items if i["status"] == "expired"),
+            "items": items,
+        }
