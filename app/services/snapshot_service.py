@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from app.domain.enums import TestType
 from app.core.security import verify_paid_child
+from app.services.pronouns import pronouns_for
 from app.infrastructure.repositories import ScoreRepository
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,30 @@ def _questions_behind(evidence: str, answered_in_activity: int) -> int:
     return answered_in_activity
 
 
+#: Round minutes to something a person would say out loud.
+_SPOKEN_MINUTES = {
+    10: "ten minutes", 15: "fifteen minutes", 20: "twenty minutes",
+    25: "twenty-five minutes", 30: "half an hour", 35: "thirty-five minutes",
+    40: "forty minutes", 45: "three quarters of an hour",
+}
+
+
+def _span_phrase(minutes: float) -> str:
+    """How long the sitting took, in words a parent would use.
+
+    The letter says "I sat with Manju for about twenty minutes" because that
+    run took about twenty minutes, not because twenty is in the template.
+    """
+    if minutes is None:
+        return "a short sitting"
+    if minutes < 8:
+        return "a few minutes"
+    if minutes > 50:
+        return "a little under an hour" if minutes <= 75 else "a couple of sittings"
+    nearest = min(_SPOKEN_MINUTES, key=lambda m: abs(m - minutes))
+    return _SPOKEN_MINUTES[nearest]
+
+
 class SnapshotService:
     """Builds the structured evidence behind the Learning Snapshot."""
 
@@ -120,6 +145,9 @@ class SnapshotService:
         """Fetch all four results and synthesise the evidence package."""
         uid, child_data = verify_paid_child(id_token, child_id)
         child_name = child_data.get("name", "")
+        # A letter about one child is written in the singular. The pronouns
+        # come from the profile, never from the name.
+        pronouns = pronouns_for(child_data)
 
         # A1. Fetch the latest result for every assessment.
         results: Dict[str, Optional[Dict[str, Any]]] = {}
@@ -166,6 +194,7 @@ class SnapshotService:
 
         return {
             "child_name": child_name,
+            "pronouns": pronouns,
             "grade": grade,
             "tests_completed": completed,
             "activities_completed": [display[k] for k in completed if k in display],
@@ -188,6 +217,9 @@ class SnapshotService:
             # The facts that make this letter about THIS child. Stage B is
             # checked against them, so a vague letter is caught rather than
             # hoped away.
+            # Whether this set fitted the child, so the letter can say so
+            # when it did not. Never a score - a direction.
+            "level_fit": self._level_fit(activity_detail, growth_edges),
             "must_mention": self._must_mention(activity_detail),
             "could_mention": self._could_mention(activity_detail),
         }
@@ -633,18 +665,92 @@ class SnapshotService:
                 continue
 
         if not stamps:
-            return {"activities": [], "span_minutes": None, "same_sitting": None}
+            return {
+                "activities": [],
+                "span_minutes": None,
+                "span_phrase": "a short sitting",
+                "same_sitting": None,
+            }
 
         span = (max(stamps) - min(stamps)).total_seconds() / 60.0
         return {
             "activities": [display[k] for k, v in results.items() if v and k in display],
             "span_minutes": round(span, 1),
+            # The words the letter uses for how long this took. "Twenty
+            # minutes" is a fact about one run, not a phrase to hardcode.
+            "span_phrase": _span_phrase(span),
             # Everything inside an hour was one sitting, not a series of
             # sessions over time.
             "same_sitting": span <= 60.0,
             "first_at": min(stamps).isoformat(),
             "last_at": max(stamps).isoformat(),
         }
+
+    @staticmethod
+    def _level_fit(
+        activity_detail: Dict[str, Dict[str, Any]],
+        growth_edges: Sequence[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Did this set of activities fit the child?
+
+        A set the child walked through tells you they are secure, but not
+        where their limit is. A set that was out of reach tells you less than
+        one pitched right. Both are worth a sentence to a parent, and neither
+        is a score: the letter is handed a direction, never a ratio.
+        """
+        shares: List[float] = []
+
+        spelling = activity_detail.get("spelling") or {}
+        if spelling.get("words_total"):
+            shares.append(spelling["words_correct"] / spelling["words_total"])
+
+        comprehension = activity_detail.get("comprehension") or {}
+        answered = comprehension.get("questions_answered") or 0
+        if answered:
+            worked_out = len(comprehension.get("worked_out") or [])
+            shares.append(worked_out / answered)
+
+        logic = activity_detail.get("logic") or {}
+        answered = logic.get("questions_answered") or 0
+        if answered:
+            right = sum(1 for q in logic.get("questions") or [] if q["correct"])
+            shares.append(right / answered)
+
+        if not shares:
+            return {"fit": "unknown", "suggest": None, "why": ""}
+
+        share = sum(shares) / len(shares)
+
+        # Comfortable: almost nothing to fault, and the engine found little
+        # to grow. The level above would show the parent more.
+        if share >= 0.9 and len(growth_edges) <= 2:
+            return {
+                "fit": "comfortable",
+                "suggest": "the level above",
+                "why": (
+                    "This child found the set comfortable. That shows they "
+                    "are secure here, but it does not show where their limit "
+                    "is. The level above would stretch them and show the "
+                    "parent more."
+                ),
+            }
+
+        # Out of reach: a set this hard says less about the child than one
+        # pitched right, and it is a harder afternoon for them.
+        if share <= 0.45:
+            return {
+                "fit": "too_hard",
+                "suggest": "the level below",
+                "why": (
+                    "This set was hard for this child, and a set that is too "
+                    "hard tells a parent less than one pitched right. The "
+                    "level below would give a clearer picture and a better "
+                    "experience. This is not about where the child should be "
+                    "at school; it is about this set, today."
+                ),
+            }
+
+        return {"fit": "well_matched", "suggest": None, "why": ""}
 
     @staticmethod
     def _flawless_activities(
@@ -664,8 +770,9 @@ class SnapshotService:
                 {
                     "activity": display["spelling"],
                     "what_happened": (
-                        f"Spelled every one of {spelling['words_total']} words "
-                        "correctly, with nothing to correct."
+                        "Every word this child wrote was spelled correctly, "
+                        "including the long ones. There was nothing to "
+                        "correct."
                     ),
                 }
             )
@@ -676,8 +783,8 @@ class SnapshotService:
                 {
                     "activity": display["comprehension"],
                     "what_happened": (
-                        f"Answered all {comprehension['questions_answered']} "
-                        "questions about the stories correctly."
+                        "Every question about the stories came back, "
+                        "including the ones the stories only hint at."
                     ),
                 }
             )
@@ -688,8 +795,7 @@ class SnapshotService:
                 {
                     "activity": display["logic"],
                     "what_happened": (
-                        f"Worked out all {logic['questions_answered']} puzzles, "
-                        "including the hard ones."
+                        "Every puzzle was worked out, the hard ones included."
                     ),
                 }
             )
@@ -702,8 +808,7 @@ class SnapshotService:
                 {
                     "activity": display["speaking"],
                     "what_happened": (
-                        f"Read all {speaking['questions_answered']} sentences "
-                        "without skipping a word."
+                        "Read every sentence without skipping a word."
                     ),
                 }
             )

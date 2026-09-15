@@ -367,11 +367,17 @@ print(f"  growth edges found {meta['growth_edges_found']}  "
       f"written {meta['growth_edges_written']}")
 
 check("Letter came from the model, not the fallback", meta["llm_generated"])
+covered = {
+    name
+    for item in letter.get("still_growing") or []
+    for name in item.get("signals") or []
+}
 check("LS9 every growth edge reached the parent",
-      meta["growth_edges_written"] >= meta["growth_edges_found"],
-      f"{meta['growth_edges_written']} of {meta['growth_edges_found']}")
-check("LS9 more than two growth edges reached the parent",
-      meta["growth_edges_written"] > 2, f"{meta['growth_edges_written']}")
+      len(covered) >= meta["growth_edges_found"],
+      f"{len(covered)} signals covered, {meta['growth_edges_found']} found")
+check("Growth edges are grouped into something a parent can act on",
+      1 <= meta["growth_edges_written"] <= 5,
+      f"{meta['growth_edges_written']} sections")
 
 body = json.dumps(letter, ensure_ascii=False)
 check("LS3 no Listening Channel", "Listening" not in body)
@@ -379,8 +385,31 @@ check("LS5 no 'what helped' section", "what_helped" not in letter)
 check("LS5 full_picture is merged away", "full_picture" not in letter)
 check("LS6 no invented week", "this week" not in body.lower()
       and "our sessions" not in body.lower())
-check("LS8 no gendered pronoun", not __import__("re").search(
-    r"\b(he|she|his|her|him)\b", body, __import__("re").I))
+_re = __import__("re")
+if meta.get("pronouns_known"):
+    check(f"Written in the singular ({meta['pronouns']}/...)",
+          not _re.search(r"\b(they|them|their)\b", body, _re.I))
+else:
+    check("No pronoun is guessed for a child whose profile does not say",
+          not _re.search(r"\b(he|she|his|her|him)\b", body, _re.I))
+check("No count of what the child got right or wrong", not _re.search(
+    r"\b(all|only)\s+(\d+|fifteen|fourteen|thirteen|twelve|eleven|ten|nine|"
+    r"eight|seven|six|five|four|three|two)\s+"
+    r"(words?|questions?|puzzles?|sentences?)\b", body, _re.I)
+      and not _re.search(r"\d+\s*(%|out of\s*\d+)", body))
+
+opening = " ".join(str(v) for v in (letter.get("opening") or {}).values())
+ACTIVITY_NAMES = json.load(
+    open("data/tags/learning_areas.json", encoding="utf-8")
+)["test_display_names"].values()
+check("The opening names no activity",
+      not any(a.lower() in opening.lower() for a in ACTIVITY_NAMES))
+check("The opening says what the child did, not what the child is",
+      not _re.search(r"ha[sd] (a|an) (knack|keen eye|gift)|is a (strong|natural)",
+                     opening, _re.I))
+check("The letter is framed as a letter",
+      letter.get("salutation") and letter.get("signature")
+      and letter.get("caveat"))
 check("LS10 no invented signal name 'Adaptability'", "Adaptability" not in body)
 check("Eko's voice: no exclamation marks", "!" not in body)
 check("Conference section is present and has three items",

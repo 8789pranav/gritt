@@ -513,3 +513,108 @@ better to send no specifics than wrong specifics.
 - No clinical language or diagnostic framing.
 - No client-side processing. The backend returns the finished letter.
 - No per-question detail in the letter. Specifics come from aggregate evidence.
+
+---
+
+## 14. The letter as it now stands
+
+Sections 7 and 8 describe the first version of the prompt and its guardrails.
+What follows is the current contract. Where the two disagree, this section is
+the one the code implements.
+
+### 14.1 One child, one set of pronouns
+
+A letter about one child is written in the singular. "They worked it out and
+they were pleased" is a form letter, and it is the first thing a parent
+notices.
+
+The pronouns come from the child's profile, are resolved in
+`app/services/pronouns.py`, and travel in the evidence as `pronouns`. A name
+never decides them: a name is not a pronoun, and guessing misgenders a real
+child.
+
+The resolver reads whichever of `pronouns`, `pronoun`, `gender` or `sex` the
+child record happens to carry, and accepts `he`/`she`/`they`, `boy`/`girl`,
+or a pair like `she/her`. **Nothing writes that field yet.** Until the child
+profile captures it, every letter falls back to the child's name and
+they/them, which is wrong for nobody but is not the singular voice this
+section describes. Capturing it is a change to the profile, not to the
+Snapshot: the pipeline is ready for it and needs no further work here.
+
+| Profile says | The letter uses | If the letter slips |
+|--------------|-----------------|---------------------|
+| he / she / they | that set, with the verbs agreeing | a plural pronoun is a **voice** violation: the writer is asked again, the letter is never withheld |
+| nothing | the child's name, and they/them where a pronoun is unavoidable | a gendered pronoun is **rewritten in place** before validation, because it is a guess about a real child |
+
+`meta.pronouns` and `meta.pronouns_known` record which set was used and
+whether it came from the profile or the fallback.
+
+### 14.2 No counting what a child got right or wrong
+
+Not `15 of 15`, not `fifteen of fifteen`, not `all thirteen questions
+correctly`, not a percentage. Spelling the number out does not make it less
+of a score. Enforced by `_FORBIDDEN_PATTERNS`, over digits and written-out
+numbers alike, and Stage A no longer puts a count into the evidence it writes
+itself (a flawless run reads "Every word this child wrote was spelled
+correctly").
+
+Numbers that describe **how** a child worked stay, because they make the
+letter concrete rather than clinical: time spent ("a minute and a half on one
+word"), how often something happened ("twice he held a sound"), pace in words
+rather than digits, and above all the child's own spellings.
+
+### 14.3 The opening
+
+The first thing a parent reads describes HOW their child works — not what
+they scored, and not what they are. There are two ways to get it wrong and
+both are checked in `SnapshotWriter._check_opening`:
+
+| Failure | Example | Verdict |
+|---------|---------|---------|
+| Counting | "Answered all 13 questions about the stories correctly." | fatal |
+| Labelling | "Has a keen eye for patterns." "Is a strong reader." | fatal |
+| Naming an activity | "In Word Wizard, he took his time." | fatal |
+| Resting on one activity | a timing story from the Logic Quest alone | voice |
+| Hiding the growth edge | praise with nothing honest in it | voice |
+
+The fatal three are mechanical and the writer can always fix them. The other
+two are judgements: worth asking again for, never worth sending a parent the
+generic letter instead.
+
+The shape asked for: lead with the way this child approaches things, prove it
+with one concrete thing they did, draw on at least two activities, and name
+one place they are still working plainly, inside the opening.
+
+### 14.4 Growth edges are grouped, never dropped
+
+The old rule was one section per growth edge, which produced letters with
+seven near-identical sections about the same read-aloud sound. The rule is
+now **coverage**: every growth edge the engine found must be named in the
+`signals` of some `still_growing` item, and related edges belong in one item.
+Three items is the target and five is the ceiling.
+
+### 14.5 The frame around the letter
+
+`salutation`, `caveat` and `signature` are added deterministically in
+`_finalise`, because they are the same shape every time and a model asked to
+reproduce them on every run eventually will not. The caveat uses the real
+length of the sitting ("Twenty minutes is a short time...", from
+`session.span_phrase`) and the child's own name.
+
+### 14.6 A note about the level
+
+Stage A computes `level_fit` from how the run actually went and hands the
+writer a direction, never a ratio:
+
+| Fit | When | What the letter says |
+|-----|------|----------------------|
+| `comfortable` | almost nothing to fault, few growth edges | the level above would show the parent more |
+| `too_hard` | most of the set out of reach | the level below would give a clearer picture, and a better afternoon |
+| `well_matched` | anything else | nothing — the key is stripped if the model writes one anyway |
+
+### 14.7 Grammar
+
+The writer is asked to check every sentence on its own — subject, verb,
+agreement, tense, full stop. The mechanical slips that survive that check
+(a doubled word, a space before a comma, a lower-case sentence opening,
+`a apple`) are repaired deterministically in `tidy_prose`.

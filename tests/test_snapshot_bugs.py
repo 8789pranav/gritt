@@ -228,6 +228,39 @@ def evidence(full_run):
     )
 
 
+def _compliant_opening(evidence) -> dict:
+    """An opening built the way the specification asks.
+
+    Test letters are skeletons. Without this they fail the opening checks for
+    reasons that have nothing to do with what is under test.
+    """
+    return {
+        "headline": "Pranav takes time over the hard ones.",
+        "paragraph": (
+            "Pranav " + _required_facts_sentence(evidence)
+            + " Where Pranav is still working is the spelling rules that "
+            "sound does not reach."
+        ),
+    }
+
+
+def _one_grouped_growth_item(evidence) -> list:
+    """Every growth edge, covered by a single item.
+
+    The rule is coverage, not one section per edge, so a skeleton letter
+    carries them all in one place.
+    """
+    return [
+        {
+            "headline": "Some things are still settling.",
+            "signals": [g["signal_name"] for g in evidence["growth_edges"]],
+            "seen_in": sorted({g["seen_in"] for g in evidence["growth_edges"]}),
+            "paragraph": "x",
+            "suggestion": {"because": "This is why."},
+        }
+    ]
+
+
 def _required_facts_sentence(evidence) -> str:
     """One sentence carrying every fact Stage A says the letter must name.
 
@@ -262,15 +295,58 @@ class TestLS9EveryGrowthEdgeReachesTheParent:
         letter = {
             "opening": {"headline": "x", "paragraph": "y"},
             "what_i_noticed": [],
-            # Only two items, where the evidence has more.
+            # Two items covering one edge between them: the rest are dropped.
             "still_growing": [
-                {"signals": [], "suggestion": {"because": "Because of this."}}
-                for _ in range(2)
+                {
+                    "signals": [evidence["growth_edges"][0]["signal_name"]],
+                    "suggestion": {"because": "This is why."},
+                },
+                {"signals": [], "suggestion": {"because": "This is why."}},
             ],
             "for_the_conference": {"items": []},
         }
         violations = writer._validate(letter, evidence)
-        assert any("every one must reach the parent" in v for v in violations)
+        assert any("leaves out growth edges" in v for v in violations)
+
+    def test_related_edges_may_be_grouped_into_one_item(self, evidence):
+        """Four read-aloud sounds are one thing to work on, not four.
+
+        The old rule demanded one item per edge, which produced letters with
+        seven near-identical sections. The rule is coverage: every edge is
+        named, however few items carry them.
+        """
+        writer = SnapshotWriter()
+        letter = {
+            "opening": {"headline": "x", "paragraph": "y"},
+            "what_i_noticed": [],
+            "still_growing": [
+                {
+                    "signals": [g["signal_name"] for g in evidence["growth_edges"]],
+                    "suggestion": {"because": "This is why."},
+                }
+            ],
+            "for_the_conference": {"items": []},
+        }
+        violations = writer._validate(letter, evidence)
+        assert not any("growth edge" in v for v in violations)
+
+    def test_a_letter_of_seven_sections_is_rejected(self, evidence):
+        writer = SnapshotWriter()
+        names = [g["signal_name"] for g in evidence["growth_edges"]]
+        letter = {
+            "opening": {"headline": "x", "paragraph": "y"},
+            "what_i_noticed": [],
+            "still_growing": [
+                {"signals": names, "suggestion": {"because": "This is why."}}
+                for _ in range(7)
+            ],
+            "for_the_conference": {"items": []},
+        }
+        violations = writer._validate(letter, evidence)
+        # Worth asking again for, never worth withholding the letter: a long
+        # letter is a worse read, a missing growth edge is a worse letter.
+        assert any("same finding" in v and v.startswith("voice - ")
+                   for v in violations)
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +587,395 @@ class TestLS8Pronouns:
     def test_the_disclaimer_uses_them(self, evidence):
         letter = SnapshotWriter()._finalise({"closing": "c"}, evidence)
         assert "compares them to no one" in letter["disclaimer"]
+
+
+class TestTheLetterIsWrittenInTheSingular:
+    """A letter about one child reads like it is about one child.
+
+    "They worked it out and they were pleased" is a form letter. When the
+    profile records the child's pronouns, the letter uses them; when it does
+    not, it uses the name and they/them rather than guessing.
+    """
+
+    @staticmethod
+    def _letter(paragraph):
+        return {
+            "opening": {"headline": "x", "paragraph": paragraph},
+            "what_i_noticed": [],
+            "still_growing": [],
+            "for_the_conference": {"items": []},
+        }
+
+    @staticmethod
+    def _knowing(evidence, key):
+        from app.services.pronouns import pronouns_for
+
+        known = dict(evidence)
+        known["pronouns"] = pronouns_for({"gender": key})
+        return known
+
+    def test_the_profile_decides_the_pronouns(self):
+        from app.services.pronouns import pronouns_for
+
+        assert pronouns_for({"gender": "boy"})["subject"] == "he"
+        assert pronouns_for({"gender": "girl"})["object"] == "her"
+        assert pronouns_for({"pronouns": "she/her"})["possessive"] == "her"
+        assert pronouns_for({})["subject"] == "they"
+        assert pronouns_for({"gender": ""})["known"] is False
+
+    def test_a_name_never_decides_them(self):
+        """A name is not a pronoun, and guessing misgenders a real child."""
+        from app.services.pronouns import pronouns_for
+
+        assert pronouns_for({"name": "Manju"})["known"] is False
+
+    def test_his_pronouns_are_used_and_they_is_flagged(self, evidence):
+        known = self._knowing(evidence, "boy")
+        assert not [
+            v for v in SnapshotWriter()._validate(
+                self._letter("He read every word without stopping."), known
+            )
+            if "pronoun" in v
+        ]
+        violations = SnapshotWriter()._validate(
+            self._letter("They read every word without stopping."), known
+        )
+        assert any("plural pronoun" in v for v in violations)
+
+    def test_a_plural_pronoun_never_costs_the_letter(self, evidence):
+        """It is a voice slip. The generic letter belongs to no child."""
+        known = self._knowing(evidence, "girl")
+        violations = [
+            v for v in SnapshotWriter()._validate(
+                self._letter("Their spelling is secure."), known
+            )
+            if "pronoun" in v
+        ]
+        assert violations and all(v.startswith("voice - ") for v in violations)
+
+    def test_the_repair_leaves_a_known_childs_prose_alone(self, evidence):
+        from app.services.snapshot_writer import _repair
+
+        known = self._knowing(evidence, "boy")
+        repaired = _repair(self._letter("He held the sound and kept going."), known)
+        assert "He held the sound" in repaired["opening"]["paragraph"]
+
+    def test_an_unknown_child_still_gets_they(self, evidence):
+        from app.services.snapshot_writer import _repair
+
+        repaired = _repair(self._letter("He was pleased with himself."), evidence)
+        assert repaired["opening"]["paragraph"] == "They were pleased with themselves."
+
+    def test_the_disclaimer_follows_the_childs_pronouns(self, evidence):
+        known = self._knowing(evidence, "boy")
+        letter = SnapshotWriter()._finalise({"closing": "c"}, known)
+        assert "compares him to no one" in letter["disclaimer"]
+        assert letter["meta"]["pronouns"] == "he"
+        assert letter["meta"]["pronouns_known"] is True
+
+
+class TestTheOpening:
+    """The first thing a parent reads describes HOW their child works.
+
+    Not what they scored - a count is a score however it is spelled - and
+    not what they are. An opening that avoids counting by labelling has
+    fixed nothing, so both are checked.
+    """
+
+    @staticmethod
+    def _letter(headline, paragraph):
+        return {
+            "opening": {"headline": headline, "paragraph": paragraph},
+            "what_i_noticed": [],
+            "still_growing": [],
+            "for_the_conference": {"items": []},
+        }
+
+    def _opening(self, evidence, headline, paragraph):
+        return SnapshotWriter()._check_opening(
+            self._letter(headline, paragraph), evidence
+        )
+
+    def _real_opening(self, evidence):
+        """One built the way the specification asks, from this child's run."""
+        could = evidence["could_mention"]
+        word = could["words_written"][0]
+        puzzle = could["puzzles"][0]
+        return (
+            "Pranav takes his time, and it usually pays off.",
+            f"He spent nearly a minute on one word and wrote {word}, every "
+            f"sound in it right. He stayed with {puzzle} rather than "
+            "guessing when it got hard. Where he is still working is the "
+            "spelling rules that sound does not reach.",
+        )
+
+    def test_the_specified_opening_passes(self, evidence):
+        assert self._opening(evidence, *self._real_opening(evidence)) == []
+
+    def test_a_count_is_rejected(self, evidence):
+        violations = self._opening(
+            evidence,
+            "Pranav answered all 13 questions about the stories correctly.",
+            "He worked steadily throughout.",
+        )
+        assert any("counts what the child got right or wrong" in v
+                   for v in violations)
+
+    def test_a_count_spelled_out_is_still_a_count(self, evidence):
+        violations = self._opening(
+            evidence,
+            "Pranav spelled fifteen of fifteen words.",
+            "He worked steadily throughout.",
+        )
+        assert any("counts what the child got right or wrong" in v
+                   for v in violations)
+
+    @pytest.mark.parametrize(
+        "headline",
+        [
+            "Pranav has a keen eye for patterns and structures.",
+            "Pranav has a knack for spotting what comes next.",
+            "Pranav is a strong reader.",
+            "Pranav showed a strong understanding of the stories.",
+        ],
+    )
+    def test_saying_what_the_child_is_is_rejected(self, evidence, headline):
+        """The second failure mode: avoiding a count by labelling instead."""
+        violations = self._opening(evidence, headline, "He worked steadily.")
+        assert any("says what the child IS" in v for v in violations)
+
+    def test_an_activity_name_is_rejected(self, evidence):
+        violations = self._opening(
+            evidence,
+            "Pranav works slowly and carefully.",
+            "In Word Wizard he took his time over every word.",
+        )
+        assert any("names an activity" in v for v in violations)
+
+    def test_an_opening_that_rests_on_one_activity_is_sent_back(self, evidence):
+        word = evidence["could_mention"]["words_written"][0]
+        violations = self._opening(
+            evidence,
+            "Pranav takes his time.",
+            f"He spent nearly a minute on one word and wrote {word}. He is "
+            "still working on the rules that sound does not reach.",
+        )
+        assert any("rests on one activity" in v for v in violations)
+
+    def test_an_opening_that_hides_the_growth_edge_is_sent_back(self, evidence):
+        could = evidence["could_mention"]
+        violations = self._opening(
+            evidence,
+            "Pranav takes his time.",
+            f"He spent nearly a minute on one word and wrote "
+            f"{could['words_written'][0]}. He stayed with "
+            f"{could['puzzles'][0]} rather than guessing.",
+        )
+        assert any("names nowhere this child is still working" in v
+                   for v in violations)
+
+    def test_neither_judgement_ever_costs_the_letter(self, evidence):
+        """Both are worth asking again for. Neither is worth the fallback."""
+        violations = self._opening(
+            evidence,
+            "Pranav takes his time.",
+            f"He wrote {evidence['could_mention']['words_written'][0]}.",
+        )
+        assert violations
+        assert all(v.startswith("voice - ") for v in violations)
+
+    def test_the_opening_is_checked_as_part_of_the_letter(self, evidence):
+        headline, paragraph = self._real_opening(evidence)
+        letter = self._letter(headline, "In Word Wizard, " + paragraph)
+        assert any("names an activity" in v
+                   for v in SnapshotWriter()._validate(letter, evidence))
+
+
+class TestNoCountsReachTheParent:
+    """No tally of what a child got right or wrong, in digits or in words."""
+
+    @staticmethod
+    def _letter(paragraph):
+        return {
+            "opening": {"headline": "x", "paragraph": paragraph},
+            "what_i_noticed": [],
+            "still_growing": [],
+            "for_the_conference": {"items": []},
+        }
+
+    @pytest.mark.parametrize(
+        "phrase",
+        [
+            "He spelled 15 of 15 words.",
+            "Fifteen of fifteen, including amputate.",
+            "He answered all thirteen questions correctly.",
+            "He read all eight sentences.",
+            "Three questions came back wrong.",
+            "That is 80% of them.",
+        ],
+    )
+    def test_a_tally_is_rejected(self, evidence, phrase):
+        violations = SnapshotWriter()._validate(self._letter(phrase), evidence)
+        assert any("count of right or wrong" in v or "percentage" in v
+                   or "score ratio" in v for v in violations)
+
+    @pytest.mark.parametrize(
+        "phrase",
+        [
+            "I sat with them for about twenty minutes, across four activities.",
+            "They sat with it for thirty-three seconds and worked it out.",
+            "One word a day, out loud.",
+            "Four words on the fridge, read together once a day.",
+            "Every word they wrote was spelled correctly.",
+        ],
+    )
+    def test_how_they_worked_is_not_a_tally(self, evidence, phrase):
+        violations = SnapshotWriter()._validate(self._letter(phrase), evidence)
+        assert not any("count of right or wrong" in v for v in violations)
+
+    def test_stage_a_reports_a_flawless_run_without_counting_it(self):
+        from app.services.snapshot_service import SnapshotService
+
+        flawless = SnapshotService._flawless_activities(
+            {
+                "spelling": {
+                    "words_total": 15,
+                    "words_correct": 15,
+                    "misspellings": [],
+                }
+            },
+            {"spelling": "Word Wizard"},
+        )
+        assert flawless
+        assert not any(c.isdigit() for c in flawless[0]["what_happened"])
+
+
+class TestTheLetterMatchesTheTemplate:
+    """The frame every snapshot carries, and the note only some do."""
+
+    def test_the_letter_is_framed_like_a_letter(self, evidence):
+        letter = SnapshotWriter()._finalise({"closing": "c"}, evidence)
+        assert letter["salutation"] == "Dear Parent,"
+        assert letter["signature"] == "Eko"
+        assert "trust yourself first" in letter["caveat"]
+
+    def test_the_caveat_uses_the_real_length_of_the_sitting(self, evidence):
+        from app.services.snapshot_writer import _caveat
+
+        assert _caveat(
+            {"child_name": "Sam", "session": {"span_phrase": "half an hour"}}
+        ).startswith("Half an hour is a short time")
+        assert "the Sam you know" in _caveat(
+            {"child_name": "Sam", "session": {}}
+        )
+
+    def test_a_comfortable_set_earns_a_note_about_the_level(self):
+        from app.services.snapshot_service import SnapshotService
+
+        fit = SnapshotService._level_fit(
+            {
+                "spelling": {"words_total": 15, "words_correct": 15,
+                             "misspellings": []},
+                "comprehension": {"questions_answered": 14,
+                                  "worked_out": [{}] * 13},
+                "logic": {"questions_answered": 15,
+                          "questions": [{"correct": True}] * 14
+                          + [{"correct": False}]},
+            },
+            growth_edges=[],
+        )
+        assert fit["suggest"] == "the level above"
+
+    def test_a_set_out_of_reach_points_downwards(self):
+        from app.services.snapshot_service import SnapshotService
+
+        fit = SnapshotService._level_fit(
+            {
+                "spelling": {"words_total": 15, "words_correct": 4,
+                             "misspellings": [{}] * 11},
+                "comprehension": {"questions_answered": 14,
+                                  "worked_out": [{}] * 4},
+                "logic": {"questions_answered": 15,
+                          "questions": [{"correct": True}] * 6
+                          + [{"correct": False}] * 9},
+            },
+            growth_edges=[{}] * 6,
+        )
+        assert fit["suggest"] == "the level below"
+
+    def test_a_set_that_fitted_earns_no_note(self, evidence):
+        assert not (evidence["level_fit"] or {}).get("suggest")
+
+    def test_a_level_note_the_evidence_did_not_ask_for_is_dropped(self, evidence):
+        from app.services.snapshot_writer import _repair
+
+        letter = _repair(
+            {
+                "opening": {"headline": "x", "paragraph": "y"},
+                "what_i_noticed": [],
+                "still_growing": [],
+                "for_the_conference": {"items": []},
+                "level_note": {"headline": "One note about the level.",
+                               "paragraph": "Try the level above."},
+            },
+            evidence,
+        )
+        assert "level_note" not in letter
+
+    def test_a_quoted_spelling_the_child_never_wrote_is_dropped(self, evidence):
+        from app.services.snapshot_writer import _repair
+
+        real = evidence["what_the_child_did"]["spelling"]["misspellings"][0]
+        letter = _repair(
+            {
+                "opening": {"headline": "x", "paragraph": "y"},
+                "what_i_noticed": [
+                    {
+                        "headline": "h",
+                        "quotes": [
+                            {"wrote": real["attempt"], "for_word": real["word"]},
+                            {"wrote": "skool", "for_word": "school"},
+                        ],
+                    }
+                ],
+                "still_growing": [],
+                "for_the_conference": {"items": []},
+            },
+            evidence,
+        )
+        quotes = letter["what_i_noticed"][0]["quotes"]
+        assert quotes == [{"wrote": real["attempt"], "for_word": real["word"]}]
+
+
+class TestEverySentenceReadsRight:
+    def test_the_mechanical_slips_are_fixed(self):
+        from app.services.snapshot_writer import tidy_prose
+
+        assert tidy_prose("he read  well , and and then he stopped.") == (
+            "He read well, and then he stopped."
+        )
+        assert tidy_prose("It took a hour. a apple. an big word.") == (
+            "It took an hour. An apple. A big word."
+        )
+
+    def test_a_one_off_keeps_its_article(self):
+        from app.services.snapshot_writer import tidy_prose
+
+        assert tidy_prose("That is a one-off.") == "That is a one-off."
+
+    def test_the_tidy_pass_runs_over_the_letter(self, evidence):
+        from app.services.snapshot_writer import _repair
+
+        letter = _repair(
+            {
+                "opening": {"headline": "x", "paragraph": "they read  well ."},
+                "what_i_noticed": [],
+                "still_growing": [],
+                "for_the_conference": {"items": []},
+            },
+            evidence,
+        )
+        assert letter["opening"]["paragraph"] == "They read well."
 
 
 # ---------------------------------------------------------------------------
@@ -757,16 +1222,10 @@ class TestRepairRatherThanDiscard:
         from app.services.snapshot_writer import _repair
 
         raw = {
-            "opening": {"headline": "A good sitting.",
-                        "paragraph": "He " + _required_facts_sentence(evidence)},
+            "opening": _compliant_opening(evidence),
             "what_i_noticed": [{"headline": str(i), "signals": [], "seen_in": []}
                                for i in range(9)],
-            "still_growing": [
-                {"headline": g["signal_name"], "signals": [g["signal_name"]],
-                 "seen_in": [g["seen_in"]], "paragraph": "x",
-                 "suggestion": {"because": "Because of this."}}
-                for g in evidence["growth_edges"]
-            ],
+            "still_growing": _one_grouped_growth_item(evidence),
             "for_the_conference": {
                 "items": [{"point": str(i), "worth_asking": "Worth asking."}
                           for i in range(5)]
@@ -836,20 +1295,13 @@ class TestTheLetterIsSpecificEveryTime:
                 "headline": "Pranav spells by sound.",
                 "paragraph": (
                     "Pranav wrote fone for phone and graff for graph. In "
-                    "The Treasure Map they chose The oak tree."
+                    "The Treasure Map they chose The oak tree. Where they "
+                    "are still working is the rules that sound does not "
+                    "reach."
                 ),
             },
             "what_i_noticed": [],
-            "still_growing": [
-                {
-                    "headline": g["signal_name"],
-                    "signals": [g["signal_name"]],
-                    "seen_in": [g["seen_in"]],
-                    "paragraph": "x",
-                    "suggestion": {"because": "Because of this."},
-                }
-                for g in evidence["growth_edges"]
-            ],
+            "still_growing": _one_grouped_growth_item(evidence),
             "for_the_conference": {
                 "items": [{"point": str(i), "worth_asking": "Worth asking."}
                           for i in range(3)]
@@ -903,22 +1355,12 @@ class TestVoiceSlipsNeverCostTheLetter:
         It has to carry the required facts as well: since specificity became
         a guardrail, a letter that quotes nothing is no longer clean.
         """
+        opening = _compliant_opening(evidence)
+        opening["paragraph"] = paragraph + " " + opening["paragraph"]
         return {
-            "opening": {
-                "headline": "A good sitting.",
-                "paragraph": paragraph + " " + _required_facts_sentence(evidence),
-            },
+            "opening": opening,
             "what_i_noticed": [],
-            "still_growing": [
-                {
-                    "headline": g["signal_name"],
-                    "signals": [g["signal_name"]],
-                    "seen_in": [g["seen_in"]],
-                    "paragraph": "x",
-                    "suggestion": {"because": "Because of this."},
-                }
-                for g in evidence["growth_edges"]
-            ],
+            "still_growing": _one_grouped_growth_item(evidence),
             "for_the_conference": {
                 "items": [{"point": str(i), "worth_asking": "Worth asking."}
                           for i in range(3)]
