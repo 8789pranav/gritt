@@ -15,11 +15,11 @@
           "question": "What time of year did Aria find the mysterious letter?",
           "options": [
             "Spring",
-            "Summer",
             "Fall/October",
+            "Summer",
             "Winter"
           ],
-          "correct_index": 2,
+          "correct_index": 1,
           "question_type": "literal"
         },
         {
@@ -27,36 +27,48 @@
           "question": "Where did Aria find the first clue?",
           "options": [
             "In the auditorium",
+            "In her classroom",
             "Behind the owl statue at the library",
-            "Under a tree",
-            "In her classroom"
+            "Under a tree"
           ],
-          "correct_index": 1,
+          "correct_index": 2,
           "question_type": "literal"
         },
         {
           "question_id": "t1_q3",
           "question": "What seat number had the third clue?",
           "options": [
-            "Seat twenty-four",
-            "Seat thirty-two",
             "Seat forty-two",
+            "Seat thirty-two",
+            "Seat twenty-four",
             "Seat fifty-two"
           ],
-          "correct_index": 2,
+          "correct_index": 0,
           "question_type": "literal"
         },
         {
           "question_id": "t1_q4",
           "question": "Who created the treasure hunt and when?",
           "options": [
+            "Her father, twenty years ago",
             "Her mother, ten years ago",
-            "Her grandmother, fifty years ago",
             "Her teacher, last year",
-            "Her father, twenty years ago"
+            "Her grandmother, fifty years ago"
           ],
-          "correct_index": 1,
+          "correct_index": 3,
           "question_type": "inferential"
+        },
+        {
+          "question_id": "t1_q5",
+          "question": "In the story, what does 'elegant' mean when it says her name was written in elegant cursive?",
+          "options": [
+            "Graceful and beautiful",
+            "Messy and hard to read",
+            "Large and bold",
+            "Quick and sloppy"
+          ],
+          "correct_index": 0,
+          "question_type": "vocabulary"
         }
       ]
     },
@@ -70,12 +82,12 @@
           "question_id": "t2_q1",
           "question": "Why was Daniel afraid of water?",
           "options": [
-            "He saw a scary movie",
             "He fell into a pond as a child",
+            "He saw a scary movie",
             "His friend got hurt swimming",
             "He never learned to swim"
           ],
-          "correct_index": 1,
+          "correct_index": 0,
           "question_type": "inferential"
         },
         {
@@ -83,11 +95,11 @@
           "question": "Who helped Daniel overcome his fear?",
           "options": [
             "His parents",
-            "A swimming coach",
             "His older sister Maya",
+            "A swimming coach",
             "His best friend"
           ],
-          "correct_index": 2,
+          "correct_index": 1,
           "question_type": "literal"
         },
         {
@@ -107,15 +119,15 @@
           "question": "What important lesson did Daniel learn?",
           "options": [
             "Swimming is easy",
+            "Sisters are helpful",
             "The ocean is safe",
-            "Facing fears gives confidence",
-            "Sisters are helpful"
+            "Facing fears gives confidence"
           ],
-          "correct_index": 2,
+          "correct_index": 3,
           "question_type": "inferential"
         }
       ]
     }
   ],
-  "total_questions": 8
+  "total_questions": 9
 }

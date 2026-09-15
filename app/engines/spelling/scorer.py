@@ -136,6 +136,8 @@ class SpellingScorer(Scorer[SpellingWord, SpellingResponse]):
             mistakes: Dict[str, str] = {}
         elif is_homophone(target, attempt):
             mistakes = {"homophone_error": f"Expected {item.word!r}, got {attempt!r} — a homophone"}
+        elif sounds_like(target, attempt):
+            mistakes = {"spelling_convention": f"Sounds correct, spelling convention error: {target!r} vs {attempt!r}"}
         else:
             mistakes = {"spelling": f"Expected {item.word!r}, got {attempt or '(blank)'!r}"}
 
@@ -212,6 +214,26 @@ class SpellingScorer(Scorer[SpellingWord, SpellingResponse]):
                     "user_input": attempt,
                     "mistakes": {"unrelated_attempt": attempt},
                     "matched_features": [],
+                },
+            )
+
+        # Homophone check (sun/son, there/their) — the child used a real
+        # word that sounds identical but is spelled differently.  This is a
+        # word-choice error, not a phonics error, so do not generate phantom
+        # feature mistakes.
+        if is_homophone(target, attempt):
+            return ScoredItem(
+                item_id=item.item_id,
+                label=item.word,
+                is_correct=False,
+                points=max_points,
+                max_points=max_points,
+                status=ResponseStatus.ANSWERED,
+                detail={
+                    "type": item.word_type.value,
+                    "user_input": attempt,
+                    "mistakes": {"homophone_error": f"Expected {item.word!r}, got {attempt!r} — a homophone"},
+                    "matched_features": [e.feature.value for e in expectations],
                 },
             )
 

@@ -214,9 +214,11 @@ class AssessmentEngine(ABC, Generic[TItem, TResponse]):
         child_id: str,
         grade: Grade,
         responses: Sequence[TResponse],
+        items: Optional[Sequence[TItem]] = None,
     ) -> AssessmentResult:
         """Run the full score -> derive -> tag pipeline for one submission."""
-        items = self.get_items(grade)
+        if items is None:
+            items = self.get_items(grade)
 
         score = self.scorer.score(items, responses, grade)
         if not score.level:

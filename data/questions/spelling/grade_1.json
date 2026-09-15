@@ -133,7 +133,8 @@
       "features": {
         "beginning": "a",
         "final": "d",
-        "short_vowels": "a"
+        "short_vowels": "a",
+        "consonant_blends": "nd"
       }
     }
   ],

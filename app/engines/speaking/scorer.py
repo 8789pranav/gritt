@@ -18,10 +18,10 @@ from app.engines.speaking.analyzer import SpeechAnalysis
 
 #: Percentage bands, highest first.
 LEVEL_BANDS: Sequence[tuple[float, str]] = (
-    (90.0, "Excellent Speaker"),
-    (75.0, "Good Speaker"),
-    (50.0, "Developing Speaker"),
-    (0.0, "Needs Improvement"),
+    (90.0, "Above grade level"),
+    (75.0, "At grade level"),
+    (50.0, "Approaching grade level"),
+    (0.0, "Below grade level"),
 )
 
 #: Maximum points available for one sentence.

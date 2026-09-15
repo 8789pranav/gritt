@@ -67,6 +67,10 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
         fast_and_wrong_count = 0
         self_corrected_to_right_count = 0
 
+        # G1: Track latencies for median-based impulsivity check.
+        latencies: List[float] = []
+        wrong_latencies: List[float] = []
+
         shift_result = "no_sort"
         rule_inferred = False
 
@@ -107,9 +111,6 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
             if response.attempts > 1:
                 multiple_attempts_count += 1
 
-            if not is_correct and latency and latency < expected * FAST_RESPONSE_RATIO:
-                fast_and_wrong_count += 1
-
             if response.self_corrected and is_correct:
                 self_corrected_to_right_count += 1
 
@@ -121,6 +122,24 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
 
             if response.rule_inferred:
                 rule_inferred = True
+
+            # G1: Collect response times for median-based impulsivity check.
+            latencies.append(latency)
+
+            # G1: Record wrong-answer latency for impulsivity check.
+            if not is_correct and latency > 0:
+                wrong_latencies.append(latency)
+
+        # G1: Compute fast_and_wrong_count using the child's own median
+        # response time as the threshold, not a fixed expected_latency.
+        # A response is "impulsive" only if it is wrong AND clearly faster
+        # than the child's own typical pace (below 50% of their median).
+        if wrong_latencies:
+            median_latency = sorted(wrong_latencies)[len(wrong_latencies) // 2]
+            impulsive_threshold = median_latency * 0.5
+            fast_and_wrong_count = sum(
+                1 for wl in wrong_latencies if wl <= impulsive_threshold
+            )
 
         return {
             "pattern_score": pattern_score,
@@ -154,6 +173,14 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
         responses_by_id = {response.item_id: response for response in responses}
         results: List[PerItemTags] = []
 
+        # G1: Compute the child's own median response time for impulsivity.
+        all_latencies = sorted(
+            r.response_time_seconds or 0 for r in responses
+            if r.response_time_seconds and r.response_time_seconds > 0
+        )
+        median_latency = all_latencies[len(all_latencies) // 2] if all_latencies else 0
+        impulsive_threshold = median_latency * 0.5 if median_latency else 0
+
         for item in items:
             response = responses_by_id.get(item.item_id)
             if response is None:
@@ -180,7 +207,13 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
                 tags.append(CognitiveTag.TRIAL_AND_ERROR_STRATEGY.value)
             if response.self_corrected and is_correct:
                 tags.append(CognitiveTag.SELF_CORRECTION_PRESENT.value)
-            if not is_correct and latency and latency < expected * FAST_RESPONSE_RATIO:
+            # G1: Only tag as impulsive if wrong AND clearly faster than
+            # the child's own median (below 50% of their median).
+            if (
+                not is_correct
+                and impulsive_threshold > 0
+                and 0 < latency <= impulsive_threshold
+            ):
                 tags.append(CognitiveTag.IMPULSIVE_RESPONSE.value)
             if not is_correct and latency > expected * SLOW_RESPONSE_MULTIPLIER:
                 tags.append(CognitiveTag.REASONING_UNDER_LOAD_EMERGING.value)

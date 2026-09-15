@@ -63,6 +63,25 @@ class ComprehensionSignalDeriver(
         if attempted[QuestionType.LITERAL] and attempted[QuestionType.INFERENTIAL]:
             gap = round(literal_accuracy - inferential_accuracy, 4)
 
+        # D4: Detect repeating answer patterns (data capture for later analysis).
+        # A child who always picks the same option position (e.g. alternating
+        # B, C, B, C) can score high without comprehension. This signal records
+        # the most common selected index and its frequency.
+        selected_indices = [
+            r.selected_index for r in responses
+            if r is not None and r.selected_index is not None
+        ]
+        repeating_pattern_detected = False
+        most_common_index = -1
+        most_common_count = 0
+        if selected_indices:
+            from collections import Counter
+            index_counts = Counter(selected_indices)
+            most_common_index, most_common_count = index_counts.most_common(1)[0]
+            # Flag if any single position is used more than 60% of the time.
+            if most_common_count / len(selected_indices) > 0.6:
+                repeating_pattern_detected = True
+
         return {
             "literal_accuracy": literal_accuracy,
             "inferential_accuracy": inferential_accuracy,
@@ -75,6 +94,10 @@ class ComprehensionSignalDeriver(
             "vocabulary_attempted": attempted[QuestionType.VOCABULARY],
             "total_questions": score.total_items,
             "questions_answered": score.answered_items,
+            # D4: Data capture for pattern detection (not used at launch).
+            "repeating_pattern_detected": repeating_pattern_detected,
+            "most_common_selected_index": most_common_index,
+            "most_common_selected_count": most_common_count,
         }
 
     def per_item_tags(

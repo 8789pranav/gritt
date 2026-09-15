@@ -67,84 +67,84 @@
       "trigger": "pattern_score >= 3 AND pattern_hard_count >= 1",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child demonstrates strong pattern recognition across multiple items including at least one hard item."
+      "description": "Your child recognises patterns confidently, including on harder items."
     },
     {
       "id": "pattern_detection_emerging",
-      "trigger": "pattern_score >= 2",
+      "trigger": "pattern_score >= 2 AND pattern_score < 3 OR pattern_score >= 2 AND pattern_hard_count < 1",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child shows early pattern recognition but not yet consistent across hard items."
+      "description": "Your child is beginning to recognise patterns. With more practice they will tackle harder ones too."
     },
     {
       "id": "relational_reasoning_present",
       "trigger": "relational_score >= 2",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child draws relationships between concepts effectively."
+      "description": "Your child connects ideas and sees how different concepts relate to each other."
     },
     {
       "id": "systematic_problem_solving",
       "trigger": "systematic_score >= 2",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child applies step-by-step logical approaches to complex problems."
+      "description": "Your child breaks down complex problems into manageable steps."
     },
     {
       "id": "cognitive_flexibility_intact",
       "trigger": "shift_result == shifted_ok",
       "confidence": "medium",
       "polarity": "strength",
-      "description": "Child shifts strategy when the rule changes (observed via sort task)."
+      "description": "Your child adapts their thinking when the rules change, showing flexible problem-solving."
     },
     {
       "id": "flexible_strategy_use",
       "trigger": "rule_inferred == true OR flexibility_score >= 2",
       "confidence": "medium",
       "polarity": "strength",
-      "description": "Child adapts their approach flexibly and tries new strategies when needed."
+      "description": "Your child tries different strategies and adapts their approach when needed."
     },
     {
       "id": "reasoning_under_load_emerging",
       "trigger": "load_fails >= 2 OR load_success_count >= 2",
       "confidence": "high",
       "polarity": "growth_edge",
-      "description": "Child shows emerging ability to hold multiple features or steps at once."
+      "description": "Your child is developing the ability to hold several pieces of information in mind at once. Practice with multi-step puzzles will help."
     },
     {
       "id": "strategy_shift_difficulty",
       "trigger": "shift_result == stuck",
       "confidence": "medium",
       "polarity": "growth_edge",
-      "description": "Child stays stuck in the old rule after a change (observed via sort task)."
+      "description": "Your child tended to stick with an earlier rule after it changed. Practising switching rules will help build flexibility."
     },
     {
       "id": "rule_maintenance_difficulty",
       "trigger": "rule_maintenance_fails >= 2",
       "confidence": "low",
       "polarity": "growth_edge",
-      "description": "Child struggles to reliably apply even a single filter rule. Flagged as low confidence on single items."
+      "description": "Your child is still learning to apply a single rule consistently. This is common at this stage and will improve with sorting games."
     },
     {
       "id": "trial_and_error_strategy",
       "trigger": "multiple_attempts_count >= 2",
       "confidence": "high",
       "polarity": "neutral",
-      "description": "Child explores by trying rather than planning ahead."
+      "description": "Your child explores by trying different answers rather than planning ahead. This is a natural stage of learning."
     },
     {
       "id": "impulsive_response",
       "trigger": "fast_and_wrong_count >= 2",
       "confidence": "high",
       "polarity": "growth_edge",
-      "description": "Child responds quickly without sufficient reflection, leading to errors."
+      "description": "Some answers were given very quickly compared to your child's usual pace. Encouraging a brief pause before responding may help reduce these slips."
     },
     {
       "id": "self_correction_present",
       "trigger": "self_corrected_to_right_count >= 1",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child catches and fixes their own mistakes."
+      "description": "Your child notices and corrects their own mistakes, which is a valuable learning skill."
     }
   ]
 }

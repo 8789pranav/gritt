@@ -227,6 +227,7 @@ _HOMOPHONE_GROUPS: List[frozenset] = [
     frozenset({"ate", "eight"}),
     frozenset({"see", "sea"}),
     frozenset({"hi", "high"}),
+    frozenset({"sun", "son"}),
 ]
 
 _HOMOPHONE_MAP: Dict[str, frozenset] = {}

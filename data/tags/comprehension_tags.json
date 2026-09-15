@@ -9,7 +9,10 @@
     "inferential_accuracy",
     "vocabulary_accuracy",
     "overall_accuracy",
-    "literal_inferential_gap"
+    "literal_inferential_gap",
+    "literal_attempted",
+    "inferential_attempted",
+    "vocabulary_attempted"
   ],
   "question_type_mapping": {
     "literal": "Questions about explicit story details (who, what, where, when)",
@@ -19,45 +22,52 @@
   "tags": [
     {
       "id": "literal_comprehension_strong",
-      "trigger": "literal_accuracy >= 0.8",
+      "trigger": "literal_accuracy >= 0.8 AND literal_attempted >= 3",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child recalls and identifies stated facts from the text accurately."
+      "description": "Your child recalls and identifies stated facts from the text accurately."
     },
     {
       "id": "inferential_comprehension_strong",
-      "trigger": "inferential_accuracy >= 0.8",
+      "trigger": "inferential_accuracy >= 0.8 AND inferential_attempted >= 3",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child draws valid conclusions and inferences beyond the literal text."
+      "description": "Your child draws valid conclusions and inferences beyond the literal text."
     },
     {
       "id": "inferential_comprehension_emerging",
-      "trigger": "inferential_accuracy < 0.6 AND literal_inferential_gap >= 0.3",
+      "trigger": "inferential_accuracy >= 0.6 AND inferential_accuracy < 0.8 AND inferential_attempted >= 3",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Your child is developing good inference skills. Practice with 'why' and 'how' questions will help them go further."
+    },
+    {
+      "id": "inferential_comprehension_difficulty",
+      "trigger": "inferential_accuracy < 0.6 AND literal_inferential_gap >= 0.3 AND inferential_attempted >= 3",
       "confidence": "high",
       "polarity": "growth_edge",
-      "description": "Child understands literal content but struggles to infer meaning."
+      "description": "Your child understands literal content but is still developing the ability to infer meaning. Practice with 'why' and 'how' questions will help."
     },
     {
       "id": "vocabulary_in_context_strong",
-      "trigger": "vocabulary_accuracy >= 0.8",
+      "trigger": "vocabulary_accuracy >= 0.8 AND vocabulary_attempted >= 3",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child determines word meanings from surrounding context effectively."
+      "description": "Your child determines word meanings from surrounding context effectively."
     },
     {
       "id": "vocabulary_in_context_emerging",
-      "trigger": "vocabulary_accuracy < 0.6",
+      "trigger": "vocabulary_accuracy < 0.6 AND vocabulary_attempted >= 3",
       "confidence": "high",
       "polarity": "growth_edge",
-      "description": "Child has difficulty determining word meaning from context."
+      "description": "Your child is still developing the ability to work out word meanings from context. Talking about new words while reading will help."
     },
     {
       "id": "listening_comprehension_strong",
       "trigger": "overall_accuracy >= 0.75",
       "confidence": "high",
       "polarity": "strength",
-      "description": "Child demonstrates strong understanding of audio-narrated stories."
+      "description": "Your child demonstrates strong understanding of audio-narrated stories."
     }
   ]
 }
