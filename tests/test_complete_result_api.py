@@ -40,7 +40,7 @@ def _spelling_payload(grade: str, attempts: dict, time: float = 10.0):
     }
 
 
-def _logic_payload(grade: str, wrong=(), times=None, attempts=1):
+def _logic_payload(grade: str, wrong=(), times=None, attempts=1, skip=()):
     engine = logic_engine()
     items = engine.get_items(Grade(grade))
     return {
@@ -60,6 +60,7 @@ def _logic_payload(grade: str, wrong=(), times=None, attempts=1):
                 "self_corrected": False,
             }
             for i in items
+            if i.item_id not in skip
         ],
     }
 
@@ -77,9 +78,11 @@ async def _spelling_round_trip(client, grade, attempts, time=10.0):
     return submit.json(), result.json()
 
 
-async def _logic_round_trip(client, grade, wrong=(), times=None, attempts=1):
+async def _logic_round_trip(client, grade, wrong=(), times=None, attempts=1,
+                            skip=()):
     submit = await client.post(
-        "/logic/submit_test/", json=_logic_payload(grade, wrong, times, attempts)
+        "/logic/submit_test/",
+        json=_logic_payload(grade, wrong, times, attempts, skip),
     )
     assert submit.status_code == 200, submit.text
     result = await client.post(
@@ -371,6 +374,38 @@ class TestLogicCompleteResult:
         assert wrong_rows
         for row in wrong_rows:
             assert row["selected_index"] != row["correct_index"]
+
+    async def test_unanswered_items_show_not_answered(
+        self, client, mock_firebase_auth, seed_user
+    ):
+        """An item with no response behind it is "Not answered", not "Incorrect".
+
+        Word Wizard, Voice Challenge and Story Explorer all carry this state.
+        Logic Quest scored an unanswered item as a miss the child never made.
+        """
+        skipped = {"logic_3_1", "logic_3_4"}
+        submit, data = await _logic_round_trip(client, "Third", skip=skipped)
+
+        for rows in (
+            submit["teacher_admin_detail"]["table_data"],
+            data["teacher_admin_detail"]["table_data"],
+        ):
+            for row in rows:
+                answered = row["selected_answer"] != ""
+                if not answered:
+                    assert row["icon"] == "Not answered", row
+                    assert row["error_type"] == "Not answered", row
+                    assert row["correct"] is False, row
+                else:
+                    assert row["icon"] in ("Correct", "Incorrect"), row
+                    assert row["error_type"] != "Not answered", row
+
+        # The skipped items are the unanswered ones, and there are exactly two.
+        unanswered_submit = [
+            r for r in submit["teacher_admin_detail"]["table_data"]
+            if r["icon"] == "Not answered"
+        ]
+        assert len(unanswered_submit) == 2, unanswered_submit
 
     async def test_g1_fast_wrong_answers_reach_the_payload(
         self, client, mock_firebase_auth, seed_user

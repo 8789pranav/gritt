@@ -97,6 +97,57 @@ def _logic_error_type(tags) -> str:
     return "Incorrect"
 
 
+def _logic_table(scored_items, per_item_map):
+    """One row per Logic Quest item, for the teacher view.
+
+    Built once and used by both the submit response and complete_result, the
+    same way Voice Challenge's teacher_table serves both endpoints, so the
+    two tables cannot drift apart.
+
+    An item with no response behind it shows "Not answered" - the same state
+    Word Wizard, Voice Challenge and Story Explorer already show. Scoring it
+    as "Incorrect" named a miss the child never made.
+    """
+    rows: List[Dict[str, Any]] = []
+    for s in scored_items:
+        detail = s.get("detail", {}) or {}
+        answered = (
+            s.get("status") != "Not Attempted"
+            and detail.get("selected_answer") is not None
+        )
+        if answered and s.get("is_correct"):
+            error_type = None
+        elif not answered:
+            error_type = "Not answered"
+        else:
+            error_type = _logic_error_type(
+                per_item_map.get(s.get("item_id", ""), [])
+            )
+        rows.append({
+            # Word Wizard has always shown the word and the attempt. The
+            # Logic table showed an item number and two indices, which
+            # reads as nothing at all.
+            "item_number": s.get("label", ""),
+            "question": detail.get("question_text", "") or s.get("label", ""),
+            "item_type": (detail.get("item_type") or "").replace("_", " "),
+            "difficulty": detail.get("difficulty", ""),
+            "selected_answer": detail.get("selected_answer", ""),
+            "correct_answer": detail.get("correct_answer", ""),
+            # L-D1: these must match the keys LogicScorer writes into
+            # ScoredItem.detail, or the teacher table reads null.
+            "selected_index": detail.get("selected_answer_index"),
+            "correct_index": detail.get("correct_answer_index"),
+            "correct": s.get("is_correct", False),
+            "error_type": error_type,
+            "time": detail.get("response_time_seconds", 0.0),
+            "icon": (
+                "Not answered" if not answered
+                else "Correct" if s.get("is_correct") else "Incorrect"
+            ),
+        })
+    return rows
+
+
 def _speaking_table(sentences):
     from app.engines.speaking.result import teacher_table
 
@@ -344,37 +395,7 @@ class AssessmentService:
             for p in per_item_dicts
         }
 
-        def _error_type_for_submit(item_dict: Dict[str, Any]) -> Optional[str]:
-            if item_dict.get("is_correct"):
-                return None
-            return _logic_error_type(
-                per_item_map_submit.get(item_dict.get("item_id", ""), [])
-            )
-
-        table_data_submit = [
-            {
-                # Word Wizard has always shown the word and the attempt. The
-                # Logic table showed an item number and two indices, which
-                # reads as nothing at all.
-                "item_number": s.get("label", ""),
-                "question": s.get("detail", {}).get("question_text", "")
-                            or s.get("label", ""),
-                "item_type": (s.get("detail", {}).get("item_type") or "")
-                             .replace("_", " "),
-                "difficulty": s.get("detail", {}).get("difficulty", ""),
-                "selected_answer": s.get("detail", {}).get("selected_answer", ""),
-                "correct_answer": s.get("detail", {}).get("correct_answer", ""),
-                # L-D1: these must match the keys LogicScorer writes into
-                # ScoredItem.detail, or the teacher table reads null.
-                "selected_index": s.get("detail", {}).get("selected_answer_index"),
-                "correct_index": s.get("detail", {}).get("correct_answer_index"),
-                "correct": s.get("is_correct", False),
-                "error_type": _error_type_for_submit(s),
-                "time": s.get("detail", {}).get("response_time_seconds", 0.0),
-                "icon": "Correct" if s.get("is_correct") else "Incorrect",
-            }
-            for s in logic_scored_items
-        ]
+        table_data_submit = _logic_table(logic_scored_items, per_item_map_submit)
 
         score_id = self._scores.save(
             uid, child_id, TestType.LOGIC.storage_key,
@@ -448,32 +469,7 @@ class AssessmentService:
 
         per_item_map = {p["item_id"]: p["tags"] for p in per_item_tags}
 
-        def _error_type_for(item: Dict[str, Any]) -> Optional[str]:
-            if item.get("is_correct"):
-                return None
-            return _logic_error_type(per_item_map.get(item.get("item_id", ""), []))
-
-        table_data = [
-            {
-                "item_number": s.get("label", ""),
-                "question": s.get("detail", {}).get("question_text", "")
-                            or s.get("label", ""),
-                "item_type": (s.get("detail", {}).get("item_type") or "")
-                             .replace("_", " "),
-                "difficulty": s.get("detail", {}).get("difficulty", ""),
-                "selected_answer": s.get("detail", {}).get("selected_answer", ""),
-                "correct_answer": s.get("detail", {}).get("correct_answer", ""),
-                # L-D1: selected_index / correct_index / time never existed
-                # in ScoredItem.detail, so every row read null, null and 0.0.
-                "selected_index": s.get("detail", {}).get("selected_answer_index"),
-                "correct_index": s.get("detail", {}).get("correct_answer_index"),
-                "correct": s.get("is_correct", False),
-                "error_type": _error_type_for(s),
-                "time": s.get("detail", {}).get("response_time_seconds", 0.0),
-                "icon": "Correct" if s.get("is_correct") else "Incorrect",
-            }
-            for s in scored_items
-        ]
+        table_data = _logic_table(scored_items, per_item_map)
 
         strengths = [
             t.get("description", "") for t in dear_parent_tags
