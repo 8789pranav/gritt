@@ -585,21 +585,41 @@ The shape asked for: lead with the way this child approaches things, prove it
 with one concrete thing they did, draw on at least two activities, and name
 one place they are still working plainly, inside the opening.
 
-### 14.4 Growth edges are grouped, never dropped
+### 14.4 Growth edges are grouped in Stage A, never dropped
 
-The old rule was one section per growth edge, which produced letters with
-seven near-identical sections about the same read-aloud sound. The rule is
-now **coverage**: every growth edge the engine found must be named in the
-`signals` of some `still_growing` item, and related edges belong in one item.
-Three items is the target and five is the ceiling.
+The first rule was one section per growth edge, which produced letters with
+seven near-identical sections about the same read-aloud sound. The second was
+coverage — every edge named somewhere, grouping left to the writer — and a
+child with seventeen growth edges got three sections covering six of them,
+with reading aloud missing from the letter entirely. Three attempts of that
+ends at the generic letter, which is how the child who most needs the letter
+gets the one that says nothing.
+
+Which findings are the same finding is not prose. It is the learning area,
+which Stage A already knows, so Stage A now emits `growth_clusters` — one per
+area, carrying its signals and the activities behind them — and the writer
+writes one `still_growing` item per cluster. Words for facts, which is the
+shape of the whole pipeline.
+
+Coverage is still checked, and an edge the writer drops is filed back into
+the section holding its siblings rather than costing the letter.
 
 ### 14.5 The frame around the letter
 
-`salutation`, `caveat` and `signature` are added deterministically in
-`_finalise`, because they are the same shape every time and a model asked to
-reproduce them on every run eventually will not. The caveat uses the real
-length of the sitting ("Twenty minutes is a short time...", from
+`salutation`, `caveat`, `signature` and `disclaimer` are fixed, and they live
+in `data/snapshot/letter_frame.json` rather than in the code, so product and
+legal can reword them without a developer. They are fixed on purpose: a
+greeting that varies looks like a mistake, and a disclaimer a model rephrases
+each run is a liability. The caveat uses the real length of the sitting (from
 `session.span_phrase`) and the child's own name.
+
+Everything else — every sentence about the child — is written by the model
+from that child's evidence. Stage A emits no prose at all: the note about the
+level and the flawless-run observation used to arrive as finished sentences
+and came back in letters word for word, so they are facts now.
+
+`meta` records `prompt_version`, `frame_version` and `model`, so a letter can
+be traced to the wording that produced it.
 
 ### 14.6 A note about the level
 
@@ -612,7 +632,35 @@ writer a direction, never a ratio:
 | `too_hard` | most of the set out of reach | the level below would give a clearer picture, and a better afternoon |
 | `well_matched` | anything else | nothing — the key is stripped if the model writes one anyway |
 
-### 14.7 Grammar
+### 14.7 The conference section is balanced
+
+At least one item about a strength, because parents arrive braced for bad
+news, and at least one about something still growing, because this is the
+page they carry into the room. The rule used to have only the first half,
+and the struggling child's letter came back with three pieces of good news —
+leaving the parent who most needed something to ask for with nothing. Each
+item declares `"about": "strength" | "still_growing"` so the balance is
+checked rather than guessed from the wording.
+
+### 14.8 Three tiers of violation
+
+| Tier | Example | What happens |
+|------|---------|--------------|
+| harm | a score, a comparison, clinical language, a dropped growth edge | never ships; the generic letter is better |
+| opening | a counting opening, an activity name, a headline naming a quality | asked again, ranked down, ships flagged rather than withheld |
+| voice | "impressive", a plural pronoun for one child | asked again, never withheld |
+
+The middle tier exists because a bad opening is a worse opening, not a danger
+to a child, and a parent handed the generic letter learns nothing about their
+own child at all.
+
+An opening that breaks its own rules gets one more chance at **just the
+opening** (`_rewrite_opening_if_needed`): a model rewriting a whole letter to
+fix one paragraph rewrites everything except that paragraph. If the rewrite
+is no better, the draft already in hand is kept, so the pass can improve a
+letter and can never cost one.
+
+### 14.9 Grammar
 
 The writer is asked to check every sentence on its own — subject, verb,
 agreement, tense, full stop. The mechanical slips that survive that check

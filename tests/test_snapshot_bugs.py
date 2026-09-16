@@ -261,6 +261,24 @@ def _one_grouped_growth_item(evidence) -> list:
     ]
 
 
+def _balanced_conference() -> dict:
+    """Three items a parent could take to a meeting.
+
+    One thing to be glad about and one thing to raise: the section is checked
+    for both, because three pieces of good news is not a conversation.
+    """
+    return {
+        "items": [
+            {"point": "p1", "worth_asking": "Worth asking.",
+             "about": "strength"},
+            {"point": "p2", "worth_asking": "Worth asking.",
+             "about": "still_growing"},
+            {"point": "p3", "worth_asking": "Worth asking.",
+             "about": "strength"},
+        ]
+    }
+
+
 def _required_facts_sentence(evidence) -> str:
     """One sentence carrying every fact Stage A says the letter must name.
 
@@ -331,6 +349,7 @@ class TestLS9EveryGrowthEdgeReachesTheParent:
         assert not any("growth edge" in v for v in violations)
 
     def test_a_letter_of_seven_sections_is_rejected(self, evidence):
+        """Stage A groups the edges; the letter carries one section each."""
         writer = SnapshotWriter()
         names = [g["signal_name"] for g in evidence["growth_edges"]]
         letter = {
@@ -345,8 +364,53 @@ class TestLS9EveryGrowthEdgeReachesTheParent:
         violations = writer._validate(letter, evidence)
         # Worth asking again for, never worth withholding the letter: a long
         # letter is a worse read, a missing growth edge is a worse letter.
-        assert any("same finding" in v and v.startswith("voice - ")
+        assert any("the evidence groups into" in v and v.startswith("voice - ")
                    for v in violations)
+
+    def test_stage_a_groups_the_edges_rather_than_the_writer(self, evidence):
+        """Which findings are the same finding is a fact, not prose.
+
+        Asking the writer to work it out is what lost eleven of seventeen
+        growth edges for the child who needed the letter most.
+        """
+        clusters = evidence["growth_clusters"]
+        assert clusters
+        assert len(clusters) < len(evidence["growth_edges"])
+
+        grouped = [name for c in clusters for name in c["signals"]]
+        assert sorted(grouped) == sorted(
+            g["signal_name"] for g in evidence["growth_edges"]
+        )
+        # One cluster per area, and each says which activities produced it.
+        assert len({c["cluster"] for c in clusters}) == len(clusters)
+        assert all(c["seen_in"] for c in clusters)
+
+    def test_an_edge_the_writer_drops_is_filed_not_lost(self, evidence):
+        """A dropped signal name is repaired, because it is not prose."""
+        from app.services.snapshot_writer import _repair
+
+        cluster = max(evidence["growth_clusters"], key=lambda c: len(c["signals"]))
+        assert len(cluster["signals"]) > 1
+        kept, dropped = cluster["signals"][0], cluster["signals"][1:]
+
+        letter = _repair(
+            {
+                "opening": {"headline": "x", "paragraph": "y"},
+                "what_i_noticed": [],
+                "still_growing": [
+                    {"headline": "h", "signals": [kept],
+                     "seen_in": list(cluster["seen_in"]), "paragraph": "p",
+                     "suggestion": {"because": "This is why."}}
+                ],
+                "for_the_conference": {"items": []},
+            },
+            evidence,
+        )
+        covered = {
+            name for item in letter["still_growing"]
+            for name in item["signals"]
+        }
+        assert set(dropped) <= covered
 
 
 # ---------------------------------------------------------------------------
@@ -847,7 +911,10 @@ class TestNoCountsReachTheParent:
             {"spelling": "Word Wizard"},
         )
         assert flawless
-        assert not any(c.isdigit() for c in flawless[0]["what_happened"])
+        # A fact, in a few words, and not a sentence the writer can lift.
+        note = flawless[0]["nothing_to_fault"]
+        assert not any(c.isdigit() for c in note)
+        assert not note.endswith(".")
 
 
 class TestTheLetterMatchesTheTemplate:
@@ -1226,10 +1293,7 @@ class TestRepairRatherThanDiscard:
             "what_i_noticed": [{"headline": str(i), "signals": [], "seen_in": []}
                                for i in range(9)],
             "still_growing": _one_grouped_growth_item(evidence),
-            "for_the_conference": {
-                "items": [{"point": str(i), "worth_asking": "Worth asking."}
-                          for i in range(5)]
-            },
+            "for_the_conference": _balanced_conference(),
             "what_helped": {"headline": "Strategic tasks"},
         }
         violations = SnapshotWriter()._validate(_repair(raw), evidence)
@@ -1302,10 +1366,7 @@ class TestTheLetterIsSpecificEveryTime:
             },
             "what_i_noticed": [],
             "still_growing": _one_grouped_growth_item(evidence),
-            "for_the_conference": {
-                "items": [{"point": str(i), "worth_asking": "Worth asking."}
-                          for i in range(3)]
-            },
+            "for_the_conference": _balanced_conference(),
         }
         assert not missing_required_facts(letter, evidence)
         assert not SnapshotWriter()._validate(letter, evidence)
@@ -1361,10 +1422,7 @@ class TestVoiceSlipsNeverCostTheLetter:
             "opening": opening,
             "what_i_noticed": [],
             "still_growing": _one_grouped_growth_item(evidence),
-            "for_the_conference": {
-                "items": [{"point": str(i), "worth_asking": "Worth asking."}
-                          for i in range(3)]
-            },
+            "for_the_conference": _balanced_conference(),
         }
 
     def test_an_adjective_is_reported_as_voice_not_harm(self, evidence):

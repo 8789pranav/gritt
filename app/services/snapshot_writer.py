@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from typing import Any, Dict, List, Optional
 
@@ -22,6 +23,29 @@ from app.core.config import get_settings
 from app.services.pronouns import describe as describe_pronouns
 
 logger = logging.getLogger(__name__)
+
+#: The greeting, the signature, the caveat, the disclaimer and the fallback -
+#: everything a letter says that is not about the child in front of it. In
+#: config rather than in code so product and legal can reword it without a
+#: developer, and versioned so a letter can be traced to the wording that
+#: produced it.
+_FRAME_PATH = os.path.join("data", "snapshot", "letter_frame.json")
+
+_FRAME_CACHE: Optional[Dict[str, Any]] = None
+
+#: The brief the model is given. Bump it when the brief changes materially,
+#: so two letters that read differently can be told apart by more than a
+#: guess about which week they were written in.
+PROMPT_VERSION = "2026-09-16"
+
+
+def letter_frame() -> Dict[str, Any]:
+    """The fixed frame, loaded once."""
+    global _FRAME_CACHE
+    if _FRAME_CACHE is None:
+        with open(_FRAME_PATH, encoding="utf-8") as handle:
+            _FRAME_CACHE = json.load(handle)
+    return _FRAME_CACHE
 
 _SYSTEM_PROMPT = """You are Eko. You sat next to this child through four
 activities and you are telling their parent what you saw.
@@ -149,6 +173,19 @@ word"), how many times something happened ("twice he held a sound"), pace in
 words rather than digits ("faster than most children her age"), and above
 all the child's own words - stand, pie, fone.
 
+Two openings for the same near-perfect child, so the difference is plain:
+
+  NO:  "Vedika spelled every word correctly and worked out every puzzle."
+       A tally. It says how much, not how, and it fits any careful child.
+
+  YES: "Vedika stays with a hard question until she has it. One puzzle asked
+       her to work out a score from two different card values; she sat with
+       it for thirty-three seconds, longer than she spent on anything else,
+       and got it right. She does the same reading aloud - twice she held a
+       sound while she worked out a longer word, then carried on. Where she
+       is still working is new words: she thought riddle meant a kind of
+       envelope."
+
 The test: could this opening be moved onto another child? If yes, rewrite
 it. And if the data does not support a way of working - an ordinary pace, no
 long pauses, no fast guesses - do not invent one. Open with the strongest
@@ -195,7 +232,8 @@ STRUCTURE - return JSON with exactly these keys
     "items": [
       {
         "point": "Something specific this child actually did. Name it.",
-        "worth_asking": "A question the parent can ask the teacher. Start it with 'Worth asking' or 'Worth mentioning'."
+        "worth_asking": "A question the parent can ask the teacher. Start it with 'Worth asking' or 'Worth mentioning'.",
+        "about": "strength or still_growing - which kind of thing this item is"
       }
     ]
   },
@@ -210,19 +248,24 @@ RULES
   the attempt this child actually wrote for it, copied exactly from
   `what_the_child_did`. Invent nothing; omit the key when there is nothing
   to quote.
-- "still_growing": THREE items where the evidence allows it, and never more
-  than five. Every growth edge in the evidence must be covered by one of
-  them - list its signal name in that item's "signals". Growth edges that
-  are really the same finding belong in ONE item: four read-aloud sounds are
-  one thing to work on at home, not four. Merging them is how the letter
-  stays readable. Dropping one is not allowed.
-- Order the still_growing items so the most useful to the parent comes first.
+- "still_growing": ONE item for each entry in `growth_clusters`, in the
+  order they are given, and nothing else. A cluster is one thing a parent
+  can act on: four sounds that slipped while reading aloud are one item,
+  not four. Copy ALL of that cluster's signal names into that item's
+  "signals" - every one, even the ones your paragraph does not have room to
+  name - and write the paragraph about what they have in common. Nothing is
+  dropped and nothing is split.
 - "level_note": include it ONLY when `level_fit` carries a "suggest" value,
   and write it from the "why" given there, in your own plain words. When
   `level_fit` has no suggestion, the key must be absent or null.
-- "for_the_conference": exactly 3 items. At least one must be a strength -
-  parents arrive at a conference braced for bad news. Each item names
-  something specific the child did and ends with a question worth asking.
+- "for_the_conference": exactly 3 items, and they are balanced. At least
+  one is a strength, because parents arrive at a conference braced for bad
+  news. At least one is something still growing, because this is the page
+  they carry into the room: three pieces of good news is not a conversation,
+  and it is worst for the child who is finding everything hard - their
+  parent leaves with nothing to ask for. Mark each item "about":
+  "strength" or "still_growing". Each names something specific the child did
+  and ends with a question worth asking.
 - Every "signals" entry must appear verbatim in `allowed_signal_names`.
   There is no signal called "Adaptability". If you cannot find a name in
   that list, the observation does not exist.
@@ -231,8 +274,15 @@ RULES
   Logic Quest measured. The paragraph text follows the same rule: do not
   write that something "was also evident in" an activity that did not
   measure it.
-- If `flawless_activities` is not empty, each one gets its own item in
-  "what_i_noticed". A run with nothing to fault is still an observation.
+- Each entry in `flawless_activities` is a fact about something with
+  nothing to fault in it, written as a note rather than as a sentence: put
+  it in your own words. Each gets its own item in "what_i_noticed" - and
+  ONLY there. A run with nothing to fault is an
+  observation, not an opening: "she spelled every word correctly" is the one
+  thing the opening may not say, however true it is. For a child who got
+  everything right, open on HOW they got there: the word they took longest
+  over and still worked out, the puzzle they stayed with, the sound they
+  held while they thought.
 - Never write: score, percent, grade level, above, below, average, advanced,
   behind, diagnosis, assessment score, excels, outstanding.
 - Never compare this child to any other child or to a standard.
@@ -269,6 +319,16 @@ def _child_specific_rules(evidence: Dict[str, Any]) -> str:
 
     lines = ["THIS CHILD", "", describe_pronouns(pronouns, name)]
 
+    activities = evidence.get("activities_completed") or []
+    if activities:
+        lines.append(
+            "\nThese names never appear in the opening: "
+            + ", ".join(activities)
+            + ". Not \"In \" one, not \"during\" one, not \"as seen in\" one. "
+            "The parent does not know what they are. Say what happened - the "
+            "word, the puzzle, the sentence - and let it stand on its own."
+        )
+
     span = session.get("span_phrase")
     activities = session.get("activities") or evidence.get("activities_completed") or []
     if span and activities:
@@ -281,10 +341,14 @@ def _child_specific_rules(evidence: Dict[str, Any]) -> str:
 
     if level.get("suggest"):
         lines.append(
-            "\nWrite a level_note. What it has to say, in your own plain "
-            "words: %s Name %s as the thing to try next time, and do not "
-            "turn it into a judgement about this child."
-            % (level["why"], level["suggest"])
+            "\nWrite a level_note, in your own words and about %s. What is "
+            "true: this set was %s. Say that %s would suit %s better next "
+            "time, say what a parent gets out of trying it, and make clear "
+            "this is about the set and not about where %s should be at "
+            "school. Two or three sentences, and none of them a sentence you "
+            "would write about a different child."
+            % (name, level.get("means", "not a good fit"), level["suggest"],
+               name, name)
         )
     else:
         lines.append("\nThis set fitted this child. Omit level_note entirely.")
@@ -384,6 +448,14 @@ _STYLE_PATTERNS = [
     (re.compile(r"\bwhat a delight\b", re.I), "evaluation instead of observation"),
     (re.compile(r"\bthe child (demonstrates|exhibits|displays)\b", re.I),
      "report language instead of Eko's voice"),
+    (re.compile(r"\bdemonstrat(?:ed|es|ing) (?:mastery|a mastery|strong|"
+                r"solid|excellent|good|clear)\b", re.I),
+     "assessment language instead of what you saw"),
+    (re.compile(r"\b(?:mastery|proficiency|competency|aptitude) (?:of|in|with)\b",
+                re.I),
+     "assessment language instead of what you saw"),
+    (re.compile(r"\bsolid (?:phonetic|phonics|reading|maths?) knowledge\b", re.I),
+     "assessment language instead of what you saw"),
 ]
 
 #: A quoted misspelling must never land as a correction. The shape is always:
@@ -412,8 +484,32 @@ _GENDERED_PRONOUNS = re.compile(r"\b(he|she|his|her|hers|him|himself|herself)\b"
 #: The plural forms, for the opposite check: once a child's pronouns ARE
 #: known, "they worked it out and they were pleased" reads like a form letter
 #: about nobody, which is the complaint this exists to catch.
+#:
+#: But not every "they" is the child. "Ask her what she thinks they mean"
+#: is about the words, and flagging it sends the writer back to fix a
+#: sentence that was right. So a plural pronoun counts only where it can
+#: only be the child: in a sentence that names them, standing as the subject
+#: of something a child does, or owning something only a child owns.
 _PLURAL_PRONOUNS = re.compile(
     r"\b(they|them|their|theirs|themselves|themself)\b", re.I
+)
+
+_SENTENCE = re.compile(r"[^.!?]+[.!?]?")
+
+_CHILD_DOES = re.compile(
+    r"\bthey\s+(?:also\s+|then\s+|still\s+|never\s+|did\s+not\s+|do\s+not\s+|"
+    r"had\s+|have\s+)?"
+    r"(?:read|wrote|write|spell|spelled|answer|answered|work|worked|choose|"
+    r"chose|took|stayed|gave|sat|kept|went|said|guessed|paused|reread|"
+    r"sounded|stretched|skipped|tried|remembered|noticed)\b",
+    re.I,
+)
+
+_CHILD_OWNS = re.compile(
+    r"\btheir\s+(?:own\s+)?(?:spelling|reading|writing|handwriting|answers?|"
+    r"voice|pace|work|thinking|method|approach|sounds?|words?|attempts?|"
+    r"strategy|strategies|year|age|confidence|ear)\b",
+    re.I,
 )
 
 #: Verbs that have to move with the pronoun, or "he is" becomes "they is".
@@ -447,6 +543,7 @@ _FOLLOWED_BY_A_WORD = re.compile(r"\s+\w")
 _SPACE_BEFORE_PUNCTUATION = re.compile(r"\s+([,.;:?])")
 _MISSING_SPACE_AFTER = re.compile(r"([,;:])(?=[^\s\d])")
 _REPEATED_WORD = re.compile(r"\b(\w+)(\s+\1)\b", re.I)
+_DANGLING_COMMA = re.compile(r",\s*([.?!])")
 _DOUBLE_SPACE = re.compile(r"[ \t]{2,}")
 _SENTENCE_START = re.compile(r"(^|[.?]\s+)([a-z])")
 _A_BEFORE_VOWEL = re.compile(r"\b(a)\s+([aeiou]\w+)", re.I)
@@ -478,6 +575,8 @@ def tidy_prose(text: str) -> str:
 
     text = _DOUBLE_SPACE.sub(" ", text)
     text = _SPACE_BEFORE_PUNCTUATION.sub(r"\1", text)
+    # A comma with nothing after it: the clause it held went somewhere.
+    text = _DANGLING_COMMA.sub(r"\1", text)
     text = _MISSING_SPACE_AFTER.sub(r"\1 ", text)
     text = _REPEATED_WORD.sub(r"\1", text)
 
@@ -499,8 +598,9 @@ def tidy_prose(text: str) -> str:
         return ("An " if match.group(0)[0].isupper() else "a ") + word
 
     text = _AN_BEFORE_CONSONANT.sub(fix_an, text)
+    text = text.strip()
     text = _SENTENCE_START.sub(lambda m: m.group(1) + m.group(2).upper(), text)
-    return text.strip()
+    return text
 
 
 def _tidy(value: Any) -> Any:
@@ -624,10 +724,189 @@ def _repair(letter: Any, evidence: Optional[Dict[str, Any]] = None) -> Any:
     # writer's opinion, so there is nothing to ask the writer about.
     if evidence:
         _strike_unearned_activities(letter, evidence)
+        _strike_activity_names(letter, evidence)
+        _strike_counting_from_the_opening(letter, evidence)
         _strike_unsupported_level_note(letter, evidence)
         _strike_invented_quotes(letter, evidence)
+        _file_uncovered_growth_edges(letter, evidence)
 
     return letter
+
+
+def _file_uncovered_growth_edges(
+    letter: Dict[str, Any], evidence: Dict[str, Any]
+) -> None:
+    """Put a dropped growth edge back where it belongs.
+
+    A child with eleven growth edges gets three sections, and a model
+    grouping eleven findings into three will lose one of the names on the
+    way. Asking again mostly produces a different dropped name, and three
+    rounds of that ends in the generic letter - which is how a child who
+    needs the letter most ends up with the one that says nothing.
+
+    Which area and which activity an edge belongs to is Stage A's fact, not
+    the writer's opinion, so an edge that was left out is filed into the
+    section already carrying its siblings. Only a section covering the same
+    area AND the same activity qualifies: that is what "the same finding"
+    means, and it is the grouping the letter was asked for in the first
+    place. An edge with no sibling section stays uncovered, and the writer
+    is asked again for it.
+    """
+    growing = letter.get("still_growing")
+    if not isinstance(growing, list) or not growing:
+        return
+
+    edges = {g["signal_name"]: g for g in evidence.get("growth_edges") or []}
+    covered = {
+        name for item in growing for name in (item.get("signals") or [])
+    }
+    missing = [edges[n] for n in edges if n not in covered]
+    if not missing:
+        return
+
+    #: Which area and activity each section already speaks for.
+    speaks_for = []
+    for item in growing:
+        areas, activities = set(), set()
+        for name in item.get("signals") or []:
+            sibling = edges.get(name)
+            if sibling:
+                areas.add(sibling.get("area"))
+                activities.add(sibling.get("seen_in"))
+        speaks_for.append((areas, activities))
+
+    def file_under(edge: Dict[str, Any], item: Dict[str, Any],
+                   areas: set, why: str) -> None:
+        item.setdefault("signals", []).append(edge["signal_name"])
+        seen = item.setdefault("seen_in", [])
+        if edge["seen_in"] not in seen:
+            seen.append(edge["seen_in"])
+        areas.add(edge.get("area"))
+        logger.info(
+            "snapshot writer: filing %r under %r (%s)",
+            edge["signal_name"], item.get("headline", "?"), why,
+        )
+
+    for edge in missing:
+        # First choice: a section already speaking for this area AND this
+        # activity. That is the same finding by both measures.
+        for item, (areas, activities) in zip(growing, speaks_for):
+            if edge.get("area") in areas and edge.get("seen_in") in activities:
+                file_under(edge, item, areas, "same area, same activity")
+                break
+        else:
+            # Second choice: the section speaking for this edge's area. Stage
+            # A grouped the edges by area and asked for one section each, so
+            # a section that already carries any of this cluster is where the
+            # rest of it belongs.
+            for item, (areas, _) in zip(growing, speaks_for):
+                if edge.get("area") in areas:
+                    file_under(edge, item, areas, "same cluster")
+                    break
+
+
+def _strike_counting_from_the_opening(
+    letter: Dict[str, Any], evidence: Dict[str, Any]
+) -> None:
+    """Drop the sentence that counts, and keep the rest of the opening.
+
+    Only where the paragraph can spare it: an opening cut down to one
+    sentence is a worse opening than one that counts, so a paragraph with
+    nothing else in it is left alone and the writer is asked again instead.
+    """
+    opening = letter.get("opening")
+    if not isinstance(opening, dict):
+        return
+
+    paragraph = opening.get("paragraph")
+    if not isinstance(paragraph, str) or not paragraph.strip():
+        return
+
+    sentences = [s for s in _SENTENCE.findall(paragraph) if s.strip()]
+    kept = [s for s in sentences if not _OPENING_TALLY.search(s)]
+    if len(kept) == len(sentences):
+        return
+    if len(kept) < 2:
+        # Nothing left to stand on. Let the validator ask for it again.
+        return
+
+    logger.info(
+        "snapshot writer: dropping a counting sentence from the opening"
+    )
+    opening["paragraph"] = tidy_prose(" ".join(s.strip() for s in kept))
+
+
+def _strike_activity_names(
+    letter: Dict[str, Any], evidence: Dict[str, Any]
+) -> None:
+    """Take the module names out of the prose, and leave the sentences.
+
+    "In Word Wizard, she spelled..." and "...a pattern puzzle in Logic Quest,
+    working through it" are both a sentence with a phrase attached. A parent
+    does not know what Word Wizard is, and the phrase is the only part of the
+    sentence that tells them nothing, so it goes rather than being argued
+    about. `seen_in` still carries the activity as data, which is where a
+    name we invented belongs.
+
+    Only prepositional phrases: they lift out cleanly. A sentence built
+    around the name is left alone rather than mangled.
+    """
+    names = [a for a in (evidence.get("activities_completed") or []) if a]
+    if not names:
+        return
+    alternatives = "|".join(re.escape(name) for name in names)
+    phrase = re.compile(
+        r"(?P<before>\s*,)?\s*\b(?:in|during|throughout|within|over in|"
+        r"as seen in|seen in|from)\s+(?:the\s+)?(?:" + alternatives + r")"
+        r"(?:\s+(?:activity|challenge|quest|task))?\b(?P<after>\s*,)?",
+        re.I,
+    )
+
+    def without(match: "re.Match[str]") -> str:
+        """Keep the comma that belongs to the sentence, drop the phrase's own.
+
+        "In Word Wizard, she spelled" opens with the phrase, and its comma
+        goes with it. "a pattern puzzle in Logic Quest, working through it"
+        does not: that comma is holding the rest of the sentence together,
+        so it stays.
+        """
+        # Something pointing back at the activity: "in Logic Quest, where
+        # she..." The name is the antecedent, so removing it leaves a clause
+        # attached to nothing. Leave the sentence whole and let the writer
+        # rewrite it.
+        after = match.string[match.end():].lstrip()
+        if re.match(r"(?:where|which|in which|when)\b", after, re.I):
+            return match.group(0)
+
+        before = match.string[:match.start()].rstrip()
+        opens_a_sentence = not before or before.endswith((".", "?", "!"))
+        if opens_a_sentence:
+            return " "
+        return ", " if match.group("after") or match.group("before") else " "
+
+    def strip_prose(value: Any) -> Any:
+        if isinstance(value, str):
+            stripped = phrase.sub(without, value)
+            if stripped != value:
+                logger.info(
+                    "snapshot writer: taking an activity name out of the prose"
+                )
+                return tidy_prose(stripped)
+            return value
+        if isinstance(value, list):
+            return [strip_prose(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                key: item if key in _COPIED_VERBATIM or key == "meta"
+                else strip_prose(item)
+                for key, item in value.items()
+            }
+        return value
+
+    for section in ("opening", "what_i_noticed", "still_growing",
+                    "level_note", "for_the_conference", "closing"):
+        if section in letter:
+            letter[section] = strip_prose(letter[section])
 
 
 def _strike_unsupported_level_note(
@@ -741,27 +1020,13 @@ def _conform_pronouns(letter: Any, evidence: Optional[Dict[str, Any]]) -> Any:
     return _neutralise_letter(letter)
 
 
-_GENERIC_LETTER: Dict[str, Any] = {
-    "opening": {
-        "headline": "We sat down together and worked through four activities.",
-        "paragraph": (
-            "Thank you for letting me spend this time with your child. "
-            "There is plenty here worth talking about, and the notes below "
-            "are a starting point for that conversation."
-        ),
-    },
-    "what_i_noticed": [],
-    "still_growing": [],
-    "for_the_conference": {
-        "headline": "Things you could mention at a parent-teacher conference",
-        "items": [],
-    },
-    "closing": (
-        "This is a starting point for a conversation about how your child "
-        "learns. It is not a diagnosis or a formal assessment, and it "
-        "compares your child to no one."
-    ),
-}
+def _generic_letter() -> Dict[str, Any]:
+    """What a parent gets when the model failed every attempt.
+
+    It says nothing about their child because nothing about their child could
+    be verified, and sending that is more honest than sending a guess.
+    """
+    return json.loads(json.dumps(letter_frame()["fallback"]))
 
 #: Keys the letter must carry, and the ones it must no longer carry.
 _REQUIRED_KEYS = ("opening", "what_i_noticed", "still_growing", "for_the_conference")
@@ -780,6 +1045,10 @@ _MAX_ATTEMPTS = 3
 _ENOUGH_DETAIL = 6
 
 _MAX_NOTICED = 4
+
+#: How many times to ask for the opening again, when only the opening is
+#: wrong. The first pass tends to fix the headline and leave the tally.
+_OPENING_ATTEMPTS = 2
 
 #: Three growth edges is what a parent can act on. More than five is a list
 #: nobody finishes, so related findings are grouped rather than dropped.
@@ -800,6 +1069,17 @@ def style_violations(letter: Dict[str, Any]) -> List[str]:
 #: Marks a violation as a matter of voice rather than of harm.
 _STYLE_PREFIX = "voice - "
 
+#: The opening has rules of its own, and a model will break them three times
+#: running on a child who did everything right: "spelled every word
+#: correctly" is true, salient, and exactly what an opening may not say.
+#:
+#: Breaking them is worth asking again for, and worth preferring a draft that
+#: does not. It is not worth the generic letter: a parent handed that learns
+#: nothing about their own child, and a counting opening is a worse opening,
+#: not a danger to anyone. So these rank between voice and harm - never
+#: shipped while a cleaner draft exists, and shipped rather than nothing.
+_OPENING_PREFIX = "opening - "
+
 #: What the child IS, rather than what the child did. The second way to get
 #: an opening wrong: it avoids counting by labelling, which fixes nothing.
 _LABELLING = re.compile(
@@ -816,6 +1096,57 @@ _LABELLING = re.compile(
     re.I,
 )
 
+#: "Spelled every word correctly." No digit in it, and still a score. The
+#: opening is where this matters most, and it is the phrase a model reaches
+#: for the moment numbers are blocked. Sections may still say "every word he
+#: wrote was spelled correctly" - it is the opening that must describe how
+#: the child works rather than how much of it they got right.
+_OPENING_TALLY = re.compile(
+    r"\b(?:spelled|answered|solved|worked out|read|got|completed|finished)\s+"
+    r"(?:almost\s+|nearly\s+)?(?:every|all|each)\s+(?:of\s+)?(?:the\s+|his\s+|"
+    r"her\s+|their\s+)?(?:word|words|question|questions|puzzle|puzzles|"
+    r"sentence|sentences|item|items|one|ones)\b"
+    r"|\bwith perfect accuracy\b"
+    r"|\b(?:every|all|each) (?:single )?(?:word|question|puzzle|sentence)\b[^.]{0,40}"
+    r"\b(?:correct|correctly|right)\b"
+    r"|\bperfect (?:score|run|sheet)\b",
+    re.I,
+)
+
+#: "Approaches tasks with confidence and precision." Every rule kept, and
+#: it fits any child alive. The nouns are the tell: a quality the child is
+#: said to possess, in place of something they were seen doing.
+_ABSTRACT_HEADLINE = re.compile(
+    # The construction, not the noun that ends it. "Approaches tasks with
+    # confidence" and "approaches tasks with a thoughtful and steady pace"
+    # are the same sentence with the last word swapped, and a list of nouns
+    # catches whichever ones it happens to contain - the second one shipped
+    # to a parent because "pace" was not on the list.
+    #
+    # What gives the shape away is the generic object. A child is never seen
+    # doing "tasks": they are seen doing a spelling, a puzzle, a page.
+    r"\b(?:approach(?:es|ed)?|tackl(?:es|ed)|handl(?:es|ed)|goes about|"
+    r"works? through|worked through|engag(?:es|ed) with|deals? with)\s+"
+    r"(?:each |every |the |his |her |their |different |various )?"
+    r"(?:tasks?|things|activities|work|challenges|problems|questions)\b"
+    # Or a quality the child is said to possess, in its usual shapes.
+    r"|\bwith (?:a |an )?(?:great |real |quiet |strong |thoughtful |steady )*"
+    r"(?:confidence|precision|determination|curiosity|persistence|"
+    r"enthusiasm|diligence|focus|accuracy|care|ease|maturity|independence|"
+    r"creativity|patience|attention)\b"
+    r"|\b(?:is|was) (?:a|an) (?:strong|natural|gifted|confident|able|"
+    r"talented|bright|capable|thoughtful|careful|diligent) "
+    r"(?:learner|reader|speller|thinker|child|student|worker)\b"
+    r"|\bha[sd] (?:a|an) (?:knack|keen eye|gift|flair|natural ear|good ear|"
+    r"head|talent|aptitude)\b"
+    r"|\bha[sd] (?:strong|excellent|good|advanced) \w+ "
+    r"(?:skills|ability|abilities)\b"
+    r"|\bshow(?:s|ed|n)? (?:a )?(?:strong|excellent|good|remarkable|"
+    r"impressive)\s+(?:understanding|grasp|command|ability|aptitude)\b"
+    r"|\bdemonstrat(?:es|ed) (?:a )?(?:remarkable|strong|clear|impressive)\b",
+    re.I,
+)
+
 #: Some way of saying "and here is where they are still working". The
 #: opening names one, plainly, before any praise.
 _NAMES_A_GROWTH_EDGE = re.compile(
@@ -829,6 +1160,7 @@ _NAMES_A_GROWTH_EDGE = re.compile(
 #: that an opening draws on more than one of them.
 _ACTIVITY_BUCKETS = {
     "words_written": "spelling",
+    "words_spelled_correctly": "spelling",
     "sentences_read": "speaking",
     "story_titles": "comprehension",
     "questions_worked_out": "comprehension",
@@ -916,17 +1248,22 @@ class SnapshotWriter:
                     self._generate(evidence, violations=seen or None), evidence
                 )
                 violations = self._validate(letter, evidence)
-                harm = [v for v in violations if not v.startswith(_STYLE_PREFIX)]
                 style = [v for v in violations if v.startswith(_STYLE_PREFIX)]
+                opening = [v for v in violations
+                           if v.startswith(_OPENING_PREFIX)]
+                harm = [v for v in violations
+                        if not v.startswith((_STYLE_PREFIX, _OPENING_PREFIX))]
                 detail = specificity(letter, evidence)
 
                 # Rank every draft that breaks no rule: fewest voice slips
                 # first, then the one that used most of this child's own
                 # words. Keeping whichever arrived first is what made the
                 # letter good some runs and vague others.
-                rank = (-len(style), detail)
+                rank = (-len(opening), -len(style), detail)
                 if not harm and (best is None or rank > best_rank):
-                    best, best_rank, best_style = letter, rank, style
+                    best, best_rank, best_style = (
+                        letter, rank, style + opening
+                    )
 
                 logger.info(
                     "snapshot writer: attempt %d - %d violation(s), "
@@ -956,13 +1293,18 @@ class SnapshotWriter:
             # little thin, still belongs to this child; the generic letter
             # belongs to no one.
             if best is not None:
+                best = self._rewrite_opening_if_needed(best, evidence)
+                best_style = [
+                    v for v in best_style
+                    if not v.startswith(_OPENING_PREFIX)
+                ] + self._check_opening(best, evidence)
                 if best_style:
                     logger.warning(
                         "snapshot writer: shipping with voice slips %s", best_style
                     )
                 return self._finalise(
                     best, evidence, style_slips=best_style,
-                    specificity=best_rank[1] if best_rank else 0,
+                    specificity=best_rank[2] if best_rank else 0,
                 )
 
             logger.warning("snapshot writer: no usable letter, using generic")
@@ -987,16 +1329,20 @@ class SnapshotWriter:
                 + "\n".join(f"- {v}" for v in violations)
             )
 
-        edges = [g["signal_name"] for g in evidence.get("growth_edges", [])]
+        clusters = evidence.get("growth_clusters") or []
+        plan = "\n".join(
+            f"  {index}. {cluster['area_display_name']} "
+            f"(seen in {', '.join(cluster['seen_in'])}) - signals: "
+            + ", ".join(cluster["signals"])
+            for index, cluster in enumerate(clusters, start=1)
+        )
         user_prompt = (
             "Below is the structured evidence for one child. "
             "Write the letter now using ONLY this data.\n\n"
-            "Every one of these growth edges must be covered somewhere in "
-            '"still_growing", named in that item\'s "signals": '
-            f"{', '.join(edges) if edges else 'none'}.\n"
-            "Group the ones that are really the same finding into a single "
-            f"item. Aim for three items and never write more than "
-            f"{_ABSOLUTE_MAX_GROWING}.\n\n"
+            f'"still_growing" has exactly {len(clusters)} item(s), one for '
+            "each of these, in this order, each carrying every signal name "
+            "listed beside it:\n"
+            f"{plan or '  (none)'}\n\n"
             "EVIDENCE (JSON):\n"
             f"{json.dumps(evidence, indent=2, ensure_ascii=False, default=str)}"
         )
@@ -1016,6 +1362,125 @@ class SnapshotWriter:
             # The letter got longer: every growth edge now reaches the parent,
             # and the conference section is new.
             max_tokens=5000,
+        )
+        return json.loads(response.choices[0].message.content)
+
+    # ------------------------------------------------------------------
+    def _rewrite_opening_if_needed(
+        self, letter: Dict[str, Any], evidence: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Ask again for the opening alone, when only the opening is wrong.
+
+        The opening is the hardest paragraph in the letter and the one a
+        parent reads first, and a model asked to rewrite a whole letter to
+        fix one paragraph tends to rewrite everything except that paragraph.
+        Asked for the paragraph on its own, with the problems named, it
+        mostly gets it. If it does not, the draft we already had is kept:
+        this can improve the letter and can never cost it.
+        """
+        def opening_problems(draft: Dict[str, Any]) -> List[str]:
+            return [
+                v for v in self._check_opening(draft, evidence)
+                if v.startswith(_OPENING_PREFIX)
+            ]
+
+        best = letter
+        problems = opening_problems(best)
+
+        # Twice, because the first pass usually fixes the headline and leaves
+        # the tally: "spelled every word correctly" is the most striking true
+        # thing about a child who did, and it takes being told twice.
+        for _ in range(_OPENING_ATTEMPTS):
+            if not problems:
+                return best
+
+            try:
+                rewritten = self._generate_opening(best, evidence, problems)
+            except Exception as exc:
+                logger.warning("snapshot writer: opening rewrite failed: %s", exc)
+                return best
+
+            candidate = json.loads(json.dumps(best))
+            candidate["opening"] = rewritten
+            candidate = _repair(candidate, evidence)
+
+            after = opening_problems(candidate)
+            harmful = [
+                v for v in self._validate(candidate, evidence)
+                if not v.startswith((_STYLE_PREFIX, _OPENING_PREFIX))
+            ]
+            if harmful or len(after) >= len(problems):
+                logger.info(
+                    "snapshot writer: keeping the opening we had (%d problem(s) "
+                    "before, %d after%s)",
+                    len(problems), len(after),
+                    ", and the rewrite broke a rule" if harmful else "",
+                )
+                return best
+
+            logger.info(
+                "snapshot writer: opening rewritten, %d problem(s) left",
+                len(after),
+            )
+            best, problems = candidate, after
+
+        return best
+
+    def _generate_opening(
+        self,
+        letter: Dict[str, Any],
+        evidence: Dict[str, Any],
+        problems: List[str],
+    ) -> Dict[str, Any]:
+        """One focused call: this paragraph, these problems, nothing else."""
+        import openai
+
+        opening = letter.get("opening") or {}
+        system = (
+            _SYSTEM_PROMPT[_SYSTEM_PROMPT.index("THE OPENING"):
+                           _SYSTEM_PROMPT.index("STRUCTURE - return JSON")]
+            + "\n\n" + _child_specific_rules(evidence)
+            + "\n\nReturn JSON with exactly two keys, and nothing else: "
+            '{"headline": "...", "paragraph": "..."}'
+        )
+        user = (
+            "This opening breaks the rules below. Write it again - only the "
+            "opening, and about this child.\n\n"
+            "Two things, before you start.\n"
+            "  - Say nothing at all about how much this child got right or "
+            "wrong. Not how many, not 'every', not 'all'. If they spelled "
+            "every word correctly, the sentence to write instead is about "
+            "the word they took LONGEST over and still got: name it and say "
+            "how long. The times are in `what_the_child_did`.\n"
+            "  - The headline is something this child was seen DOING. "
+            "'Takes his time, and it usually pays off.' 'Stays with a hard "
+            "question until she has it.' Never a quality they are said to "
+            "have: not care, not focus, not determination, not attention, "
+            "not confidence.\n\nWHAT IS WRONG:\n"
+            + "\n".join(f"- {p}" for p in problems)
+            + "\n\nTHE OPENING AS IT STANDS:\n"
+            f"  headline: {opening.get('headline', '')}\n"
+            f"  paragraph: {opening.get('paragraph', '')}\n\n"
+            "WHAT THIS CHILD ACTUALLY DID (use it, quote it):\n"
+            + json.dumps({
+                "must_mention": evidence.get("must_mention"),
+                "could_mention": evidence.get("could_mention"),
+                "what_the_child_did": evidence.get("what_the_child_did"),
+                "growth_clusters": evidence.get("growth_clusters"),
+                "session": evidence.get("session"),
+            }, indent=2, ensure_ascii=False, default=str)
+        )
+
+        client = openai.OpenAI(api_key=self._settings.openai.api_key)
+        response = client.chat.completions.create(
+            model=self._settings.openai.analysis_model,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=0.2,
+            max_tokens=700,
         )
         return json.loads(response.choices[0].message.content)
 
@@ -1067,11 +1532,13 @@ class SnapshotWriter:
                 "cover each one in an item, grouping the ones that are the "
                 f"same finding: {', '.join(sorted(uncovered))}"
             )
-        if expected and len(growing) > _ABSOLUTE_MAX_GROWING:
+        clusters = evidence.get("growth_clusters") or []
+        if clusters and len(growing) > len(clusters):
             violations.append(
-                f"{_STYLE_PREFIX}still_growing has {len(growing)} items, which "
-                "is more than a parent will read; group the ones that are the "
-                f"same finding into at most {_ABSOLUTE_MAX_GROWING}"
+                f"{_STYLE_PREFIX}still_growing has {len(growing)} items where "
+                f"the evidence groups into {len(clusters)}; one item per "
+                "cluster, so a parent is given things to act on rather than a "
+                "list to get through"
             )
         if not expected and growing:
             violations.append("still_growing invents growth edges not in the evidence")
@@ -1096,6 +1563,24 @@ class SnapshotWriter:
                 violations.append(
                     "a conference item has no question for the parent to ask"
                 )
+
+        # Balance, both ways. Never fatal: a lopsided page is still a page
+        # about this child, and the generic letter is about nobody.
+        kinds = {str(item.get("about", "")).strip().lower()
+                 for item in conference_items}
+        if conference_items and "strength" not in kinds:
+            violations.append(
+                f"{_STYLE_PREFIX}nothing in the conference section is a "
+                "strength; a parent arrives braced for bad news and this is "
+                "the page they take in with them"
+            )
+        if conference_items and "still_growing" not in kinds:
+            violations.append(
+                f"{_STYLE_PREFIX}everything in the conference section is good "
+                "news; one item has to be something still growing, or the "
+                "parent walks into the meeting with nothing to ask for - and "
+                "that lands hardest on the child who found the set hardest"
+            )
 
         violations.extend(self._check_signal_names(letter, evidence))
         violations.extend(self._check_polarity(letter, evidence))
@@ -1152,16 +1637,38 @@ class SnapshotWriter:
         for activity in evidence.get("activities_completed") or []:
             if activity and re.search(rf"\b{re.escape(activity)}\b", text, re.I):
                 violations.append(
-                    f"the opening names an activity ({activity!r}): say what "
-                    "happened, not which module it happened in"
+                    f"{_OPENING_PREFIX}it names an activity ({activity!r}): "
+                    "say what happened, not which module it happened in"
                 )
                 break
 
         match = _LABELLING.search(text)
         if match:
             violations.append(
-                f"the opening says what the child IS, not what they did: "
-                f"{match.group(0)!r}"
+                f"{_OPENING_PREFIX}it says what the child IS, not what they "
+                f"did: {match.group(0)!r}"
+            )
+
+        match = _ABSTRACT_HEADLINE.search(headline) or (
+            _ABSTRACT_HEADLINE.search(paragraph) if not headline else None
+        )
+        if match:
+            violations.append(
+                f"{_OPENING_PREFIX}the headline names a quality rather than "
+                f"something this child did: {match.group(0)!r}. It would fit "
+                "any child, and the opening has to be one that could not be "
+                "moved onto another one. Say what they were seen doing: "
+                "\"takes his time, and it usually pays off\", \"stays with a "
+                "hard question until she has it\""
+            )
+
+        match = _OPENING_TALLY.search(text)
+        if match:
+            violations.append(
+                f"{_OPENING_PREFIX}it counts what the child got right, even "
+                f"without a number: {match.group(0)!r}. Say what they DID "
+                "instead - the word they took longest over, the puzzle they "
+                "stayed with, the sound they held while they thought"
             )
 
         # A count anywhere is already fatal; in the opening it is the whole
@@ -1218,14 +1725,14 @@ class SnapshotWriter:
                 ]
             return []
 
-        match = _PLURAL_PRONOUNS.search(text)
-        if not match:
+        found = _plural_pronoun_for_the_child(letter, child)
+        if not found:
             return []
         return [
-            f"{_STYLE_PREFIX}plural pronoun {match.group(0)!r} in a letter "
-            f"about one child: {child} takes {pronouns['subject']}/"
-            f"{pronouns['object']}/{pronouns['possessive']}, and every verb "
-            "has to agree with it"
+            f"{_STYLE_PREFIX}plural pronoun for one child: {child} takes "
+            f"{pronouns['subject']}/{pronouns['object']}/"
+            f"{pronouns['possessive']}, with the verbs agreeing. Rewrite: "
+            f"{found!r}"
         ]
 
     # ------------------------------------------------------------------
@@ -1329,8 +1836,7 @@ class SnapshotWriter:
 
     # ------------------------------------------------------------------
     def _fallback(self, evidence: Dict[str, Any]) -> Dict[str, Any]:
-        letter = json.loads(json.dumps(_GENERIC_LETTER))
-        return self._finalise(letter, evidence, llm_generated=False)
+        return self._finalise(_generic_letter(), evidence, llm_generated=False)
 
     @staticmethod
     def _finalise(
@@ -1342,7 +1848,7 @@ class SnapshotWriter:
     ) -> Dict[str, Any]:
         name = evidence.get("child_name", "your child")
         pronouns = evidence.get("pronouns") or {}
-        closing = letter.get("closing") or _GENERIC_LETTER["closing"]
+        closing = letter.get("closing") or letter_frame()["fallback"]["closing"]
         if "{name}" in closing:
             closing = closing.replace("{name}", name)
         letter["closing"] = closing
@@ -1350,8 +1856,9 @@ class SnapshotWriter:
         # The frame of the letter. It is the same shape every time, so it is
         # written here rather than asked for: a model that has to produce
         # "Dear Parent," on every run will eventually produce something else.
-        letter["salutation"] = "Dear Parent,"
-        letter["signature"] = "Eko"
+        frame = letter_frame()
+        letter["salutation"] = frame["salutation"]
+        letter["signature"] = frame["signature"]
         letter["caveat"] = _caveat(evidence)
 
         # LS5 / LS3: these sections are gone. Strip them if a model produced
@@ -1359,11 +1866,9 @@ class SnapshotWriter:
         for key in _REMOVED_KEYS:
             letter.pop(key, None)
 
-        letter["branding"] = "The Dear Parent Project"
-        letter["disclaimer"] = (
-            f"This is a starting point for a conversation about how {name} "
-            "learns. It is not a diagnosis or a formal assessment, and it "
-            f"compares {pronouns.get('object', 'them')} to no one."
+        letter["branding"] = frame["branding"]
+        letter["disclaimer"] = frame["disclaimer"].format(
+            name=name, them=pronouns.get("object", "them")
         )
         letter["meta"] = {
             "llm_generated": llm_generated,
@@ -1383,8 +1888,47 @@ class SnapshotWriter:
             # from the profile or were the they/them fallback.
             "pronouns": pronouns.get("key", "they"),
             "pronouns_known": bool(pronouns.get("known")),
+            # Which wording produced this letter, for a parent who asks about
+            # it later and a reviewer who has to answer them.
+            "prompt_version": PROMPT_VERSION,
+            "frame_version": letter_frame().get("version"),
+            "model": get_settings().openai.analysis_model,
         }
         return letter
+
+
+def _plural_pronoun_for_the_child(
+    letter: Dict[str, Any], child_name: str
+) -> Optional[str]:
+    """The first sentence that calls this one child "they".
+
+    Only where the pronoun can only mean the child: alongside their name, as
+    the subject of something a child does, or owning something of theirs. A
+    "they" that means the words in a story, or two stories, is left alone.
+    """
+    for text in _prose(letter):
+        for sentence in _SENTENCE.findall(text):
+            if not _PLURAL_PRONOUNS.search(sentence):
+                continue
+            if _CHILD_DOES.search(sentence) or _CHILD_OWNS.search(sentence):
+                return sentence.strip()
+    return None
+
+
+def _prose(value: Any) -> List[str]:
+    """Every piece of writing in the letter, names and labels excluded."""
+    out: List[str] = []
+    if isinstance(value, str):
+        out.append(value)
+    elif isinstance(value, list):
+        for item in value:
+            out.extend(_prose(item))
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            if key in _COPIED_VERBATIM or key == "meta":
+                continue
+            out.extend(_prose(item))
+    return out
 
 
 def _activities_behind(text: str, evidence: Dict[str, Any]) -> set:
@@ -1414,12 +1958,8 @@ def _caveat(evidence: Dict[str, Any]) -> str:
     """
     name = evidence.get("child_name") or "your child"
     span = (evidence.get("session") or {}).get("span_phrase") or "a short sitting"
-    opener = span[0].upper() + span[1:]
-    return (
-        f"{opener} is a short time, and children have days. Take this as one "
-        "afternoon's worth of noticing rather than the whole picture. If "
-        f"something here does not sound like the {name} you know, trust "
-        "yourself first."
+    return letter_frame()["caveat"].format(
+        span=span[0].upper() + span[1:], name=name
     )
 
 

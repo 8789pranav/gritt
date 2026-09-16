@@ -207,6 +207,9 @@ class SnapshotService:
             ),
             "strengths": strengths,
             "growth_edges": growth_edges,
+            # The same growth edges, grouped into what a parent can act on.
+            # One section of the letter per cluster.
+            "growth_clusters": self._growth_clusters(growth_edges),
             "neutral_observations": neutral,
             "areas": self._areas(signals),
             "what_the_child_did": activity_detail,
@@ -293,6 +296,43 @@ class SnapshotService:
                     }
                 )
         return signals
+
+    @staticmethod
+    def _growth_clusters(
+        growth_edges: Sequence[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Growth edges gathered into one thing to work on each.
+
+        Four sounds that slipped while reading aloud are one thing a parent
+        can do something about, not four. The learning area is what makes
+        them one: it is the product's own answer to "is this the same
+        finding", and it is settled here rather than left to the writer,
+        which is what let eleven of seventeen edges fall out of a letter.
+
+        Ordered so the most useful to the parent comes first, by the same
+        rank the edges themselves are ordered by.
+        """
+        clusters: Dict[str, Dict[str, Any]] = {}
+        for edge in growth_edges:
+            cluster = clusters.setdefault(edge["area"], {
+                "cluster": edge["area"],
+                "area_display_name": edge["area_display_name"],
+                "signals": [],
+                "seen_in": [],
+                "questions_behind": 0,
+            })
+            cluster["signals"].append(edge["signal_name"])
+            if edge["seen_in"] not in cluster["seen_in"]:
+                cluster["seen_in"].append(edge["seen_in"])
+            cluster["questions_behind"] += edge.get("questions_behind", 0)
+
+        ordered = list(clusters.values())
+        rank = {
+            edge["area"]: index
+            for index, edge in reversed(list(enumerate(growth_edges)))
+        }
+        ordered.sort(key=lambda c: rank.get(c["cluster"], 99))
+        return ordered
 
     def _areas(self, signals: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """The merged picture, one entry per area that has evidence.
@@ -620,6 +660,18 @@ class SnapshotService:
             "words_written": [
                 m["attempt"] for m in (spelling.get("misspellings") or [])
             ],
+            # The words a child got RIGHT are evidence too: without these a
+            # flawless speller has nothing quotable, and a letter about them
+            # cannot reach across two activities without inventing something.
+            #
+            # Only the long ones. "Well" and "they" are spelled correctly by
+            # everyone and appear inside any sentence, so counting them as
+            # this child's own words makes a vague letter look specific.
+            # "Turnstile" and "amputate" are the ones a parent notices.
+            "words_spelled_correctly": [
+                w["word"] for w in (spelling.get("words") or [])
+                if w.get("correct") and len(str(w.get("word", ""))) >= 6
+            ],
             "sentences_read": [
                 s["sentence"] for s in (speaking.get("sentences") or [])
             ],
@@ -717,7 +769,7 @@ class SnapshotService:
             shares.append(right / answered)
 
         if not shares:
-            return {"fit": "unknown", "suggest": None, "why": ""}
+            return {"fit": "unknown", "suggest": None}
 
         share = sum(shares) / len(shares)
 
@@ -727,12 +779,9 @@ class SnapshotService:
             return {
                 "fit": "comfortable",
                 "suggest": "the level above",
-                "why": (
-                    "This child found the set comfortable. That shows they "
-                    "are secure here, but it does not show where their limit "
-                    "is. The level above would stretch them and show the "
-                    "parent more."
-                ),
+                # What is true, not how to say it. The sentences that used to
+                # live here came back in the letter unchanged.
+                "means": "secure here, but this set did not find their limit",
             }
 
         # Out of reach: a set this hard says less about the child than one
@@ -741,16 +790,13 @@ class SnapshotService:
             return {
                 "fit": "too_hard",
                 "suggest": "the level below",
-                "why": (
-                    "This set was hard for this child, and a set that is too "
-                    "hard tells a parent less than one pitched right. The "
-                    "level below would give a clearer picture and a better "
-                    "experience. This is not about where the child should be "
-                    "at school; it is about this set, today."
+                "means": (
+                    "out of reach today, so this run says less about the "
+                    "child than a set pitched right would"
                 ),
             }
 
-        return {"fit": "well_matched", "suggest": None, "why": ""}
+        return {"fit": "well_matched", "suggest": None}
 
     @staticmethod
     def _flawless_activities(
@@ -769,11 +815,7 @@ class SnapshotService:
             flawless.append(
                 {
                     "activity": display["spelling"],
-                    "what_happened": (
-                        "Every word this child wrote was spelled correctly, "
-                        "including the long ones. There was nothing to "
-                        "correct."
-                    ),
+                    "nothing_to_fault": "every word spelled correctly",
                 }
             )
 
@@ -782,9 +824,9 @@ class SnapshotService:
             flawless.append(
                 {
                     "activity": display["comprehension"],
-                    "what_happened": (
-                        "Every question about the stories came back, "
-                        "including the ones the stories only hint at."
+                    "nothing_to_fault": (
+                        "every question about the stories worked out, "
+                        "including the ones the stories only imply"
                     ),
                 }
             )
@@ -794,9 +836,7 @@ class SnapshotService:
             flawless.append(
                 {
                     "activity": display["logic"],
-                    "what_happened": (
-                        "Every puzzle was worked out, the hard ones included."
-                    ),
+                    "nothing_to_fault": "every puzzle worked out, hard ones included",
                 }
             )
 
@@ -807,9 +847,7 @@ class SnapshotService:
             flawless.append(
                 {
                     "activity": display["speaking"],
-                    "what_happened": (
-                        "Read every sentence without skipping a word."
-                    ),
+                    "nothing_to_fault": "every sentence read without a word skipped",
                 }
             )
 
