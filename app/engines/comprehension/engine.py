@@ -17,24 +17,32 @@ from app.engines.comprehension.loader import ComprehensionStoryLoader
 from app.engines.comprehension.scorer import LEVEL_BANDS, ComprehensionScorer
 from app.engines.comprehension.signals import ComprehensionSignalDeriver
 
+#: Guidance shown to parents, keyed by the lowest percentage that earns it.
+#: S6: advice describes what the child DID, not what the child IS. No
+#: labels, no grade levels, no scores.
 _RECOMMENDATIONS: Sequence[Tuple[float, str]] = (
     (
         90.0,
-        "Outstanding comprehension! Consider advancing to more challenging texts.",
+        "Your child understood the stories well, including the parts that "
+        "ask them to read between the lines. Try introducing slightly harder "
+        "books with richer vocabulary to keep them growing.",
     ),
     (
         75.0,
-        "Good understanding of the stories. Continue practising with varied "
-        "reading materials.",
+        "Your child understood most of what they read. Keep offering a mix "
+        "of story types and talking about what happened in each one.",
     ),
     (
         50.0,
-        "Keep practising! Try re-reading stories and discussing them with an adult.",
+        "Your child is building their understanding of stories. Re-reading "
+        "a story together and talking about what happened will help them "
+        "grow.",
     ),
     (
         0.0,
-        "Focus on listening carefully to stories. Practise summarising what "
-        "happened after each story.",
+        "Your child is starting to engage with stories. Focus on listening "
+        "to short stories together and talking about who, what and where "
+        "before moving on to harder questions.",
     ),
 )
 

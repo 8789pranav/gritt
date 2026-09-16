@@ -18,6 +18,21 @@ LEVEL_BANDS: Sequence[tuple[float, str]] = (
 )
 
 
+def _option_text(item, index) -> str:
+    """What an answer choice actually said.
+
+    The teacher table used to carry the index alone. "selected_index 0,
+    correct_index 3" tells a teacher nothing about what the child thought;
+    Word Wizard has shown the word and the attempt since the start.
+    """
+    if index is None:
+        return ""
+    for option in item.options:
+        if option.index == index:
+            return option.text
+    return ""
+
+
 class LogicScorer(Scorer[LogicItem, LogicResponse]):
     """Awards one point per correctly answered item.
 
@@ -56,7 +71,11 @@ class LogicScorer(Scorer[LogicItem, LogicResponse]):
                             "item_type": item.item_type,
                             "difficulty": item.difficulty.value,
                             "primary_tag": item.primary_tag.value,
+                            "question_text": item.question_text,
                             "correct_answer_index": item.correct_answer_index,
+                            "correct_answer": _option_text(
+                                item, item.correct_answer_index
+                            ),
                         },
                     )
                 )
@@ -79,8 +98,17 @@ class LogicScorer(Scorer[LogicItem, LogicResponse]):
                         "item_type": item.item_type,
                         "difficulty": item.difficulty.value,
                         "primary_tag": item.primary_tag.value,
+                        # So a letter can say which puzzle, in words rather
+                        # than by item number.
+                        "question_text": item.question_text,
                         "selected_answer_index": response.selected_answer_index,
+                        "selected_answer": _option_text(
+                            item, response.selected_answer_index
+                        ),
                         "correct_answer_index": item.correct_answer_index,
+                        "correct_answer": _option_text(
+                            item, item.correct_answer_index
+                        ),
                         "response_time_seconds": response.response_time_seconds,
                         "attempts": response.attempts,
                         "self_corrected": response.self_corrected,

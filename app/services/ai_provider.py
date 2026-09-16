@@ -232,3 +232,152 @@ class AIProvider:
 def get_ai_provider() -> AIProvider:
     """Factory used by services to obtain an AIProvider instance."""
     return AIProvider()
+
+
+# ---------------------------------------------------------------------------
+# Spelling convention classifier — uses GPT-4o-mini to detect phonetically
+# correct but conventionally wrong spellings that rule-based phonetic keys
+# miss (k/c, ow/ou, ur/er swaps). Batch call: one API call per submission.
+# ---------------------------------------------------------------------------
+
+_CONVENTION_SYSTEM_PROMPT = """\
+You are a phonics and spelling convention expert for early-grade spelling assessment.
+
+You will receive a JSON list of word pairs. Each pair has a "target" (the correct \
+spelling) and an "attempt" (what the child wrote).
+
+For each pair, classify the attempt into exactly one category:
+
+- "spelling_convention": The attempt SOUNDS IDENTICAL or nearly identical to the \
+target when spoken aloud, but is spelled differently. The child knows the sounds; \
+they just used the wrong spelling convention. Examples: candle→kandle (k for c), \
+outline→owtline (ow for ou), perplex→purplex (ur for er), turnstile→ternstile \
+(er for ur), phone→fone (f for ph), graph→graff (f for gh), clunk→clunck (ck for k), \
+candle→candel (el for le), standstill→standstil (dropped silent e on UNSTRESSED syllable).
+
+- "phonics_error": The attempt sounds DIFFERENT from the target — wrong vowel sound, \
+wrong consonant, missing sound, or extra sound. Examples: cat→cot (wrong vowel), \
+bug→bag (wrong vowel), home→hom (dropped silent e SHORTENS the vowel — phonics error), \
+turnstile→turnstil (dropped silent e SHORTENS the vowel — phonics error, NOT convention), \
+entertain→entertan (dropped silent e shortens the vowel — phonics error).
+
+- "exact_match": The attempt is spelled exactly the same as the target.
+
+- "unrelated": The attempt is a completely different word, not a misspelling.
+
+CRITICAL RULES — the silent 'e' distinction is the most important:
+
+1. A dropped silent 'e' that SHORTENS or CHANGES the vowel sound is ALWAYS a \
+PHONICS ERROR, never a convention error. The sound changed. Examples: \
+home→hom (long o becomes short o), turnstile→turnstil (long i becomes short i), \
+entertain→entertan (long a becomes short a), smile→smil (long i becomes short i).
+
+2. A dropped silent 'e' on an UNSTRESSED syllable where the sound does NOT change \
+IS a convention error. Example: standstill→standstil (the final syllable is \
+unstressed, so dropping the 'e' doesn't change the sound).
+
+3. To decide: pronounce both words aloud in your head. If they sound IDENTICAL, \
+it's a convention error. If the vowel sound changes (especially long→short), \
+it's a phonics error.
+
+4. Letter swaps that produce the SAME sound (k/c before a/o/u, ow/ou, ur/er, \
+ir/er, f/ph, f/gh, ck/k, c/k) are convention errors.
+
+5. When in doubt, ask: "Would these two sound identical if read aloud by a \
+teacher?" If yes, convention error. If the sound changes, phonics error.
+
+Return a JSON object: {"results": [{"index": 0, "category": "spelling_convention"}, ...]}
+The index is the 0-based position in the input list. Only include items where \
+category is "spelling_convention" — omit all other categories.
+"""
+
+_CONVENTION_USER_TEMPLATE = """\
+Classify each word pair below. Return JSON with "results" array.
+
+Word pairs:
+{pairs_json}
+"""
+
+
+class SpellingConventionClassifier:
+    """Batch-classify spelling attempts as convention errors or phonics errors.
+
+    Uses GPT-4o-mini for speed and cost. Falls back to rule-based
+    ``sounds_like()`` when OpenAI is not configured or the call fails.
+    """
+
+    def __init__(self) -> None:
+        self._settings = get_settings()
+        self._openai: Optional[openai.OpenAI] = None
+        if self._settings.openai.is_configured:
+            self._openai = openai.OpenAI(api_key=self._settings.openai.api_key)
+
+    @property
+    def is_configured(self) -> bool:
+        return self._openai is not None
+
+    def classify_batch(
+        self,
+        pairs: List[Dict[str, str]],
+    ) -> Dict[int, str]:
+        """Classify a batch of (target, attempt) pairs.
+
+        Parameters
+        ----------
+        pairs
+            List of ``{"target": "candle", "attempt": "kandle"}`` dicts.
+
+        Returns
+        -------
+        dict
+            Mapping of index → category string. Only includes indices that
+            are convention errors (category == "spelling_convention").
+            Other categories are omitted so the caller falls back to
+            rule-based logic for them.
+        """
+        if not self._openai or not pairs:
+            return {}
+
+        # Truncate to avoid token limits (typical submission has 10-20 words).
+        pairs_to_send = pairs[:50]
+
+        import json as _json
+        user_prompt = _CONVENTION_USER_TEMPLATE.format(
+            pairs_json=_json.dumps(pairs_to_send, indent=2)
+        )
+
+        try:
+            response = self._openai.chat.completions.create(
+                model="gpt-4o-mini",
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": _CONVENTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.0,
+                max_tokens=1000,
+            )
+        except Exception as exc:
+            logger.warning("Spelling convention AI call failed: %s", exc)
+            return {}
+
+        raw = response.choices[0].message.content
+        try:
+            result = _json.loads(raw)
+        except _json.JSONDecodeError as exc:
+            logger.warning("Spelling convention AI returned invalid JSON: %s", raw[:200])
+            return {}
+
+        convention_indices: Dict[int, str] = {}
+        for item in result.get("results", []):
+            idx = item.get("index")
+            category = item.get("category", "")
+            if idx is not None and category == "spelling_convention":
+                convention_indices[int(idx)] = "spelling_convention"
+
+        return convention_indices
+
+
+def get_spelling_convention_classifier() -> SpellingConventionClassifier:
+    """Factory for the spelling convention AI classifier."""
+    return SpellingConventionClassifier()

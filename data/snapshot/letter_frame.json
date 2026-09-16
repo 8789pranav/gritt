@@ -1,0 +1,44 @@
+{
+  "_comment": [
+    "The parts of the Learning Snapshot that are the same for every child.",
+    "",
+    "Everything a letter says ABOUT a child is written by the model, per",
+    "child, from that child's own evidence. What is here is the frame around",
+    "it: the greeting, the signature, the line that hands the letter back to",
+    "the parent, and the disclaimer. They are fixed on purpose - a greeting",
+    "that varies looks like a mistake, and a disclaimer the model rephrases",
+    "each run is a liability rather than a feature.",
+    "",
+    "They live in a config file rather than in the code so that product and",
+    "legal can change the words without a code change. {name} is the child's",
+    "name, {them} their object pronoun, {span} how long the sitting took.",
+    "",
+    "The fallback letter is what a parent gets if the model fails every",
+    "attempt. It says nothing about their child because nothing about their",
+    "child could be verified, and that is the honest thing to send."
+  ],
+
+  "version": "2026-09-16",
+
+  "salutation": "Dear Parent,",
+  "signature": "Eko",
+  "branding": "The Dear Parent Project",
+
+  "caveat": "{span} is a short time, and children have days. Take this as one afternoon's worth of noticing rather than the whole picture. If something here does not sound like the {name} you know, trust yourself first.",
+
+  "disclaimer": "This is a starting point for a conversation about how {name} learns. It is not a diagnosis or a formal assessment, and it compares {them} to no one.",
+
+  "fallback": {
+    "opening": {
+      "headline": "We sat down together and worked through four activities.",
+      "paragraph": "Thank you for letting me spend this time with your child. There is plenty here worth talking about, and the notes below are a starting point for that conversation."
+    },
+    "what_i_noticed": [],
+    "still_growing": [],
+    "for_the_conference": {
+      "headline": "Things you could mention at a parent-teacher conference",
+      "items": []
+    },
+    "closing": "This is a starting point for a conversation about how your child learns. It is not a diagnosis or a formal assessment, and it compares your child to no one."
+  }
+}

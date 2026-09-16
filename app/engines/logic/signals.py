@@ -30,11 +30,46 @@ PATTERN_TAGS = {
     CognitiveTag.PATTERN_DETECTION_EMERGING,
 }
 
+#: Item tags that measure working-memory load. The _EMERGING spelling is the
+#: pre-L-B3 name, kept so an older stored payload still resolves.
+LOAD_TAGS = {
+    CognitiveTag.REASONING_UNDER_LOAD,
+    CognitiveTag.REASONING_UNDER_LOAD_EMERGING,
+}
+
 #: A response faster than this fraction of the expected latency is "fast".
 FAST_RESPONSE_RATIO = 0.5
 
 #: A response slower than this multiple of the expected latency is "slow".
 SLOW_RESPONSE_MULTIPLIER = 1.5
+
+#: Construct accuracy at or above this counts as a strength (G5, L-N1).
+#: Thresholds must be proportions: the bank holds only one or two items per
+#: construct per grade, so an absolute count like ">= 3" can never be met.
+MASTERY_THRESHOLD = 0.75
+
+
+def impulsive_threshold(responses) -> float:
+    """Half the median response time across EVERY answered item (G1).
+
+    Taking the median of the wrong answers alone made the tag unfirable: when
+    every wrong answer is fast, none of them is fast *relative to the wrong
+    answers*. The rollup and the per-item tags now read the same number.
+    """
+    latencies = sorted(
+        r.response_time_seconds
+        for r in responses
+        if r.response_time_seconds and r.response_time_seconds > 0
+    )
+    if not latencies:
+        return 0.0
+    middle = len(latencies) // 2
+    median = (
+        latencies[middle]
+        if len(latencies) % 2
+        else (latencies[middle - 1] + latencies[middle]) / 2
+    )
+    return median * 0.5
 
 
 class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
@@ -52,17 +87,30 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
         items_by_id = {item.item_id: item for item in items}
         load_item_types = set(self.config.item_type_groups.get("load", []))
 
-        # Skill accumulators.
-        pattern_score = 0
-        pattern_hard_count = 0
-        relational_score = 0
-        systematic_score = 0
-        flexibility_score = 0
-        load_success_count = 0
+        # Skill accumulators. Each construct tracks how many items were SHOWN
+        # as well as how many were correct, so the rollup can use a proportion
+        # rather than an absolute count (G5, L-N1).
+        pattern_score = pattern_shown = 0
+        relational_score = relational_shown = 0
+        systematic_score = systematic_shown = 0
+        flexibility_score = flexibility_shown = 0
+        load_success_count = load_shown = 0
+
+        # L-D13: how many HARD items of each kind the child was shown. The
+        # old pattern_hard_count only incremented on a correct answer, so a
+        # grade whose only hard pattern item was missed reported zero hard
+        # pattern items - it counted successes and called them items.
+        hard_shown = {
+            "pattern": 0,
+            "relational": 0,
+            "systematic": 0,
+            "flexibility": 0,
+            "load": 0,
+        }
 
         # Difficulty / behaviour accumulators.
         load_fails = 0
-        rule_maintenance_fails = 0
+        slow_and_correct_count = 0
         multiple_attempts_count = 0
         fast_and_wrong_count = 0
         self_corrected_to_right_count = 0
@@ -83,29 +131,40 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
             latency = response.response_time_seconds or 0
             expected = item.expected_latency_seconds or 30
 
-            # --- skill credit for correct answers ---------------------------
-            if is_correct:
-                if item.primary_tag in PATTERN_TAGS:
-                    pattern_score += 1
-                    if item.difficulty is Difficulty.HARD:
-                        pattern_hard_count += 1
-                elif item.primary_tag is CognitiveTag.RELATIONAL_REASONING_PRESENT:
-                    relational_score += 1
-                elif item.primary_tag is CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING:
-                    systematic_score += 1
-                elif item.primary_tag is CognitiveTag.FLEXIBLE_STRATEGY_USE:
-                    flexibility_score += 1
-                elif item.primary_tag is CognitiveTag.REASONING_UNDER_LOAD_EMERGING:
-                    load_success_count += 1
+            # --- skill credit, counted against the items actually shown -----
+            construct: Optional[str] = None
+            if item.primary_tag in PATTERN_TAGS:
+                construct = "pattern"
+                pattern_shown += 1
+                pattern_score += int(is_correct)
+            elif item.primary_tag is CognitiveTag.RELATIONAL_REASONING_PRESENT:
+                construct = "relational"
+                relational_shown += 1
+                relational_score += int(is_correct)
+            elif item.primary_tag is CognitiveTag.SYSTEMATIC_PROBLEM_SOLVING:
+                construct = "systematic"
+                systematic_shown += 1
+                systematic_score += int(is_correct)
+            elif item.primary_tag is CognitiveTag.FLEXIBLE_STRATEGY_USE:
+                construct = "flexibility"
+                flexibility_shown += 1
+                flexibility_score += int(is_correct)
+            elif item.primary_tag in LOAD_TAGS:
+                construct = "load"
+                load_shown += 1
+                load_success_count += int(is_correct)
+
+            if construct and item.difficulty is Difficulty.HARD:
+                hard_shown[construct] += 1
 
             # --- cognitive load: wrong, or right but laboured ---------------
             if item.item_type in load_item_types:
                 if not is_correct or latency > expected * SLOW_RESPONSE_MULTIPLIER:
                     load_fails += 1
 
-            # --- rule maintenance: failed a multi-step rule application -----
-            if item.item_type in {"two_step", "rule_application"} and not is_correct:
-                rule_maintenance_fails += 1
+            # --- pace: worked slowly and still got it right -----------------
+            if is_correct and latency > expected * SLOW_RESPONSE_MULTIPLIER:
+                slow_and_correct_count += 1
 
             # --- behavioural signals ---------------------------------------
             if response.attempts > 1:
@@ -130,28 +189,48 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
             if not is_correct and latency > 0:
                 wrong_latencies.append(latency)
 
-        # G1: Compute fast_and_wrong_count using the child's own median
-        # response time as the threshold, not a fixed expected_latency.
-        # A response is "impulsive" only if it is wrong AND clearly faster
-        # than the child's own typical pace (below 50% of their median).
-        if wrong_latencies:
-            median_latency = sorted(wrong_latencies)[len(wrong_latencies) // 2]
-            impulsive_threshold = median_latency * 0.5
+        # G1: wrong AND clearly faster than the typical pace. The threshold
+        # is half the median of EVERY answered item - the same number that
+        # per_item_tags uses, so the rollup and the item tags agree.
+        cutoff = impulsive_threshold(responses)
+        if cutoff > 0:
             fast_and_wrong_count = sum(
-                1 for wl in wrong_latencies if wl <= impulsive_threshold
+                1 for wl in wrong_latencies if 0 < wl <= cutoff
             )
 
         return {
             "pattern_score": pattern_score,
-            "pattern_hard_count": pattern_hard_count,
+            "pattern_hard_count": hard_shown["pattern"],
+            "relational_hard_count": hard_shown["relational"],
+            "systematic_hard_count": hard_shown["systematic"],
+            "flexibility_hard_count": hard_shown["flexibility"],
+            "load_hard_count": hard_shown["load"],
             "relational_score": relational_score,
             "systematic_score": systematic_score,
             "flexibility_score": flexibility_score,
             "load_success_count": load_success_count,
             "load_fails": load_fails,
-            "rule_maintenance_fails": rule_maintenance_fails,
-            "shift_result": shift_result,
-            "rule_inferred": rule_inferred,
+            # Proportions the rollup triggers read (G5, L-D7, L-N1).
+            "pattern_accuracy": self.ratio(pattern_score, pattern_shown),
+            "pattern_items_count": pattern_shown,
+            "relational_accuracy": self.ratio(relational_score, relational_shown),
+            "relational_items_count": relational_shown,
+            "systematic_accuracy": self.ratio(systematic_score, systematic_shown),
+            "systematic_items_count": systematic_shown,
+            "flexibility_accuracy": self.ratio(flexibility_score, flexibility_shown),
+            "flexibility_items_count": flexibility_shown,
+            "load_accuracy": self.ratio(load_success_count, load_shown),
+            "load_items_count": load_shown,
+            # L-D15: rule_maintenance_* is gone. It re-scored the very items
+            # systematic_problem_solving already owns - at Grade 2 the same
+            # three questions, the same 1 of 3 - so a parent was shown one
+            # weakness twice under two names. A construct needs its own
+            # questions to be a construct.
+            "slow_and_correct_count": slow_and_correct_count,
+            # L-D5: shift_result and rule_inferred are still derived above, so
+            # wiring the sort task back up stays a one-line change, but they
+            # are no longer published as signals - the API never populates the
+            # response fields they read, so every tag built on them was dead.
             "multiple_attempts_count": multiple_attempts_count,
             "fast_and_wrong_count": fast_and_wrong_count,
             "self_corrected_to_right_count": self_corrected_to_right_count,
@@ -159,7 +238,10 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
             # any trigger.
             "total_items": score.total_items,
             "correct_answers": score.correct_answers,
-            "overall_accuracy": self.ratio(score.correct_answers, score.total_items),
+            # L-D10: use the 0-100 scale everywhere, not 0-1.
+            "overall_accuracy": round(
+                self.ratio(score.correct_answers, score.total_items) * 100, 1
+            ),
         }
 
     def per_item_tags(
@@ -173,13 +255,8 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
         responses_by_id = {response.item_id: response for response in responses}
         results: List[PerItemTags] = []
 
-        # G1: Compute the child's own median response time for impulsivity.
-        all_latencies = sorted(
-            r.response_time_seconds or 0 for r in responses
-            if r.response_time_seconds and r.response_time_seconds > 0
-        )
-        median_latency = all_latencies[len(all_latencies) // 2] if all_latencies else 0
-        impulsive_threshold = median_latency * 0.5 if median_latency else 0
+        # G1: the same threshold the rollup uses.
+        cutoff = impulsive_threshold(responses)
 
         for item in items:
             response = responses_by_id.get(item.item_id)
@@ -209,14 +286,19 @@ class LogicSignalDeriver(SignalDeriver[LogicItem, LogicResponse]):
                 tags.append(CognitiveTag.SELF_CORRECTION_PRESENT.value)
             # G1: Only tag as impulsive if wrong AND clearly faster than
             # the child's own median (below 50% of their median).
+            if not is_correct and cutoff > 0 and 0 < latency <= cutoff:
+                tags.append(CognitiveTag.IMPULSIVE_RESPONSE.value)
+            # L-B3: the item tag names the construct; it makes no judgement.
+            # L-D14: but never on a load item itself. A missed load question
+            # already carries reasoning_under_load_missed, and adding the
+            # bare construct tag beside it put both outcomes on one question -
+            # the teacher table then read the miss as a strength.
             if (
                 not is_correct
-                and impulsive_threshold > 0
-                and 0 < latency <= impulsive_threshold
+                and latency > expected * SLOW_RESPONSE_MULTIPLIER
+                and item.primary_tag not in LOAD_TAGS
             ):
-                tags.append(CognitiveTag.IMPULSIVE_RESPONSE.value)
-            if not is_correct and latency > expected * SLOW_RESPONSE_MULTIPLIER:
-                tags.append(CognitiveTag.REASONING_UNDER_LOAD_EMERGING.value)
+                tags.append(CognitiveTag.REASONING_UNDER_LOAD.value)
 
             # Conditional tags declared on the item itself.
             condition = self._condition_for(is_correct, latency, expected)

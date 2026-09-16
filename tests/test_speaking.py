@@ -57,11 +57,19 @@ async def test_speaking_analyze(client, mock_firebase_auth, seed_user, mock_spee
     })
     assert resp.status_code == 200
     data = resp.json()
-    assert data["transcribed_text"] == "The cat sat on the mat."
-    assert "pronunciation" in data
-    assert "fluency" in data
-    assert "overall" in data
-    assert data["overall"]["score"] == 82
+    # analyze returns the same object submit returns per sentence, so a client
+    # written against one endpoint reads the other unchanged.
+    assert data["sentence"] == "The cat sat on the mat."
+    assert data["transcription"]["heard"] == "The cat sat on the mat."
+    assert data["answered"] is True
+    analysis = data["analysis"]
+    assert analysis["overall"]["score"] == 84.4
+    assert analysis["pronunciation"]["feedback"]
+    assert analysis["fluency"]["feedback"]
+    # The per-word and per-phoneme detail produces the scores but is not
+    # carried in the response; /lab exposes it for diagnosis.
+    assert "findings" not in analysis
+    assert "words" not in analysis
 
 
 @pytest.mark.asyncio
@@ -102,8 +110,8 @@ async def test_speaking_submit_single(client, mock_firebase_auth, seed_user, moc
     assert data["success"] is True
     assert data["answered_count"] >= 1
     assert "dear_parent_tags" in data
-    assert "results" in data
-    assert len(data["results"]) > 0
+    assert len(data["sentences"]) > 0
+    assert data["sentences"][0]["sentence_id"]
 
 
 @pytest.mark.asyncio
@@ -134,7 +142,10 @@ async def test_speaking_submit_batch(client, mock_firebase_auth, seed_user, mock
     assert resp.status_code == 200
     data = resp.json()
     assert data["answered_count"] == 2
-    assert data["total_marks"] == len(sentences) * 100
+    # A11: no total_marks. Counts and the average of what was read, nothing
+    # that tells a parent what their child is.
+    assert len(data["sentences"]) == len(sentences)
+    assert "total_marks" not in data
 
 
 @pytest.mark.asyncio
@@ -164,7 +175,8 @@ async def test_speaking_complete_result(client, mock_firebase_auth, seed_user, m
     assert resp.status_code == 200
     data = resp.json()
     assert "parent_summary" in data
-    assert "all_results" in data
+    assert "sentences" in data
+    assert "summary" in data
     assert "dear_parent_tags" in data
 
 

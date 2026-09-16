@@ -11,3 +11,9 @@
 __pycache__/
 *.pyc
 venv/
+
+# Generated Learning Snapshots. `scripts/generate_sample_letters.py` writes
+# them, they cost a model call each, and they are a record of one run rather
+# than something to review in a diff.
+sample_letters/
+sample_letters_live/

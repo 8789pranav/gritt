@@ -186,13 +186,22 @@ class SpeakingAnalyzeRequest(BaseModel):
     original_sentence: str
     audio_base64: str
     audio_format: str = "mp3"
+    time_to_speak_ms: Optional[float] = None
 
 
 class SpeakingSubmissionItem(BaseModel):
     sentence_id: str
     original_sentence: str
     audio_base64: str
-    audio_format: str = "mp3"
+    audio_format: str = "wav"
+    #: Milliseconds between pressing record and the first sound. Only the
+    #: client can measure this - it is gone by the time the audio arrives.
+    #: An absent field here silently discards whatever the client sent, which
+    #: is exactly how Story Explorer lost its response times.
+    time_to_speak_ms: Optional[float] = None
+    #: How many times this sentence was recorded. The last attempt measures
+    #: ability; the count measures confidence.
+    attempt: int = 1
 
 
 class SpeakingSubmitRequest(BaseModel):
@@ -218,6 +227,10 @@ class SpeakingResultRequest(BaseModel):
 class ComprehensionQuestionAnswer(BaseModel):
     question_id: str
     selected_index: int
+    #: C5: Story Explorer was the only activity that could not accept a time.
+    #: The field was absent, so anything the client sent was dropped by
+    #: validation before the service ever saw it.
+    response_time_seconds: float = 0.0
 
 
 class ComprehensionStoryAnswer(BaseModel):
@@ -269,6 +282,15 @@ class PaymentStatusRequest(BaseModel):
 # Final Report
 # ---------------------------------------------------------------------------
 class FinalReportRequest(BaseModel):
+    idToken: str
+    child_id: str
+    grade: str
+
+
+# ---------------------------------------------------------------------------
+# Learning Snapshot
+# ---------------------------------------------------------------------------
+class SnapshotRequest(BaseModel):
     idToken: str
     child_id: str
     grade: str

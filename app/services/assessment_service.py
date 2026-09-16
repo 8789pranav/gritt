@@ -61,6 +61,132 @@ def _tag_outputs_to_dicts(tags):
     ]
 
 
+#: L-D12: what a missed Logic Quest question is called in the teacher table.
+#: The table used to print the raw construct tag - "systematic problem
+#: solving", "pattern detection strong" - which names a skill, not an error,
+#: and reads as praise sitting in an error column.
+_LOGIC_ERROR_LABELS = {
+    "pattern_detection_strong": "Pattern question missed",
+    "pattern_detection_emerging": "Pattern question missed",
+    "relational_reasoning_present": "Relational question missed",
+    "relational_reasoning_emerging": "Relational question missed",
+    "systematic_problem_solving": "Systematic question missed",
+    "systematic_problem_solving_emerging": "Systematic question missed",
+    "flexible_strategy_use": "Flexibility question missed",
+    "flexible_strategy_emerging": "Flexibility question missed",
+    "reasoning_under_load": "Multi-step question missed",
+    "reasoning_under_load_emerging": "Multi-step question missed",
+}
+
+
+def _logic_error_type(tags) -> str:
+    """Plain English for one missed Logic Quest question (L-D12)."""
+    if "impulsive_response" in tags:
+        return "Answered too quickly"
+    if "trial_and_error_strategy" in tags:
+        return "Trial and error"
+    for tag in tags:
+        if tag.endswith("_missed"):
+            construct = tag[: -len("_missed")]
+            return _LOGIC_ERROR_LABELS.get(
+                construct,
+                construct.replace("_", " ").capitalize() + " question missed",
+            )
+    if "reasoning_under_load" in tags:
+        return "Multi-step question missed"
+    return "Incorrect"
+
+
+def _speaking_table(sentences):
+    from app.engines.speaking.result import teacher_table
+
+    return teacher_table(sentences)
+
+
+def _restore_sentences(stored):
+    """Re-add the keys Firebase drops when reading sentences back.
+
+    The Realtime Database stores no empty containers, so a sentence with no
+    tags, no findings or no words comes back missing those keys entirely
+    rather than holding an empty list - and a client doing .length on one of
+    them breaks on exactly the unattempted sentences.
+    """
+    restored = []
+    for entry in (stored or []):
+        entry = dict(entry or {})
+        entry.setdefault("tags", [])
+        analysis = dict(entry.get("analysis") or {})
+        for key in ("strengths", "areas_to_improve"):
+            analysis.setdefault(key, [])
+        for key in ("overall", "pronunciation", "fluency", "prosody",
+                    "completeness", "reading", "timing", "disfluency",
+                    "errors", "phonics"):
+            analysis.setdefault(key, {})
+        disfluency = dict(analysis.get("disfluency") or {})
+        disfluency.setdefault("fillers", [])
+        analysis["disfluency"] = disfluency
+        entry["analysis"] = analysis
+        entry.setdefault("transcription", {})
+        entry.setdefault("answered", entry.get("status") == "answered")
+        restored.append(entry)
+    return restored
+
+
+def _restore_per_item_tags(stored):
+    """Re-add the keys Firebase drops when reading per-item tags back.
+
+    The Realtime Database stores no empty containers, so an unanswered item -
+    which by design carries an empty tag list - comes back with no ``tags``
+    key at all rather than ``tags: []``. A client doing ``p.tags.length``
+    then breaks on exactly the blank words #54 was about.
+    """
+    return [
+        {
+            "item_id": entry.get("item_id", ""),
+            "answered": entry.get("answered", False),
+            "is_correct": entry.get("is_correct"),
+            "tags": entry.get("tags") or [],
+        }
+        for entry in (stored or [])
+    ]
+
+
+def _sentence_tags(measured: Dict[str, Any]) -> List[str]:
+    """Per-sentence observations, from the measurements rather than a model."""
+    if measured.get("status") == "not_attempted":
+        return []
+    if measured.get("status") == "needs_review":
+        return ["needs_review"]
+
+    tags: List[str] = []
+    scores = measured.get("scores", {})
+    errors = measured.get("errors", {})
+    timing = measured.get("timing", {})
+    disfluency = measured.get("disfluency", {})
+
+    if (scores.get("accuracy") or 0) >= 85:
+        tags.append("read_accurately")
+    elif (scores.get("accuracy") or 0) < 70:
+        tags.append("decoding_difficulty")
+
+    if errors.get("clear_error"):
+        tags.append("mispronounced_words")
+    if errors.get("prolonged"):
+        tags.append("stretched_sounds")
+    if errors.get("omission"):
+        tags.append("skipped_words")
+    if timing.get("long_pause_count"):
+        tags.append("long_pauses")
+    if disfluency.get("filler_count"):
+        tags.append("filler_used")
+    if disfluency.get("repetitions"):
+        tags.append("repeated_words")
+    if (scores.get("prosody") or 0) and scores["prosody"] < 60:
+        tags.append("flat_delivery")
+
+    return tags
+
+
 def _per_item_tags_to_dicts(per_items):
     """Serialise ``PerItemTags`` into plain dicts."""
     return [
@@ -221,22 +347,26 @@ class AssessmentService:
         def _error_type_for_submit(item_dict: Dict[str, Any]) -> Optional[str]:
             if item_dict.get("is_correct"):
                 return None
-            tags = per_item_map_submit.get(item_dict.get("item_id", ""), [])
-            if "impulsive_response" in tags:
-                return "Impulsive response"
-            if "reasoning_under_load_emerging" in tags:
-                return "Reasoning under load"
-            if "trial_and_error_strategy" in tags:
-                return "Trial and error"
-            for tag in tags:
-                if tag.endswith("_missed"):
-                    return tag.replace("_missed", "").replace("_", " ")
-            return "Incorrect"
+            return _logic_error_type(
+                per_item_map_submit.get(item_dict.get("item_id", ""), [])
+            )
 
         table_data_submit = [
             {
-                "question": s.get("label", ""),
-                "selected_index": s.get("detail", {}).get("selected_index"),
+                # Word Wizard has always shown the word and the attempt. The
+                # Logic table showed an item number and two indices, which
+                # reads as nothing at all.
+                "item_number": s.get("label", ""),
+                "question": s.get("detail", {}).get("question_text", "")
+                            or s.get("label", ""),
+                "item_type": (s.get("detail", {}).get("item_type") or "")
+                             .replace("_", " "),
+                "difficulty": s.get("detail", {}).get("difficulty", ""),
+                "selected_answer": s.get("detail", {}).get("selected_answer", ""),
+                "correct_answer": s.get("detail", {}).get("correct_answer", ""),
+                # L-D1: these must match the keys LogicScorer writes into
+                # ScoredItem.detail, or the teacher table reads null.
+                "selected_index": s.get("detail", {}).get("selected_answer_index"),
                 "correct_index": s.get("detail", {}).get("correct_answer_index"),
                 "correct": s.get("is_correct", False),
                 "error_type": _error_type_for_submit(s),
@@ -250,11 +380,12 @@ class AssessmentService:
             uid, child_id, TestType.LOGIC.storage_key,
             {
                 "grade": grade,
-                "score": result.score.correct_answers,
-                "percentage": result.score.percentage,
                 "correct_answers": result.score.correct_answers,
                 "total_items": result.score.total_items,
-                "level": result.score.level,
+                # L-D11: complete_result reads this back for the parent-facing
+                # accuracy. It was never written, so every stored run answered
+                # the parent's only figure with 0.
+                "percentage": result.score.percentage,
                 "signals": result.signals,
                 "dear_parent_tags": tag_dicts,
                 "per_item_tags": per_item_dicts,
@@ -271,14 +402,10 @@ class AssessmentService:
             "child_id": child_id,
             "grade": grade,
             "score_id": score_id,
-            "score": result.score.correct_answers,
-            "percentage": result.score.percentage,
             "correct_answers": result.score.correct_answers,
             "total_items": result.score.total_items,
-            "level": result.score.level,
             "parent_summary": {
                 "overall_accuracy": result.score.percentage,
-                "level": result.score.level,
                 "strengths": strengths,
                 "focus_areas": focus_areas,
                 "recommendation": result.recommendation,
@@ -290,7 +417,6 @@ class AssessmentService:
                 "test_level": grade,
                 "questions": result.score.total_items,
                 "correct": result.score.correct_answers,
-                "instructional_level": result.score.level,
                 "table_data": table_data_submit,
             },
             "recommendation": result.recommendation,
@@ -307,37 +433,43 @@ class AssessmentService:
             raise ResultNotFoundError("logic", child_id, grade)
 
         scored_items = latest.get("scored_items", [])
-        per_item_tags = latest.get("per_item_tags", [])
+        per_item_tags = _restore_per_item_tags(latest.get("per_item_tags", []))
         dear_parent_tags = latest.get("dear_parent_tags", [])
 
-        per_item_map = {
-            p.get("item_id", ""): p.get("tags", [])
-            for p in per_item_tags
-        }
+        # L-D11: prefer the stored figure, but recompute it for runs saved
+        # before it was written, so an older result reads correctly too.
+        correct_answers = latest.get("correct_answers", 0)
+        total_items = latest.get("total_items", 0) or len(scored_items)
+        overall_accuracy = latest.get("percentage")
+        if not overall_accuracy:
+            overall_accuracy = (
+                round(correct_answers / total_items * 100, 1) if total_items else 0.0
+            )
+
+        per_item_map = {p["item_id"]: p["tags"] for p in per_item_tags}
 
         def _error_type_for(item: Dict[str, Any]) -> Optional[str]:
             if item.get("is_correct"):
                 return None
-            tags = per_item_map.get(item.get("item_id", ""), [])
-            if "impulsive_response" in tags:
-                return "Impulsive response"
-            if "reasoning_under_load_emerging" in tags:
-                return "Reasoning under load"
-            if "trial_and_error_strategy" in tags:
-                return "Trial and error"
-            for tag in tags:
-                if tag.endswith("_missed"):
-                    return tag.replace("_missed", "").replace("_", " ")
-            return "Incorrect"
+            return _logic_error_type(per_item_map.get(item.get("item_id", ""), []))
 
         table_data = [
             {
-                "question": s.get("label", ""),
-                "selected_index": s.get("detail", {}).get("selected_index"),
-                "correct_index": s.get("detail", {}).get("correct_index"),
+                "item_number": s.get("label", ""),
+                "question": s.get("detail", {}).get("question_text", "")
+                            or s.get("label", ""),
+                "item_type": (s.get("detail", {}).get("item_type") or "")
+                             .replace("_", " "),
+                "difficulty": s.get("detail", {}).get("difficulty", ""),
+                "selected_answer": s.get("detail", {}).get("selected_answer", ""),
+                "correct_answer": s.get("detail", {}).get("correct_answer", ""),
+                # L-D1: selected_index / correct_index / time never existed
+                # in ScoredItem.detail, so every row read null, null and 0.0.
+                "selected_index": s.get("detail", {}).get("selected_answer_index"),
+                "correct_index": s.get("detail", {}).get("correct_answer_index"),
                 "correct": s.get("is_correct", False),
                 "error_type": _error_type_for(s),
-                "time": s.get("detail", {}).get("time", 0.0),
+                "time": s.get("detail", {}).get("response_time_seconds", 0.0),
                 "icon": "Correct" if s.get("is_correct") else "Incorrect",
             }
             for s in scored_items
@@ -360,14 +492,10 @@ class AssessmentService:
             "user_id": uid,
             "child_id": child_id,
             "grade": latest.get("grade"),
-            "score": latest.get("score", 0),
-            "percentage": latest.get("percentage", 0),
             "correct_answers": latest.get("correct_answers", 0),
             "total_items": latest.get("total_items", 0),
-            "level": latest.get("level", ""),
             "parent_summary": {
-                "overall_accuracy": latest.get("percentage", 0),
-                "level": latest.get("level", ""),
+                "overall_accuracy": overall_accuracy,
                 "strengths": strengths,
                 "focus_areas": focus_areas,
                 "recommendation": latest.get("recommendation", ""),
@@ -379,7 +507,6 @@ class AssessmentService:
                 "test_level": latest.get("grade", grade),
                 "questions": len(scored_items),
                 "correct": sum(1 for s in scored_items if s.get("is_correct")),
-                "instructional_level": latest.get("level", ""),
                 "table_data": table_data,
             },
             "recommendation": latest.get("recommendation", ""),
@@ -509,7 +636,16 @@ class AssessmentService:
         results = latest.get("results", [])
         total_words = len(results)
         correct_count = sum(1 for r in results if r.get("is_correct"))
-        overall_acc = round(
+
+        # #76: two different numbers used to share one name. The points
+        # ratio counts SOUNDS the child reproduced - a child who spelled 9 of
+        # 15 words right scored 94 on it, because 47 of his 50 sounds were
+        # right. Under the name "overall_accuracy" a parent reads that as
+        # "spelled almost every word correctly". So overall_accuracy now
+        # means what it says - whole words spelled correctly - and the sound
+        # figure keeps its own name and its own explanation.
+        overall_acc = round(correct_count / total_words * 100, 1) if total_words else 0
+        sound_acc = round(
             sum(r.get("points", 0) for r in results)
             / max(sum(r.get("max_points", 0) for r in results), 1)
             * 100, 1
@@ -520,23 +656,32 @@ class AssessmentService:
             WordType.SIGHT.value, WordType.NONSENSE.value
         )]
 
-        # #53: sight_word_score must match sight_word_accuracy from signals.
-        # Signals compute accuracy as correct/attempted (only answered words),
-        # so the parent summary must do the same — not points/max_points which
-        # includes unattempted words in the denominator.
-        phonics_attempted = [r for r in phonics if r.get("detail", {}).get("user_input", "").strip()]
-        sight_attempted = [r for r in sight if r.get("detail", {}).get("user_input", "").strip()]
+        # #53 / Q3: both scores must match the accuracies in signals, whose
+        # denominator is every word SHOWN — sound-alikes and blanks stay in
+        # the pool as not-yet-correct rather than shrinking it.
+        def _phonics_ok(result: Dict[str, Any]) -> bool:
+            """True when the child produced every sound, spelling aside.
+
+            phonics_score means phonics. A convention error (candel, fone) or
+            a homophone means the child heard the word correctly and wrote a
+            plausible spelling, so it does not count against phonics. Genuine
+            sound changes (hambuger, fen for fan) still do.
+            """
+            if result.get("is_correct"):
+                return True
+            mistakes = result.get("detail", {}).get("mistakes", {})
+            return "spelling_convention" in mistakes or "homophone_error" in mistakes
 
         phonics_pct = (
-            sum(1 for r in phonics_attempted if r.get("is_correct")) / len(phonics_attempted) * 100
-        ) if phonics_attempted else 0
+            sum(1 for r in phonics if _phonics_ok(r)) / len(phonics) * 100
+        ) if phonics else 0
         sight_pct = (
-            sum(1 for r in sight_attempted if r.get("is_correct")) / len(sight_attempted) * 100
-        ) if sight_attempted else 0
+            sum(1 for r in sight if r.get("is_correct")) / len(sight) * 100
+        ) if sight else 0
 
+        per_word_tags = _restore_per_item_tags(latest.get("per_word_tags", []))
         per_word_tag_map = {
-            p.get("item_id", ""): p.get("tags", [])
-            for p in latest.get("per_word_tags", [])
+            p["item_id"]: p["tags"] for p in per_word_tags
         }
 
         def _error_type_for(result: Dict[str, Any]) -> Optional[str]:
@@ -567,7 +712,9 @@ class AssessmentService:
                 None,
             )
             if feature_key:
-                return feature_key.replace("_", " ").replace(" error", "")
+                # Every other error_type is capitalised ("Spelling convention",
+                # "Homophone"); phonics features were the odd one out.
+                return feature_key.replace("_", " ").replace(" error", "").capitalize()
             # #62: if the word has a spelling_error tag or "spelling" mistake
             # key, return "Spelling" instead of None.
             if "spelling_error" in tags or "spelling" in mistakes:
@@ -600,7 +747,19 @@ class AssessmentService:
             "child_id": child_id,
             "grade": latest.get("grade", grade),
             "parent_summary": {
+                # #76: whole words spelled correctly.
                 "overall_accuracy": round(overall_acc),
+                "words_correct": correct_count,
+                "words_total": total_words,
+                # #76: the sounds the child produced, spelling aside. Named
+                # and explained, never left to be mistaken for the above.
+                "sound_accuracy": round(sound_acc),
+                "sound_accuracy_note": (
+                    "Sound accuracy counts the sounds your child wrote down "
+                    "correctly. It is usually higher than word accuracy, "
+                    "because a word can be heard perfectly and still be "
+                    "spelled by a rule your child has not met yet."
+                ),
                 "phonics_score": round(phonics_pct),
                 "sight_word_score": round(sight_pct),
                 "confidence": latest.get("confidence", "Medium"),
@@ -615,7 +774,7 @@ class AssessmentService:
                 "note": "Note: Placement is instructional and not a clinical diagnosis.",
             },
             "dear_parent_tags": latest.get("dear_parent_tags", []),
-            "per_word_tags": latest.get("per_word_tags", []),
+            "per_word_tags": per_word_tags,
             "teacher_admin_detail": {
                 "test_level": latest.get("grade", grade),
                 "words": total_words,
@@ -630,36 +789,36 @@ class AssessmentService:
     # =====================================================================
     async def speaking_analyze(self, id_token: str, child_id: str, grade: str,
                                original_sentence: str, audio_base64: str,
-                               audio_format: str = "mp3") -> Dict[str, Any]:
+                               audio_format: str = "wav",
+                               time_to_speak_ms: Optional[float] = None) -> Dict[str, Any]:
+        """Score a single sentence. Same chain as a full submission."""
         verify_paid_child(id_token, child_id)
-        from app.infrastructure.hybrid_speech import HybridSpeechProvider
 
-        speech = HybridSpeechProvider()
+        from app.engines.speaking.pipeline import SentenceSubmission, SpeakingPipeline
 
-        result = await speech.analyze_with_audio(
-            audio_base64, audio_format, original_sentence, grade
+        measured = await SpeakingPipeline().analyse_sentence(
+            SentenceSubmission(
+                sentence_id="single",
+                reference_text=original_sentence,
+                audio_base64=audio_base64,
+                audio_format=audio_format or "wav",
+                time_to_speak_ms=time_to_speak_ms,
+            ),
+            grade,
         )
-        if not result["success"] or not result["analysis"]:
+
+        if measured.get("status") == "not_attempted":
             from app.core.exceptions import AnalysisError
 
-            raise AnalysisError(result.get("error", "Analysis failed"))
+            raise AnalysisError(
+                measured.get("message") or "No speech was detected in the recording."
+            )
 
-        analysis = result["analysis"]
-        return {
-            "original_sentence": original_sentence,
-            "transcribed_text": result.get("transcribed_text", ""),
-            "duration_seconds": result.get("duration", 0),
-            "word_timestamps": result.get("word_timestamps", []),
-            "analysis_method": "hybrid_wav2vec2_gpt4",
-            "pronunciation": analysis.get("pronunciation", {}),
-            "speaking_rate": analysis.get("speaking_rate", {}),
-            "fluency": analysis.get("fluency", {}),
-            "prosody": analysis.get("prosody", {}),
-            "grammar": analysis.get("grammar", {}),
-            "overall": analysis.get("overall", {}),
-            "recommendation": analysis.get("overall", {}).get("recommendation", ""),
-            "parent_tip": analysis.get("overall", {}).get("parent_tip", ""),
-        }
+        from app.engines.speaking.result import build_sentence
+
+        # The same object /speaking/submit/ returns per sentence, so a client
+        # written against one endpoint reads the other unchanged.
+        return build_sentence(measured, original_sentence)
 
     async def speaking_submit(self, id_token: str, child_id: str, grade: str,
                               sentence_id: Optional[str] = None,
@@ -667,154 +826,114 @@ class AssessmentService:
                               audio_base64: Optional[str] = None,
                               audio_format: Optional[str] = "mp3",
                               submissions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Score a whole speaking submission through the Azure signal chain.
+
+        Sentences are analysed concurrently: App Runner enforces a fixed
+        120-second request timeout, and eight sentences one after another do
+        not fit inside it.
+        """
         uid, _ = verify_paid_child(id_token, child_id)
         grade_enum = _parse_grade(grade)
         engine = speaking_engine()
 
-        from app.infrastructure.hybrid_speech import HybridSpeechProvider
-
-        speech = HybridSpeechProvider()
+        from app.engines.speaking.pipeline import (
+            SentenceSubmission,
+            SpeakingPipeline,
+            aggregate,
+        )
+        from app.engines.speaking.result import build_sentences, teacher_table
 
         all_sentences = engine.get_items(grade_enum)
-        sentence_map = {s.sentence_id: s for s in all_sentences}
 
         submitted: Dict[str, Dict[str, Any]] = {}
         if submissions:
             for item in submissions:
-                sid = item.get("sentence_id") if isinstance(item, dict) else item.sentence_id
-                submitted[sid] = item
+                data = item if isinstance(item, dict) else item.model_dump()
+                submitted[data.get("sentence_id")] = data
         elif sentence_id:
             submitted[sentence_id] = {
                 "sentence_id": sentence_id,
                 "original_sentence": original_sentence or "",
                 "audio_base64": audio_base64 or "",
-                "audio_format": audio_format or "mp3",
+                "audio_format": audio_format or "wav",
             }
 
+        pipeline_input: List[SentenceSubmission] = []
+        for sent in all_sentences:
+            item = submitted.get(sent.sentence_id) or {}
+            pipeline_input.append(SentenceSubmission(
+                sentence_id=sent.sentence_id,
+                reference_text=sent.sentence,
+                audio_base64=item.get("audio_base64") or "",
+                audio_format=item.get("audio_format") or "wav",
+                time_to_speak_ms=item.get("time_to_speak_ms"),
+                attempt=int(item.get("attempt") or 1),
+            ))
+
+        measured = await SpeakingPipeline().analyse(pipeline_input, grade)
+        signals = aggregate(measured, grade)
+
+        by_id = {m["sentence_id"]: m for m in measured}
+        text_by_id = {sent.sentence_id: sent.sentence for sent in all_sentences}
+
+        # Per-sentence tags first, so the sentence object can carry them.
+        tags_by_id = {
+            m["sentence_id"]: _sentence_tags(m) for m in measured
+        }
+
+        sentences = build_sentences(measured, text_by_id, tags_by_id)
+
         domain_responses: List[SpeakingResponse] = []
-        analyses: Dict[str, Any] = {}
-        results: List[Dict[str, Any]] = []
         total_score = 0.0
         answered_count = 0
-
         for sent in all_sentences:
-            sid = sent.sentence_id
-            item = submitted.get(sid)
-
-            if item is None or not (
-                item.get("audio_base64") if isinstance(item, dict) else getattr(item, "audio_base64", "")
-            ):
-                results.append({
-                    "sentence_id": sid,
-                    "original_sentence": sent.sentence,
-                    "transcribed_text": "",
-                    "duration_seconds": 0,
-                    "pronunciation": {},
-                    "speaking_rate": {},
-                    "fluency": {},
-                    "grammar": {},
-                    "overall": {"score": 0, "status": "Not Attempted", "level": "Not Attempted"},
-                    "recommendation": "Not attempted.",
-                    "analysis_method": "",
-                    "status": "Not Attempted",
-                })
-                domain_responses.append(SpeakingResponse(
-                    item_id=sid,
-                    sentence_id=sid,
-                    original_sentence=sent.sentence,
-                ))
-                continue
-
-            audio_b64 = item.get("audio_base64", "") if isinstance(item, dict) else getattr(item, "audio_base64", "")
-            audio_fmt = item.get("audio_format", "mp3") if isinstance(item, dict) else getattr(item, "audio_format", "mp3")
-
-            ai_result = await speech.analyze_with_audio(
-                audio_b64, audio_fmt, sent.sentence, grade
-            )
-
-            if ai_result["success"] and ai_result["analysis"]:
-                analysis = ai_result["analysis"]
-                from app.engines.speaking.analyzer import SpeechAnalysis
-
-                speech_analysis = SpeechAnalysis.from_provider_payload(analysis)
-                analyses[sid] = speech_analysis
-
-                overall = analysis.get("overall", {})
-                overall_score = overall.get("score", 0)
-                total_score += overall_score
+            m = by_id[sent.sentence_id]
+            if m.get("status") == "answered":
+                total_score += m.get("scores", {}).get("pron_score", 0.0) or 0.0
                 answered_count += 1
+            item = submitted.get(sent.sentence_id) or {}
+            domain_responses.append(SpeakingResponse(
+                item_id=sent.sentence_id,
+                sentence_id=sent.sentence_id,
+                original_sentence=sent.sentence,
+                audio_base64=item.get("audio_base64", ""),
+                audio_format=item.get("audio_format", "wav"),
+            ))
 
-                results.append({
-                    "sentence_id": sid,
-                    "original_sentence": sent.sentence,
-                    "transcribed_text": ai_result.get("transcribed_text", ""),
-                    "duration_seconds": ai_result.get("duration", 0),
-                    "pronunciation": analysis.get("pronunciation", {}),
-                    "speaking_rate": analysis.get("speaking_rate", {}),
-                    "fluency": analysis.get("fluency", {}),
-                    "prosody": analysis.get("prosody", {}),
-                    "grammar": analysis.get("grammar", {}),
-                    "overall": overall,
-                    "recommendation": overall.get("recommendation", "Keep practicing!"),
-                    "analysis_method": "hybrid_wav2vec2_gpt4",
-                    "status": "Answered",
-                })
-                domain_responses.append(SpeakingResponse(
-                    item_id=sid,
-                    sentence_id=sid,
-                    original_sentence=sent.sentence,
-                    audio_base64=audio_b64,
-                    audio_format=audio_fmt,
-                ))
-            else:
-                results.append({
-                    "sentence_id": sid,
-                    "original_sentence": sent.sentence,
-                    "transcribed_text": ai_result.get("transcribed_text", ""),
-                    "analysis": None,
-                    "status": "Analysis Error",
-                })
-                domain_responses.append(SpeakingResponse(
-                    item_id=sid,
-                    sentence_id=sid,
-                    original_sentence=sent.sentence,
-                ))
+        # The tag engine reads the aggregate signals directly - the chain has
+        # already done every measurement the old deriver used to approximate.
+        from app.tagging.emitter import emit_tags
 
-        result = engine.evaluate_with_analyses(child_id, grade_enum, domain_responses, analyses)
+        tags = emit_tags(TestType.SPEAKING, signals)
+        tag_dicts = _tag_outputs_to_dicts(tags)
 
-        tag_dicts = _tag_outputs_to_dicts(result.tags)
-        per_item_dicts = _per_item_tags_to_dicts(result.per_item_tags)
+        per_item_dicts = [
+            {
+                "item_id": m["sentence_id"],
+                "answered": m.get("status") == "answered",
+                "is_correct": None,
+                "tags": tags_by_id[m["sentence_id"]],
+            }
+            for m in measured
+        ]
 
-        speaking_tag_map = {p["item_id"]: p.get("tags", []) for p in per_item_dicts}
-        for r in results:
-            sid = r.get("sentence_id", "")
-            r["tags"] = speaking_tag_map.get(sid, [])
-
-        max_score = len(all_sentences) * 100
-        user_score = round(total_score, 1)
-        percentage = round((user_score / max_score) * 100, 1) if max_score else 0
-        avg_score = round(total_score / len(all_sentences), 1) if all_sentences else 0
-
-        if percentage >= 90:
-            level = "Excellent Speaker"
-        elif percentage >= 75:
-            level = "Good Speaker"
-        elif percentage >= 50:
-            level = "Developing Speaker"
-        else:
-            level = "Needs Improvement"
+        # A11: no level, no grade placement, no percentage, no raw score
+        # totals. Logic Quest and Story Explorer dropped theirs long ago;
+        # Voice Challenge was the last activity still labelling the child.
+        # The average of the sentences the child actually read stays, because
+        # it is a measurement rather than a verdict. Dividing by every
+        # sentence in the test reported 12% for a child who read one sentence
+        # at 95.9, which describes how much of the test was attempted.
+        avg_score = round(total_score / answered_count, 1) if answered_count else 0
 
         test_id = self._scores.save(
             uid, child_id, TestType.SPEAKING.storage_key,
             {
                 "grade": grade,
-                "results": sanitize_data(results),
-                "total_marks": max_score,
-                "user_score": user_score,
+                "sentences": sanitize_data(sentences),
                 "answered_count": answered_count,
                 "average_score": avg_score,
-                "percentage": percentage,
-                "level": level,
+                "signals": sanitize_data(signals),
                 "dear_parent_tags": tag_dicts,
                 "per_sentence_tags": per_item_dicts,
                 "timestamp": self._utc_now(),
@@ -827,113 +946,80 @@ class AssessmentService:
             "child_id": child_id,
             "grade": grade,
             "test_id": test_id,
-            "total_marks": max_score,
-            "user_score": user_score,
             "answered_count": answered_count,
             "average_score": avg_score,
-            "percentage": percentage,
-            "level": level,
-            "results": results,
+            "sentences": sentences,
+            "teacher_admin_detail": {
+                "test_level": grade,
+                "sentences": len(sentences),
+                "answered": answered_count,
+                "table_data": teacher_table(sentences),
+            },
+            "signals": signals,
             "dear_parent_tags": tag_dicts,
             "per_sentence_tags": per_item_dicts,
             "message": (
                 f"Submission completed: {answered_count} answered, "
-                f"{len(results) - answered_count} not attempted."
+                f"{len(sentences) - answered_count} not attempted."
             ),
         }
 
     def speaking_complete_result(self, id_token: str, child_id: str,
                                  grade: Optional[str] = None) -> Dict[str, Any]:
+        """The stored result, in the same per-sentence shape submit returns."""
         uid, _ = verify_paid_child(id_token, child_id)
-        latest = self._scores.get_latest(uid, child_id, TestType.SPEAKING.storage_key, grade)
+        latest = self._scores.get_latest(
+            uid, child_id, TestType.SPEAKING.storage_key, grade)
         if not latest:
             raise ResultNotFoundError("speaking", child_id, grade)
 
-        percentage = latest.get("percentage", 0)
-        if percentage >= 90:
-            placement = "Above Grade Level"
-        elif percentage >= 75:
-            placement = "At Grade Level"
-        else:
-            placement = "Below Grade Level"
-
-        all_results = latest.get("results", [])
-        per_sentence_tags = latest.get("per_sentence_tags", [])
+        sentences = _restore_sentences(latest.get("sentences", []))
         dear_parent_tags = latest.get("dear_parent_tags", [])
-
-        per_sentence_map = {
-            p.get("item_id", ""): p.get("tags", [])
-            for p in per_sentence_tags
-        }
-
-        def _error_type_for(result: Dict[str, Any]) -> Optional[str]:
-            status = result.get("status", "")
-            if status == "Not Attempted":
-                return "Not attempted"
-            if status == "Analysis Error":
-                return "Analysis error"
-            overall = result.get("overall", {})
-            score = overall.get("score", 0)
-            if score >= 75:
-                return None
-            tags = per_sentence_map.get(result.get("sentence_id", ""), [])
-            for tag in tags:
-                if tag.endswith("_needs_work"):
-                    return tag.replace("_needs_work", " needs work")
-            if score < 50:
-                return "Below benchmark"
-            return "Developing"
-
-        table_data = [
-            {
-                "sentence": r.get("original_sentence", ""),
-                "sentence_id": r.get("sentence_id", ""),
-                "status": r.get("status", ""),
-                "overall_score": r.get("overall", {}).get("score", 0),
-                "level": r.get("overall", {}).get("level", ""),
-                "error_type": _error_type_for(r),
-                "icon": "Correct" if r.get("overall", {}).get("score", 0) >= 75 else "Incorrect",
-            }
-            for r in all_results
-        ]
-
-        strengths = [
-            t.get("tag", "") for t in dear_parent_tags
-            if t.get("polarity") == "strength"
-        ]
-        focus_areas = [
-            t.get("tag", "") for t in dear_parent_tags
-            if t.get("polarity") == "growth_edge"
-        ]
 
         return {
             "user_id": uid,
             "child_id": child_id,
             "grade": latest.get("grade"),
-            "total_marks": latest.get("total_marks", 100),
-            "user_score": latest.get("user_score", 0),
-            "answered_count": latest.get("answered_count", 0),
-            "average_score": latest.get("average_score", 0),
-            "percentage": percentage,
-            "level": latest.get("level", "Developing Speaker"),
-            "parent_summary": {
-                "level": latest.get("level", "Developing Speaker"),
-                "strengths": strengths,
-                "focus_areas": focus_areas,
-                "recommendation": "See detailed feedback for each sentence.",
-                "grade_placement": placement,
-                "note": "Assessment is instructional and not a clinical diagnosis.",
+            "timestamp": latest.get("timestamp", ""),
+
+            # A11: no total_marks, user_score, percentage, level or grade
+            # placement. Counts and the average of what was read, nothing
+            # that tells a parent what their child IS.
+            "summary": {
+                "sentences": len(sentences),
+                "answered": sum(1 for s in sentences if s["answered"]),
+                "needs_review": sum(
+                    1 for s in sentences if s["status"] == "needs_review"),
+                "average_score": latest.get("average_score", 0),
             },
+
+            "parent_summary": {
+                "strengths": [
+                    t.get("description") or t.get("tag", "")
+                    for t in dear_parent_tags if t.get("polarity") == "strength"
+                ],
+                "focus_areas": [
+                    t.get("description") or t.get("tag", "")
+                    for t in dear_parent_tags
+                    if t.get("polarity") == "growth_edge"
+                ],
+                "note": (
+                    "Assessment is instructional and not a clinical diagnosis."
+                ),
+            },
+
             "dear_parent_tags": dear_parent_tags,
-            "per_sentence_tags": per_sentence_tags,
+            "signals": latest.get("signals", {}),
+            "sentences": sentences,
+
+            # Derived from `sentences` above, never stored alongside them, so
+            # the table cannot drift from the results it summarises.
             "teacher_admin_detail": {
                 "test_level": latest.get("grade", grade),
-                "sentences": len(all_results),
-                "answered": latest.get("answered_count", 0),
-                "instructional_level": placement,
-                "table_data": table_data,
+                "sentences": len(sentences),
+                "answered": sum(1 for s in sentences if s["answered"]),
+                "table_data": _speaking_table(sentences),
             },
-            "all_results": all_results,
         }
 
     # =====================================================================
@@ -977,35 +1063,15 @@ class AssessmentService:
             t.description for t in result.tags if t.polarity.value == "growth_edge"
         ]
 
-        # C4: Fallback copy for sparse reports.
-        if not strengths and not focus_areas:
-            strengths = ["There wasn't quite enough here to say something specific yet. That's normal, and worth trying again in a few months."]
-        elif focus_areas and not strengths:
-            strengths = ["Your child is working on these skills and making progress."]
-
-        percentage = result.score.percentage
-        if percentage >= 90:
-            placement = "Above Grade Level"
-            next_step = "Consider more advanced reading materials"
-        elif percentage >= 75:
-            placement = "At Grade Level"
-            next_step = "Continue with current grade level materials"
-        else:
-            placement = "Below Grade Level"
-            next_step = "Practice with guided reading and comprehension activities"
-
+        # S6: no labels, scores, percentages, grade levels or placement.
         test_id = self._scores.save(
             uid, child_id, TestType.COMPREHENSION.storage_key,
             {
                 "grade": grade,
                 "results": sanitize_data(story_breakdown),
-                "total_questions": result.score.max_points,
+                # S2: total_questions counts only answered questions.
+                "total_questions": int(result.score.answered_items),
                 "correct_answers": result.score.correct_answers,
-                "score": result.score.correct_answers,
-                "max_score": result.score.max_points,
-                "percentage": result.score.percentage,
-                "level": result.score.level,
-                "status": status,
                 "recommendation": result.recommendation,
                 "dear_parent_tags": tag_dicts,
                 "per_question_tags": per_item_dicts,
@@ -1021,23 +1087,13 @@ class AssessmentService:
             "child_id": child_id,
             "grade": grade,
             "test_id": test_id,
-            "total_questions": int(result.score.max_points),
+            "total_questions": int(result.score.answered_items),
             "correct_answers": result.score.correct_answers,
-            "score": result.score.correct_answers,
-            "max_score": int(result.score.max_points),
-            "percentage": result.score.percentage,
-            "level": result.score.level,
-            "status": status,
             "recommendation": result.recommendation,
             "results": story_breakdown,
             "parent_summary": {
-                "overall_score": f"{result.score.correct_answers}/{int(result.score.max_points)}",
-                "percentage": result.score.percentage,
-                "level": result.score.level,
                 "strengths": strengths,
                 "focus_areas": focus_areas,
-                "grade_placement": placement,
-                "next_step": next_step,
                 "recommendation": result.recommendation,
                 "note": "Assessment is instructional and not a clinical diagnosis.",
             },
@@ -1055,17 +1111,6 @@ class AssessmentService:
         if not latest:
             raise ResultNotFoundError("comprehension", child_id, grade)
 
-        percentage = latest.get("percentage", 0)
-        if percentage >= 90:
-            placement = "Above Grade Level"
-            next_step = "Consider more advanced reading materials"
-        elif percentage >= 75:
-            placement = "At Grade Level"
-            next_step = "Continue with current grade level materials"
-        else:
-            placement = "Below Grade Level"
-            next_step = "Practice with guided reading and comprehension activities"
-
         story_breakdown = latest.get("results", [])
         per_question_tags = latest.get("per_question_tags", [])
         dear_parent_tags = latest.get("dear_parent_tags", [])
@@ -1078,6 +1123,9 @@ class AssessmentService:
         scored_items = latest.get("scored_items", [])
 
         def _error_type_for(item: Dict[str, Any]) -> Optional[str]:
+            # S7: unanswered questions show "Not answered", not "Incorrect".
+            if not item.get("detail", {}).get("answered", True):
+                return "Not answered"
             if item.get("is_correct"):
                 return None
             tags = per_question_map.get(item.get("item_id", ""), [])
@@ -1091,11 +1139,20 @@ class AssessmentService:
                 "question": s.get("label", ""),
                 "story_id": s.get("detail", {}).get("story_id", ""),
                 "story_title": s.get("detail", {}).get("story_title", ""),
+                "question_type": s.get("detail", {}).get("question_type", ""),
+                # The answer a child chose is the thing worth reading. The
+                # index beside it is for the client, not for a person.
+                "selected_answer": s.get("detail", {}).get("selected_answer", ""),
+                "correct_answer": s.get("detail", {}).get("correct_answer", ""),
                 "selected_index": s.get("detail", {}).get("selected_index"),
                 "correct_index": s.get("detail", {}).get("correct_index"),
                 "correct": s.get("is_correct", False),
                 "error_type": _error_type_for(s),
-                "icon": "Correct" if s.get("is_correct") else "Incorrect",
+                # C5: the scorer has always held this; the view dropped it.
+                "time": s.get("detail", {}).get("response_time_seconds", 0.0),
+                # S7: "Not answered" icon for unanswered questions.
+                "icon": "Not answered" if not s.get("detail", {}).get("answered", True)
+                        else ("Correct" if s.get("is_correct") else "Incorrect"),
             }
             for s in scored_items
         ]
@@ -1120,21 +1177,9 @@ class AssessmentService:
             "child_id": child_id,
             "grade": latest.get("grade"),
             "test_timestamp": latest.get("timestamp"),
-            "summary": {
-                "total_questions": latest.get("max_score", 8),
-                "correct_answers": latest.get("correct_answers", 0),
-                "percentage": percentage,
-                "level": latest.get("level", "Below grade level"),
-                "status": latest.get("status", "Below"),
-            },
             "parent_summary": {
-                "overall_score": f"{latest.get('correct_answers', 0)}/{int(latest.get('max_score', 8))}",
-                "percentage": percentage,
-                "level": latest.get("level", "Below grade level"),
                 "strengths": strengths,
                 "focus_areas": focus_areas,
-                "grade_placement": placement,
-                "next_step": next_step,
                 "recommendation": latest.get("recommendation", ""),
                 "note": "Assessment is instructional and not a clinical diagnosis.",
             },
@@ -1145,7 +1190,6 @@ class AssessmentService:
                 "test_level": latest.get("grade", grade),
                 "questions": len(scored_items),
                 "correct": sum(1 for s in scored_items if s.get("is_correct")),
-                "instructional_level": latest.get("level", ""),
                 "table_data": table_data,
             },
         }

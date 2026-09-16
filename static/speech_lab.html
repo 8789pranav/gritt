@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speech Lab</title>
+<style>
+  :root {
+    --paper:#F6F7F4; --surface:#fff; --sunken:#ECEEE9; --ink:#14181C;
+    --soft:#4B5560; --faint:#7C8792; --rule:#D8DCD6;
+    --ok:#0B6E5F; --warn:#9A5B12; --bad:#A03028;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper:#0E1114; --surface:#171B1F; --sunken:#1F2429; --ink:#E8EBE6;
+            --soft:#A3ADB5; --faint:#78838C; --rule:#2C3238;
+            --ok:#4FBFA8; --warn:#D9A05B; --bad:#E08279; color-scheme: dark; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+       font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+  .wrap{max-width:1240px;margin:0 auto;padding:24px 20px 80px}
+  header{border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:22px}
+  h1{margin:0 0 4px;font-size:22px;letter-spacing:-.02em}
+  .sub{color:var(--soft);font-size:13px}
+  h2{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);
+     margin:0 0 10px;font-weight:600}
+  .grid{display:grid;grid-template-columns:360px 1fr;gap:20px;align-items:start}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--rule);border-radius:4px;padding:16px;margin-bottom:16px}
+  label{display:block;font-size:12px;color:var(--soft);margin:10px 0 4px;font-weight:600}
+  input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--rule);
+       border-radius:3px;background:var(--paper);color:var(--ink);font:inherit;font-size:13px}
+  textarea{resize:vertical;min-height:52px}
+  button{font:inherit;font-size:13px;font-weight:600;padding:8px 13px;border-radius:3px;
+       border:1px solid var(--rule);background:var(--sunken);color:var(--ink);cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--ok)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.primary{background:var(--ok);border-color:var(--ok);color:#fff}
+  button.rec{background:var(--bad);border-color:var(--bad);color:#fff}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .stages{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .pill{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+        padding:3px 8px;border-radius:2px;background:var(--sunken);color:var(--faint)}
+  .pill.on{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+  .pill.off{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+  pre{background:var(--sunken);border:1px solid var(--rule);border-radius:3px;padding:12px;
+      overflow:auto;max-height:520px;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
+      color:var(--soft);margin:0;white-space:pre-wrap;word-break:break-word}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-size:11px;letter-spacing:.07em;text-transform:uppercase;
+     color:var(--faint);padding:7px 8px;border-bottom:1px solid var(--rule);background:var(--sunken)}
+  td{padding:7px 8px;border-bottom:1px solid var(--rule);vertical-align:top;
+     font-variant-numeric:tabular-nums}
+  .num{text-align:right}
+  .g{color:var(--ok);font-weight:600}.w{color:var(--warn);font-weight:600}.b{color:var(--bad);font-weight:600}
+  .ipa{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin-bottom:14px}
+  .card{background:var(--sunken);border:1px solid var(--rule);border-radius:3px;padding:9px 10px}
+  .card .k{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  .card .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+  .scroll{overflow-x:auto}
+  .muted{color:var(--faint);font-size:12.5px}
+  .err{color:var(--bad);font-weight:600}
+  audio{width:100%;margin-top:10px}
+  fieldset{border:1px solid var(--rule);border-radius:3px;padding:10px 12px;margin:0 0 12px}
+  legend{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);padding:0 5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Speech Lab</h1>
+    <div class="sub">Run any stage of the Voice Challenge chain on its own and read the raw output.</div>
+    <div class="stages" id="config"><span class="pill">checking…</span></div>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>1 &middot; Audio</h2>
+        <fieldset>
+          <legend>Record</legend>
+          <div class="row">
+            <button id="rec" class="rec">● Record</button>
+            <button id="stop" disabled>■ Stop</button>
+          </div>
+          <div class="muted" id="recInfo" style="margin-top:8px">Nothing recorded yet.</div>
+        </fieldset>
+        <fieldset>
+          <legend>Or upload a WAV</legend>
+          <input type="file" id="file" accept="audio/wav,audio/*">
+        </fieldset>
+        <fieldset>
+          <legend>Or synthesise a test case</legend>
+          <div class="row">
+            <button data-synth="silence">3s silence</button>
+            <button data-synth="tone">3s tone</button>
+            <button data-synth="noise">3s room tone</button>
+            <button data-synth="short">0.1s click</button>
+          </div>
+          <div class="muted" style="margin-top:8px">None of these contain speech. All four must score zero.</div>
+        </fieldset>
+        <audio id="player" controls hidden></audio>
+      </div>
+
+      <div class="panel">
+        <h2>2 &middot; Reference</h2>
+        <label for="grade">Grade</label>
+        <select id="grade">
+          <option>Kindergarten</option><option selected>First</option>
+          <option>Second</option><option>Third</option>
+        </select>
+        <label for="bank">Sentence from the real bank</label>
+        <select id="bank"><option value="">— loading —</option></select>
+        <label for="ref">Reference text</label>
+        <textarea id="ref">The brown dog likes to play with the ball.</textarea>
+        <label for="tts">Time to speak, ms (client-measured)</label>
+        <input id="tts" type="number" value="" placeholder="set by recording">
+      </div>
+
+      <div class="panel">
+        <h2>3 &middot; Run a stage</h2>
+        <div class="row">
+          <button data-run="gate">Stage 1 · Gate</button>
+          <button data-run="verbatim">Stage 3 · Verbatim</button>
+          <button data-run="azure">Stage 2 · Azure</button>
+          <button data-run="sentence" class="primary">Whole chain</button>
+        </div>
+        <div class="muted" style="margin-top:10px">
+          Stage 1 is free and offline. Stages 2 and 3 each cost one API call.
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>Result <span id="timing" class="muted"></span></h2>
+        <div id="summary"></div>
+        <div id="detail"></div>
+      </div>
+      <div class="panel">
+        <h2>Raw response</h2>
+        <pre id="raw">Run a stage to see its output.</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let audioB64 = null, audioMime = 'wav', recStart = 0;
+
+/* ---------- config ---------- */
+fetch('/lab/config').then(r => r.json()).then(c => {
+  const pill = (on, text) => `<span class="pill ${on ? 'on' : 'off'}">${text}</span>`;
+  $('#config').innerHTML =
+    pill(c.azure.configured, 'Azure ' + (c.azure.configured ? c.azure.region : 'not configured')) +
+    pill(c.openai.key_present, 'OpenAI ' + (c.openai.key_present ? 'ready' : 'missing')) +
+    `<span class="pill">gate rms ≥ ${c.gate.min_rms}</span>` +
+    `<span class="pill">gate ≥ ${c.gate.min_duration_seconds}s</span>`;
+}).catch(() => { $('#config').innerHTML = '<span class="pill off">lab disabled — set SPEECH_LAB_ENABLED=true</span>'; });
+
+/* ---------- sentence bank ---------- */
+async function loadBank() {
+  const grade = $('#grade').value;
+  try {
+    const data = await (await fetch('/lab/sentences/' + encodeURIComponent(grade))).json();
+    $('#bank').innerHTML = '<option value="">— choose —</option>' +
+      data.sentences.map(s => `<option value="${s.sentence.replace(/"/g, '&quot;')}">${s.sentence}</option>`).join('');
+  } catch { $('#bank').innerHTML = '<option value="">— unavailable —</option>'; }
+}
+$('#grade').addEventListener('change', loadBank);
+$('#bank').addEventListener('change', e => { if (e.target.value) $('#ref').value = e.target.value; });
+loadBank();
+
+/* ---------- WAV helpers ---------- */
+function encodeWav(samples, rate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true); str(8, 'WAVE');
+  str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, 'data'); v.setUint32(40, samples.length * 2, true);
+  let o = 44;
+  for (let i = 0; i < samples.length; i++, o += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return new Blob([v], { type: 'audio/wav' });
+}
+const toB64 = blob => new Promise(res => {
+  const r = new FileReader();
+  r.onloadend = () => res(r.result.split(',')[1]);
+  r.readAsDataURL(blob);
+});
+async function setAudio(blob, note) {
+  audioB64 = await toB64(blob);
+  audioMime = 'wav';
+  $('#player').hidden = false;
+  $('#player').src = URL.createObjectURL(blob);
+  $('#recInfo').textContent = note + ' — ' + Math.round(blob.size / 1024) + ' KB';
+}
+
+/* ---------- synthesised cases ---------- */
+document.querySelectorAll('[data-synth]').forEach(b => b.addEventListener('click', async () => {
+  const kind = b.dataset.synth, rate = 16000;
+  const secs = kind === 'short' ? 0.1 : 3;
+  const n = Math.floor(rate * secs), s = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    if (kind === 'tone') s[i] = 0.3 * Math.sin(2 * Math.PI * 220 * i / rate);
+    else if (kind === 'noise') s[i] = (Math.random() - 0.5) * 0.008;
+    else s[i] = 0;
+  }
+  $('#tts').value = '';
+  await setAudio(encodeWav(s, rate), 'synthetic: ' + kind);
+}));
+
+/* ---------- upload ---------- */
+$('#file').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if (f) { $('#tts').value = ''; await setAudio(f, 'uploaded ' + f.name); }
+});
+
+/* ---------- record ---------- */
+let recorder, chunks = [];
+$('#rec').addEventListener('click', async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  chunks = [];
+  recorder = new MediaRecorder(stream);
+  recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  recorder.onstop = async () => {
+    const ctx = new AudioContext();
+    const buf = await ctx.decodeAudioData(await new Blob(chunks).arrayBuffer());
+    const ch = buf.getChannelData(0);
+    // time to speak: first sample above the noise floor
+    let first = 0;
+    for (let i = 0; i < ch.length; i++) { if (Math.abs(ch[i]) > 0.02) { first = i; break; } }
+    $('#tts').value = Math.round(first / buf.sampleRate * 1000);
+    await setAudio(encodeWav(ch, buf.sampleRate), 'recorded ' + buf.duration.toFixed(1) + 's');
+    stream.getTracks().forEach(t => t.stop());
+  };
+  recorder.start(); recStart = Date.now();
+  $('#rec').disabled = true; $('#stop').disabled = false;
+  $('#recInfo').textContent = 'Recording…';
+});
+$('#stop').addEventListener('click', () => {
+  recorder && recorder.stop();
+  $('#rec').disabled = false; $('#stop').disabled = true;
+});
+
+/* ---------- run ---------- */
+const cls = v => v == null ? '' : v >= 80 ? 'g' : v >= 60 ? 'w' : 'b';
+const card = (k, v) => `<div class="card"><div class="k">${k}</div><div class="v">${v ?? '—'}</div></div>`;
+
+document.querySelectorAll('[data-run]').forEach(b => b.addEventListener('click', async () => {
+  if (!audioB64) { alert('Record, upload, or synthesise some audio first.'); return; }
+  const stage = b.dataset.run;
+  $('#raw').textContent = 'running ' + stage + '…';
+  $('#summary').innerHTML = ''; $('#detail').innerHTML = ''; $('#timing').textContent = '';
+  const body = {
+    audio_base64: audioB64, audio_format: audioMime,
+    reference_text: $('#ref').value, grade: $('#grade').value,
+    time_to_speak_ms: $('#tts').value ? Number($('#tts').value) : null
+  };
+  let res, data;
+  try {
+    res = await fetch('/lab/' + stage, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    data = await res.json();
+  } catch (e) { $('#raw').textContent = String(e); return; }
+
+  $('#raw').textContent = JSON.stringify(data, null, 2);
+  if (!res.ok) {
+    $('#summary').innerHTML = `<div class="err">${res.status} — ${data.detail || 'request failed'}</div>`;
+    return;
+  }
+  if (data.elapsed_ms != null) $('#timing').textContent = data.elapsed_ms + ' ms';
+  render(stage, data);
+}));
+
+function render(stage, d) {
+  if (stage === 'gate') {
+    const m = d.measured;
+    $('#summary').innerHTML =
+      `<div class="cards">${card('speech', d.has_speech ? 'yes' : 'no')}${card('reason', d.reason)}
+       ${card('duration', m.duration_seconds + 's')}${card('rms', m.rms)}
+       ${card('voiced', m.voiced_fraction)}${card('peak', m.peak)}</div>` +
+      (d.message ? `<div class="muted">${d.message}</div>` : '');
+    return;
+  }
+  if (stage === 'verbatim') {
+    const f = d.disfluency;
+    $('#summary').innerHTML =
+      `<div class="cards">${card('fillers', f.filler_count)}${card('per 100w', f.filler_rate_per_100w)}
+       ${card('repeats', f.repetitions)}</div>
+       <table><tr><th>Verbatim (blind)</th></tr><tr><td>${d.verbatim_text || '<span class="muted">— nothing —</span>'}</td></tr></table>
+       <div class="muted" style="margin-top:8px">${d.note}</div>`;
+    return;
+  }
+  const s = d.scores || {};
+  $('#summary').innerHTML = `<div class="cards">
+    ${card('overall', s.pron_score)}${card('accuracy', s.accuracy)}${card('fluency', s.fluency)}
+    ${card('completeness', s.completeness)}${card('prosody', s.prosody)}
+    ${d.status ? card('status', d.status) : ''}
+    ${d.reading ? card('WCPM', d.reading.wcpm) : ''}
+    ${d.channel_agreement != null ? card('agreement', d.channel_agreement) : ''}</div>`;
+
+  let html = '';
+  if (d.recognized != null || d.recognized_text != null) {
+    html += `<table><tr><th>Channel</th><th>Text</th></tr>
+      <tr><td>Azure</td><td>${d.recognized ?? d.recognized_text ?? ''}</td></tr>
+      ${d.verbatim != null ? `<tr><td>Verbatim</td><td>${d.verbatim || '—'}</td></tr>` : ''}</table>`;
+  }
+  if (d.timing) {
+    const t = d.timing;
+    html += `<h2 style="margin-top:16px">Timing</h2><div class="cards">
+      ${card('to speak', t.time_to_speak_ms != null ? t.time_to_speak_ms + 'ms' : '—')}
+      ${card('to word 1', t.time_to_first_word_ms + 'ms')}
+      ${card('pauses', t.pause_count)}${card('long', t.long_pause_count)}
+      ${card('longest', t.longest_pause_ms + 'ms')}</div>`;
+  }
+  if (d.phonics) {
+    html += `<h2 style="margin-top:16px">Phonics</h2><div class="scroll"><table>
+      <tr><th>Feature</th><th class="num">Accuracy</th></tr>` +
+      Object.entries(d.phonics).map(([k, v]) =>
+        `<tr><td>${k.replace(/_/g, ' ')}</td><td class="num ${cls(v)}">${v ?? '<span class="muted">not exercised</span>'}</td></tr>`
+      ).join('') + '</table></div>';
+  }
+  if (d.words && d.words.length) {
+    html += `<h2 style="margin-top:16px">Words &amp; phonemes</h2><div class="scroll"><table>
+      <tr><th>Word</th><th class="num">Acc</th><th>Error</th><th class="num">Offset</th><th>Phonemes (IPA)</th></tr>` +
+      d.words.map(w => `<tr>
+        <td>${w.word}</td>
+        <td class="num ${cls(w.accuracy)}">${w.accuracy}</td>
+        <td>${w.error_type === 'None' ? '<span class="muted">—</span>' : '<span class="b">' + w.error_type + '</span>'}</td>
+        <td class="num">${w.offset_ms}ms</td>
+        <td class="ipa">${(w.phonemes || []).map(p =>
+          `<span class="${cls(p.accuracy)}">${p.ipa}</span><span class="muted">${p.accuracy}</span>`).join(' · ') || '—'}</td>
+      </tr>`).join('') + '</table></div>';
+  }
+  $('#detail').innerHTML = html;
+}
+</script>
+</body>
+</html>

@@ -163,7 +163,11 @@ class FeatureExpectation:
             return bool(self.letters) and attempt.startswith(self.letters)
 
         if strategy is MatchStrategy.SUFFIX:
-            letters = self.letters
+            # A trailing silent 'e' is not itself the ending consonant sound.
+            # "l, e" (turnstile, candle) means the word ends on 'l', optionally
+            # followed by a silent 'e' - so "turnstil" still ends on 'l'.
+            consonants = "".join(alt for alt in self.alternatives if alt != "e")
+            letters = consonants or self.letters
             if not letters:
                 return False
             if attempt.endswith(letters):
@@ -178,7 +182,17 @@ class FeatureExpectation:
             vowel, _, ending = self.raw_value.partition("-")
             return vowel.strip().lower() in attempt and ending.strip().lower() in attempt
 
-        return any(alt in attempt for alt in self.alternatives)
+        # #73: a comma list is a conjunction, not a set of alternatives.
+        # "o, a, i" (bombastic) means all three vowels must be present, in
+        # order - so "bombstic", which drops the 'a', is an error rather than
+        # earning credit for the 'o' alone.
+        position = 0
+        for alt in self.alternatives:
+            index = attempt.find(alt, position)
+            if index < 0:
+                return False
+            position = index + len(alt)
+        return bool(self.alternatives)
 
 
 def parse_expectations(features: Dict[str, str]) -> List[FeatureExpectation]:
@@ -259,17 +273,37 @@ def _phonetic_key(word: str) -> str:
     w = w.replace("gh", "f")
     # ie -> e  (friend/frend — the i is silent before e)
     w = w.replace("ie", "e")
+    # ck -> k  (#63: clunk/clunck - an added letter that changes no sound)
+    w = w.replace("ck", "k")
     # Reduce doubled consonants to a single letter (still/stil, puzzle/puzle)
     w = re.sub(r"(.)\1+", r"\1", w)
-    # Remove silent 'e' at end (phone/fon, home/hom)
-    if len(w) > 2 and w.endswith("e") and w[-2] not in "aeiou":
-        w = w[:-1]
+    # #74: a trailing silent 'e' is NOT stripped. Dropping it shortens the
+    # vowel (home/hom, turnstile/turnstil), which is a phonics error, not a
+    # spelling convention. phone/fone still matches via the ph -> f rule.
     # Normalise final 'le' / 'el' to 'l' (candle/candel)
     if w.endswith("el") and len(w) > 3 and w[-3] not in "aeiou":
         w = w[:-2] + "l"
     elif w.endswith("le") and len(w) > 3 and w[-3] not in "aeiou":
         w = w[:-2] + "l"
     return w
+
+
+#: Irregular sight words, with the phonetic respellings that sound identical.
+#: Sight words are irregular by definition, so the rule-based phonetic key
+#: cannot reach them ("said" -> "sed", "what" -> "wat"). Homophones that are
+#: real words of their own (dose/does, witch/which) are deliberately absent -
+#: those are word-choice errors, not spelling-convention errors.
+_SOUND_ALIKE_VARIANTS: Dict[str, frozenset] = {
+    "said": frozenset({"sed", "sead"}),
+    "what": frozenset({"wat", "wot", "whot"}),
+    "they": frozenset({"thay"}),
+    "there": frozenset({"thare"}),
+    "could": frozenset({"cud", "coud", "culd"}),
+    "people": frozenset({"peepl", "peeple", "peopl"}),
+    "although": frozenset({"altho", "althow", "althou"}),
+    "of": frozenset({"ov", "uv"}),
+    "the": frozenset({"thu", "duh"}),
+}
 
 
 def sounds_like(target: str, attempt: str) -> bool:
@@ -282,6 +316,9 @@ def sounds_like(target: str, attempt: str) -> bool:
     """
     if not target or not attempt or target == attempt:
         return False
+    variants = _SOUND_ALIKE_VARIANTS.get(target.strip().lower())
+    if variants and attempt.strip().lower() in variants:
+        return True
     return _phonetic_key(target) == _phonetic_key(attempt)
 
 
