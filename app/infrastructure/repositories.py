@@ -170,6 +170,27 @@ class AudioCacheRepository:
         return self._client.ref(path).get() or {}
 
 
+class SnapshotRepository:
+    """Saved Learning Snapshots under ``users/{uid}/children/{child_id}/snapshot``.
+
+    A snapshot is generated once for a child and served on every later call.
+    This keeps the LLM output stable: the parent sees the same letter wording
+    regardless of how many times they open it.
+    """
+
+    def __init__(self, client: Optional[FirebaseClient] = None) -> None:
+        self._client = client or get_firebase_client()
+
+    def _path(self, uid: str, child_id: str) -> str:
+        return f"users/{uid}/children/{child_id}/snapshot"
+
+    def get(self, uid: str, child_id: str) -> Optional[Dict[str, Any]]:
+        return self._client.ref(self._path(uid, child_id)).get()
+
+    def save(self, uid: str, child_id: str, data: Dict[str, Any]) -> None:
+        self._client.ref(self._path(uid, child_id)).set(sanitize_data(data))
+
+
 class PaymentRepository:
     """Payment records under ``payments/{payment_id}`` plus a Stripe
     Checkout session index under ``payment_sessions/{session_id}``."""

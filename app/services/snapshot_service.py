@@ -141,9 +141,13 @@ class SnapshotService:
         id_token: str,
         child_id: str,
         grade: Optional[str] = None,
+        *,
+        uid: Optional[str] = None,
+        child_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Fetch all four results and synthesise the evidence package."""
-        uid, child_data = verify_paid_child(id_token, child_id)
+        if uid is None or child_data is None:
+            uid, child_data = verify_paid_child(id_token, child_id)
         child_name = child_data.get("name", "")
         # A letter about one child is written in the singular. The pronouns
         # come from the profile, never from the name.
