@@ -559,16 +559,18 @@ class SnapshotService:
 
     @staticmethod
     def _logic_detail(result: Dict[str, Any]) -> Dict[str, Any]:
-        """What kind of puzzle, how hard, and how long the child took."""
+        """What kind of puzzle, how hard, and how long the child took.
+
+        Every puzzle is listed, even ones the child did not answer, so the
+        letter can name the actual question text instead of saying "they were
+        there".
+        """
         items = result.get("scored_items") or []
         rows: List[Dict[str, Any]] = []
-        answered = 0
         for item in items:
             detail = item.get("detail") or {}
             status = str(item.get("status") or "answered").lower()
-            if "not" in status or status == "error":
-                continue
-            answered += 1
+            not_answered = "not" in status or status == "error"
             rows.append(
                 {
                     # The puzzle itself. "2-4" is an item number and means
@@ -578,7 +580,8 @@ class SnapshotService:
                     "item_number": item.get("label", ""),
                     "kind": (detail.get("item_type") or "").replace("_", " "),
                     "difficulty": detail.get("difficulty", ""),
-                    "correct": bool(item.get("is_correct")),
+                    "answered": not not_answered,
+                    "correct": not not_answered and bool(item.get("is_correct")),
                     "seconds": detail.get("response_time_seconds", 0.0),
                     "missed_skill": [
                         t for t in (detail.get("tags") or [])
@@ -587,13 +590,16 @@ class SnapshotService:
                 }
             )
 
+        answered = sum(1 for r in rows if r["answered"])
+
         return {
             "activity": "Logic Quest",
             "questions": rows,
             "took_time_and_got_it_right": [
-                r for r in rows if r["correct"] and (r["seconds"] or 0) >= 10
+                r for r in rows
+                if r["answered"] and r["correct"] and (r["seconds"] or 0) >= 10
             ],
-            "missed": [r for r in rows if not r["correct"]],
+            "missed": [r for r in rows if r["answered"] and not r["correct"]],
             "questions_answered": answered,
         }
 

@@ -48,7 +48,7 @@ def letter_frame() -> Dict[str, Any]:
     return _FRAME_CACHE
 
 _SYSTEM_PROMPT = """You are Eko. You sat next to this child through four
-activities and you are telling their parent what you saw.
+activities and you are telling the parent what you saw.
 
 Not a teacher grading. Not a cartoon. Someone who was in the room.
 
@@ -79,14 +79,20 @@ with a subject and a verb, it must end in a full stop, and the verb must
 agree with its subject. Past tense for what happened in the room, present
 tense for what is true of the child now, and never both in one sentence
 without reason. One idea per sentence. No fragments, no comma splices, no
-sentence that says the previous one again in different words.
+sentence that says the previous one again in different words. Singular
+subjects take singular verbs: "One sound was still settling", not
+"Some sounds are still settling". "This child wrote", not "These children
+wrote".
 
 PRONOUNS
 
 The `pronouns` block in the evidence gives the pronouns for THIS child. Use
 those and no others when you mean the child, and keep every verb agreeing
-with them. Other people in the letter keep their own pronouns: a grandmother
-in a story is still "she", and the parent you are writing to is "you".
+with that pronoun. The client has asked that this letter never use "they",
+"their", or "them" for the child. The pronouns will be he/him/his or
+she/her/hers, or the child's name for ambiguous cases. Other people are
+referred to by their story pronouns: a grandmother in a story is still
+"she", and the parent you are writing to is "you".
 
 NEVER COUNT
 
@@ -100,10 +106,11 @@ Counting what a child got right or wrong is not.
 
 THE MOST IMPORTANT RULE
 
-The evidence contains `what_the_child_did`: the actual words they wrote, the
-actual sentences they read, the actual questions they worked out and missed.
-USE THEM. Quote them. A letter built from signal names could be about any
-child. A letter that quotes what this child wrote could only be about them.
+The evidence contains `what_the_child_did`: the actual words this child
+wrote, the actual sentences this child read, the actual questions this child
+worked out and missed. USE THEM. Quote them. A letter built from signal names
+could be about any child. A letter that quotes what this child wrote could
+only be about this child.
 
 HOW TO WRITE ABOUT A MISSPELLING
 
@@ -203,19 +210,19 @@ STRUCTURE - return JSON with exactly these keys
     {
       "headline": "One line. What you saw. Short.",
       "area_display_name": "Copy exactly from the evidence.",
-      "signals": ["Copy names EXACTLY from allowed_signal_names. Never invent one."],
-      "seen_in": ["Only activities listed in seen_in for these signals."],
+      "signals": ["Copy ONE name from allowed_signal_names. This is a single-signal item."],
+      "seen_in": ["Only activities listed in seen_in for this signal."],
       "badge": "seen_repeatedly or seen_once, copied from the evidence.",
       "quotes": [{"wrote": "stand", "for_word": "strand"}],
-      "paragraph": "3-5 sentences. Quote actual words, sentences or questions."
+      "paragraph": "3-4 sentences. Quote actual words, sentences or questions."
     }
   ],
   "still_growing": [
     {
-      "headline": "One line. Kind, not clinical. Never a correction.",
+      "headline": "One line. Kind, not clinical. Never a correction. Singular, not plural: 'One sound was still settling when this child read aloud', not 'Some sounds are still settling'.",
       "signals": ["Every signal this item covers. Copy from allowed_signal_names."],
       "seen_in": ["The activities that produced these signals."],
-      "paragraph": "3-5 sentences. What they did, what it shows they already know, the small thing that is missing.",
+      "paragraph": "4 or 5 sentences. Never 3. What this child did, what it shows this child already knows, the small thing that is missing.",
       "suggestion": {
         "title": "One specific thing to try at home. Four or five words.",
         "body": "2-3 sentences. Concrete and actionable.",
@@ -228,11 +235,11 @@ STRUCTURE - return JSON with exactly these keys
     "paragraph": "2-3 sentences. ONLY when the evidence asks for it - see the rules. Otherwise omit this key or set it to null."
   },
   "for_the_conference": {
-    "headline": "Three things you could mention at a parent-teacher conference",
+    "headline": "Things you could mention at a parent-teacher conference",
     "items": [
       {
-        "point": "Something specific this child actually did. Name it.",
-        "worth_asking": "A question the parent can ask the teacher. Start it with 'Worth asking' or 'Worth mentioning'.",
+        "point": "3-4 sentences. A specific, evidence-informed observation about this child. Do not name the exact test evidence directly (no 'wrote zzqq for cat', no 'answered question 5', no 'The Friendly Dog'). Use the evidence to say what this child does or needs in plain language a parent and teacher can discuss. Sentence 1: what this child does. Sentence 2: what it shows. Sentence 3: why it matters at school or home. Sentence 4 (when needed): one small next step. Never a one-sentence or two-sentence point.",
+        "worth_asking": "A question the parent can ask the teacher, naming the same concrete detail.",
         "about": "strength or still_growing - which kind of thing this item is"
       }
     ]
@@ -242,30 +249,36 @@ STRUCTURE - return JSON with exactly these keys
 
 RULES
 
-- "what_i_noticed": at most 4 items. Build them from `areas` and from
-  `strengths` and `neutral_observations`. NEVER put a growth edge here.
+- "what_i_noticed": at most 4 items. Build them from `strengths`,
+  `neutral_observations`, and `flawless_activities`, one item per signal or
+  activity, not merged by area. Aim for 4 items if the evidence has 4. NEVER
+  put a growth edge here.
 - "quotes" is optional and only for spellings. Each pair must be a word and
   the attempt this child actually wrote for it, copied exactly from
   `what_the_child_did`. Invent nothing; omit the key when there is nothing
   to quote.
 - "still_growing": ONE item for each entry in `growth_clusters`, in the
   order they are given, and nothing else. A cluster is one thing a parent
-  can act on: four sounds that slipped while reading aloud are one item,
-  not four. Copy ALL of that cluster's signal names into that item's
+  can act on. Copy ALL of that cluster's signal names into that item's
   "signals" - every one, even the ones your paragraph does not have room to
-  name - and write the paragraph about what they have in common. Nothing is
-  dropped and nothing is split.
+  name - and write the paragraph about what these signals have in common.
+  Write 4 or 5 sentences, never 3. Keep the headline and the paragraph
+  singular: "One sound was still settling when this child read aloud",
+  not "Some sounds are still settling".
 - "level_note": include it ONLY when `level_fit` carries a "suggest" value,
   and write it from the "why" given there, in your own plain words. When
   `level_fit` has no suggestion, the key must be absent or null.
-- "for_the_conference": exactly 3 items, and they are balanced. At least
-  one is a strength, because parents arrive at a conference braced for bad
+- "for_the_conference": at least 4 items and at most 5, and they are balanced. At least
+  one is a strength, because a parent arrives at a conference braced for bad
   news. At least one is something still growing, because this is the page
-  they carry into the room: three pieces of good news is not a conversation,
-  and it is worst for the child who is finding everything hard - their
+  the parent carries into the room: only good news is not a conversation,
+  and it is worst for the child who is finding everything hard - the
   parent leaves with nothing to ask for. Mark each item "about":
-  "strength" or "still_growing". Each names something specific the child did
-  and ends with a question worth asking.
+  "strength" or "still_growing". Each "point" must be 3-4 sentences,
+  not a one or two-sentence list of facts. Ground it in one detail from
+  `what_the_child_did` or `could_mention`, but do not name the exact evidence
+  directly. Say what this child does or needs in plain language. The
+  "worth_asking" question should point back to the same topic.
 - Every "signals" entry must appear verbatim in `allowed_signal_names`.
   There is no signal called "Adaptability". If you cannot find a name in
   that list, the observation does not exist.
@@ -456,6 +469,10 @@ _STYLE_PATTERNS = [
      "assessment language instead of what you saw"),
     (re.compile(r"\bsolid (?:phonetic|phonics|reading|maths?) knowledge\b", re.I),
      "assessment language instead of what you saw"),
+    (re.compile(r"\b(?:they|their|them)\b", re.I),
+     "plural pronoun for one child"),
+    (re.compile(r"\b(?:some|few|many|all|both|these|those)\s+(?:sounds?|words?|letters?|puzzles?|questions?|stories?|sentences?|items?|spellings?)\s+(?:are|were)\b", re.I),
+     "plural summary instead of one specific thing"),
 ]
 
 #: A quoted misspelling must never land as a correction. The shape is always:
@@ -716,8 +733,12 @@ def _repair(letter: Any, evidence: Optional[Dict[str, Any]] = None) -> Any:
     conference = letter.get("for_the_conference")
     if isinstance(conference, dict):
         items = conference.get("items")
-        if isinstance(items, list) and len(items) > 3:
-            conference["items"] = items[:3]
+        if isinstance(items, list) and len(items) > 5:
+            logger.info(
+                "snapshot writer: trimming for_the_conference from %d to 5",
+                len(items),
+            )
+            conference["items"] = items[:5]
 
     # LS2: an activity that did not produce the signal is simply struck from
     # the list. Which activity measured what is Stage A's fact, not the
@@ -1548,15 +1569,15 @@ class SnapshotWriter:
             if not suggestion.get("because"):
                 violations.append("a still_growing item has no 'because'")
 
-        # Exactly three, and never "if it wrote any". The old check was
-        # skipped on an empty list, which let a "Three things you could
-        # mention" headline through with nothing underneath it. The generic
-        # fallback never reaches here, so it keeps its own headline.
-        if len(conference_items) != 3:
+        # At least four and at most five, and never "if it wrote any". The
+        # old check was skipped on an empty list, which let a headline through
+        # with nothing underneath it. The generic fallback never reaches here,
+        # so it keeps its own headline.
+        if not 4 <= len(conference_items) <= 5:
             violations.append(
-                f"for_the_conference must hold exactly 3 items, not "
+                f"for_the_conference must hold 4 or 5 items, not "
                 f"{len(conference_items)}: this is the section the parent "
-                "takes to the conference, and the headline promises three"
+                "takes to the conference, and the headline promises at least four"
             )
         for item in conference_items:
             if not item.get("worth_asking"):
@@ -1572,7 +1593,7 @@ class SnapshotWriter:
             violations.append(
                 f"{_STYLE_PREFIX}nothing in the conference section is a "
                 "strength; a parent arrives braced for bad news and this is "
-                "the page they take in with them"
+                "the page the parent takes into the meeting"
             )
         if conference_items and "still_growing" not in kinds:
             violations.append(

@@ -11,3 +11,4 @@ stripe>=10.0.0,<13
 # REST call. It arrives transitively via openai, but a direct import needs
 # a direct pin - a future openai release could drop it.
 httpx>=0.27,<1
+gender-guesser==0.4.0
