@@ -255,7 +255,8 @@ def _enough_noticed(evidence) -> list:
         evidence.get("neutral_observations") or []
     )
     flawless = evidence.get("flawless_activities") or []
-    wanted = min(4, len(material) + len(flawless))
+    kept = evidence.get("kept_at_it") or []
+    wanted = min(4, len(material) + len(flawless) + len(kept))
     items = [
         {
             "headline": "Pranav worked through this one.",
@@ -270,6 +271,14 @@ def _enough_noticed(evidence) -> list:
             {
                 "headline": "Pranav went through this one cleanly.",
                 "seen_in": [activity["activity"]],
+                "paragraph": "x",
+            }
+        )
+    for moment in kept[: max(0, wanted - len(items))]:
+        items.append(
+            {
+                "headline": "Pranav kept at it.",
+                "seen_in": [moment["activity"]],
                 "paragraph": "x",
             }
         )
