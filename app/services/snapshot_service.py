@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -164,14 +165,20 @@ class SnapshotService:
         # come from the profile, never from the name.
         pronouns = pronouns_for(child_data)
 
-        # A1. Fetch the latest result for every assessment.
-        results: Dict[str, Optional[Dict[str, Any]]] = {}
-        for key, storage_key in (
+        # A1. Fetch the latest result for every assessment. The four reads
+        # are independent and each downloads the activity's whole history,
+        # so they run side by side rather than one after another: Stage A
+        # measured seconds, and every one of them was spent waiting on the
+        # network doing nothing.
+        fetch_plan = (
             ("logic", TestType.LOGIC.storage_key),
             ("spelling", TestType.SPELLING.storage_key),
             ("speaking", TestType.SPEAKING.storage_key),
             ("comprehension", TestType.COMPREHENSION.storage_key),
-        ):
+        )
+
+        def fetch(pair: Tuple[str, str]) -> Tuple[str, Optional[Dict[str, Any]]]:
+            key, storage_key = pair
             try:
                 result = self._scores.get_latest(
                     uid, child_id, storage_key, grade
@@ -193,10 +200,15 @@ class SnapshotService:
                             "latest at grade %s instead",
                             key, grade, result.get("grade"),
                         )
-                results[key] = result
+                return key, result
             except Exception as exc:  # a failed fetch must not sink the letter
                 logger.warning("snapshot: could not fetch %s: %s", key, exc)
-                results[key] = None
+                return key, None
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results: Dict[str, Optional[Dict[str, Any]]] = dict(
+                pool.map(fetch, fetch_plan)
+            )
 
         completed = [k for k, v in results.items() if v]
         display = self._config["test_display_names"]
@@ -240,8 +252,10 @@ class SnapshotService:
             ),
             "strengths": strengths,
             "growth_edges": growth_edges,
-            # The same growth edges, grouped into what a parent can act on.
-            # One section of the letter per cluster.
+            # A measured strength no tag carries: the puzzle the child
+            # stayed with for ten seconds and got. It fills a noticed
+            # item without inventing anything.
+            "kept_at_it": self._kept_at_it(activity_detail, display),
             "growth_clusters": self._growth_clusters(growth_edges),
             "neutral_observations": neutral,
             "areas": self._areas(signals),
@@ -844,6 +858,36 @@ class SnapshotService:
             }
 
         return {"fit": "well_matched", "suggest": None}
+
+    @staticmethod
+    def _kept_at_it(
+        activity_detail: Dict[str, Dict[str, Any]],
+        display: Dict[str, str],
+    ) -> List[Dict[str, str]]:
+        """Moments the child stayed with something hard and got there.
+
+        A ten-second puzzle worked out is measured by the run and quoted
+        by every good letter, but no tag carries it, so the noticed
+        section could not count it. Like a flawless activity it is an
+        observation with no signal behind it: the letter item carries
+        no signals key and the activity goes in seen_in.
+        """
+        logic = activity_detail.get("logic") or {}
+        kept: List[Dict[str, str]] = []
+        for row in logic.get("took_time_and_got_it_right") or []:
+            seconds = row.get("seconds") or 0
+            if seconds < 10:
+                continue
+            kept.append(
+                {
+                    "activity": display["logic"],
+                    "what": (
+                        f"stayed {int(round(seconds))} seconds with "
+                        f"{row.get('question') or 'a puzzle'} and worked it out"
+                    ),
+                }
+            )
+        return kept[:2]
 
     @staticmethod
     def _flawless_activities(

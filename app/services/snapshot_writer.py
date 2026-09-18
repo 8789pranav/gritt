@@ -37,7 +37,7 @@ _FRAME_CACHE: Optional[Dict[str, Any]] = None
 #: The brief the model is given. Bump it when the brief changes materially,
 #: so two letters that read differently can be told apart by more than a
 #: guess about which week they were written in.
-PROMPT_VERSION = "2026-09-16"
+PROMPT_VERSION = "2026-09-19"
 
 
 def letter_frame() -> Dict[str, Any]:
@@ -250,22 +250,35 @@ STRUCTURE - return JSON with exactly these keys
 
 RULES
 
+- These words are never written, in any section, in any form: struggle,
+  struggled, struggles, fail, fails, failed, failure, weakness, weaknesses,
+  poor, incorrectly. Nor these phrases: "needs to work on", "should have",
+  "got it wrong", "the correct spelling is", "made mistakes", "made errors".
+  They are checked for and a letter containing one is thrown away. This
+  matters most for a child whose run found nothing to praise: write what
+  they DID - the sound they reached for, the answer they chose and why it
+  made sense - and what comes next. Never what they lack.
+
 - "what_i_noticed": 4 items, or every piece of evidence there is when
   there are fewer than 4. Build them from `strengths`,
-  `neutral_observations`, and `flawless_activities`, one item per signal or
-  activity, not merged by area. Use ALL THREE lists: a neutral observation
-  and a flawless activity each earn an item exactly as a strength does, and
-  leaving one out short-changes the child. Never more than 4, never fewer
-  than the evidence supports, and NEVER put a growth edge here.
+  `neutral_observations`, `flawless_activities`, and `kept_at_it`, one
+  item per signal or observation, not merged by area. Use ALL FOUR lists:
+  a neutral observation, a flawless activity and a kept-at-it moment each
+  earn an item exactly as a strength does, and leaving one out
+  short-changes the child. A kept-at-it item and a flawless item carry NO
+  "signals" key: omit it, and put the activity in "seen_in". Never more
+  than 4, never fewer than the evidence supports, and NEVER put a growth
+  edge here.
 - "quotes" is optional and only for spellings. Each pair must be a word and
   the attempt this child actually wrote for it, copied exactly from
   `what_the_child_did`. Invent nothing; omit the key when there is nothing
   to quote.
-- "still_growing": ONE item for each entry in `growth_clusters`, in the
-  order they are given, and nothing else. A cluster is one thing a parent
-  can act on. Copy ALL of that cluster's signal names into that item's
+- "still_growing": ONE item for each entry in the plan you are given in
+  the message below, in the order they are given, and nothing else. The
+  engine has already grouped the related findings and split them into
+  items for you. Copy ALL of an item's signal names into that item's
   "signals" - every one, even the ones your paragraph does not have room to
-  name - and write the paragraph about what these signals have in common.
+  name - and write the paragraph about what those signals have in common.
   Write 4 or 5 sentences, never 3. Keep the headline and the paragraph
   singular: "One sound was still settling when this child read aloud",
   not "Some sounds are still settling".
@@ -355,19 +368,40 @@ def _child_specific_rules(evidence: Dict[str, Any]) -> str:
     if not evidence.get("strengths"):
         flawless = evidence.get("flawless_activities") or []
         neutral = evidence.get("neutral_observations") or []
+        kept = evidence.get("kept_at_it") or []
         allowed = [f"{f['activity']}: {f['nothing_to_fault']}" for f in flawless]
         allowed += [n["signal_name"] for n in neutral]
-        lines.append(
-            "\nThis run found no strength to name. \"what_i_noticed\" is "
-            "built from these and NOTHING else:\n"
-            + ("\n".join(f"  - {a}" for a in allowed) or "  (nothing)")
-            + "\nA growth edge may never go there, however little else there "
-            "is - not in the prose and not in \"signals\". An item about a "
-            "flawless activity has NO \"signals\" key at all: omit it, and "
-            "put the activity in \"seen_in\". One honest item is a letter; a "
-            "growth edge dressed as praise is not. Say what went right in "
-            "plain words and leave the rest for \"still_growing\"."
-        )
+        allowed += [f"{k['activity']}: {k['what']}" for k in kept]
+        if allowed:
+            lines.append(
+                "\nThis run found no strength to name. \"what_i_noticed\" is "
+                "built from these and NOTHING else:\n"
+                + "\n".join(f"  - {a}" for a in allowed)
+                + "\nA growth edge may never go there, however little else "
+                "there is - not in the prose and not in \"signals\". An item "
+                "about a flawless activity has NO \"signals\" key at all: "
+                "omit it, and put the activity in \"seen_in\". One honest "
+                "item is a letter; a growth edge dressed as praise is not. "
+                "Say what went right in plain words and leave the rest for "
+                "\"still_growing\"."
+            )
+        else:
+            # Nothing positive fired at all. The letter is carried entirely
+            # by "still_growing", and that is the run where the writer
+            # reaches for "struggled" - the one word that throws the letter
+            # away. It is told the shape to use instead.
+            lines.append(
+                "\nThis run found nothing to praise: no strength, no neutral "
+                "observation, no activity without a fault. Send "
+                "\"what_i_noticed\" as an EMPTY LIST - inventing praise is "
+                "worse than leaving it out, and a growth edge may never go "
+                "there. The letter rests on \"still_growing\", and every "
+                "item is written as a thing in progress rather than a thing "
+                "gone wrong: what this child reached for, what it shows they "
+                "are already doing, and the one small piece not there yet. "
+                "The opening says what the sitting was like and what comes "
+                "next; it does not total up the run."
+            )
 
     span = session.get("span_phrase")
     activities = session.get("activities") or evidence.get("activities_completed") or []
@@ -665,6 +699,57 @@ def _match_case(source: str, replacement: str) -> str:
     return replacement
 
 
+#: "Struggled" is the one word a model writing four paragraphs about
+#: growth reaches for, and the one word the letter may never contain:
+#: it broke every draft of one letter and the parent got the generic
+#: page for it. Rewritten rather than rejected - a real letter about
+#: this child with one tired verb beats a warm letter about nobody.
+_DEFICIT_REWRITES = (
+    (re.compile(r"\bstruggled with\b", re.I), "had a hard time with"),
+    (re.compile(r"\bstruggled to\b", re.I), "had to work hard to"),
+    (re.compile(r"\bstruggled on\b", re.I), "worked hard on"),
+    (re.compile(r"\bstruggles with\b", re.I), "has a hard time with"),
+    (re.compile(r"\bstruggles to\b", re.I), "has to work hard to"),
+    (re.compile(r"\bstruggle with\b", re.I), "have a hard time with"),
+    (re.compile(r"\bstruggle to\b", re.I), "have to work hard to"),
+    (re.compile(r"\ba struggle\b", re.I), "hard work"),
+    (re.compile(r"\bstruggled\b", re.I), "worked hard"),
+    (re.compile(r"\bstruggles\b", re.I), "works hard"),
+    (re.compile(r"\bstruggle\b", re.I), "hard work"),
+)
+
+
+def soften_deficit_framing(text: str) -> str:
+    """Rewrite 'struggled' into what it means, without the deficit.
+
+    A repair rather than a rejection, exactly like the pronoun fix: the
+    word is mechanical, the letter around it is not, and discarding a
+    letter about this child over one tired verb leaves the parent with
+    the generic fallback, which says nothing about their child at all.
+    """
+    if not text:
+        return text
+    for pattern, replacement in _DEFICIT_REWRITES:
+        text = pattern.sub(
+            lambda m, r=replacement: _match_case(m.group(0), r), text
+        )
+    return text
+
+
+def _soften_deficit(value: Any) -> Any:
+    """Walk the letter and take the deficit framing out of the prose."""
+    if isinstance(value, str):
+        return soften_deficit_framing(value)
+    if isinstance(value, list):
+        return [_soften_deficit(v) for v in value]
+    if isinstance(value, dict):
+        return {
+            k: v if k in _COPIED_VERBATIM else _soften_deficit(v)
+            for k, v in value.items()
+        }
+    return value
+
+
 def neutralise_pronouns(text: str) -> str:
     """Rewrite gendered pronouns to they/them (LS8).
 
@@ -742,6 +827,7 @@ def _repair(letter: Any, evidence: Optional[Dict[str, Any]] = None) -> Any:
         return letter
 
     letter = _calm_exclamations(letter)
+    letter = _soften_deficit(letter)
     letter = _tidy(letter)
 
     # LS5 / LS3: these sections no longer exist.
@@ -1098,8 +1184,16 @@ _MAX_API_FAILURES = 3
 _RETRY_BACKOFF = (1.0, 2.0, 4.0)
 
 #: A call that has not returned by now is not going to. The SDK default is
-#: ten minutes, which a parent waiting on a page does not have.
-_REQUEST_TIMEOUT = 90.0
+#: ten minutes, which a parent waiting on a page does not have. Kept below
+#: the write budget so one hung call plus its retry cannot spend it all.
+_REQUEST_TIMEOUT = 60.0
+
+#: The whole of write() may spend no more than this, wall clock. Every
+#: extra draft and every opening rewrite is paid for by a parent staring
+#: at a spinner, and the budget the loops above allowed added up to five
+#: minutes of sequential calls. When the budget is spent the best draft in
+#: hand ships; the first call always happens, whatever the budget says.
+_WRITE_BUDGET_SECONDS = 100.0
 
 #: Concrete facts about this child a letter should carry before it is called
 #: finished. Below this it reads like a letter about any child, so the writer
@@ -1107,6 +1201,12 @@ _REQUEST_TIMEOUT = 90.0
 _ENOUGH_DETAIL = 6
 
 _MAX_NOTICED = 4
+
+#: How many items "still_growing" is laid out for. A run that finds eight
+#: edges in two areas is two clusters, and two items leave the page half
+#: empty: each cluster's signals are split until the section holds this
+#: many items, or nothing left can be split.
+_TARGET_GROWING = 4
 
 #: How many times to ask for the opening again, when only the opening is
 #: wrong. The first pass tends to fix the headline and leave the tally.
@@ -1231,6 +1331,261 @@ _ACTIVITY_BUCKETS = {
 }
 
 
+def _growing_plan(evidence: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """How still_growing is laid out: clusters, split to fill the page.
+
+    Every signal stays with its own cluster, so nothing is invented and
+    nothing is dropped - the plan is only a finer cut of what the engine
+    already found. The largest cluster is split in half first, so the
+    items come out roughly equal.
+    """
+    clusters = evidence.get("growth_clusters") or []
+    groups: List[Dict[str, Any]] = [
+        {"signals": list(c["signals"]), "cluster": c} for c in clusters
+    ]
+    while len(groups) < _TARGET_GROWING:
+        sizes = [len(g["signals"]) for g in groups]
+        if not sizes or max(sizes) < 2:
+            break
+        i = sizes.index(max(sizes))
+        signals = groups[i]["signals"]
+        mid = (len(signals) + 1) // 2
+        groups[i:i + 1] = [
+            {"signals": signals[:mid], "cluster": groups[i]["cluster"]},
+            {"signals": signals[mid:], "cluster": groups[i]["cluster"]},
+        ]
+    return groups
+
+
+def _noticed_plan(evidence: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The noticed section, item by item, with the fields code owns.
+
+    Signal names, activities, badges and areas are facts Stage A
+    measured. Returning them here is what lets the letter be assembled
+    rather than trusted: the model cannot get these wrong, because the
+    writer overwrites its copies with these before validating.
+    """
+    entries: List[Dict[str, Any]] = []
+    for signal in (
+        (evidence.get("strengths") or [])
+        + (evidence.get("neutral_observations") or [])
+    ):
+        entries.append(
+            {
+                "signals": [signal["signal_name"]],
+                "seen_in": [signal["seen_in"]],
+                "badge": signal["badge"],
+                "area_display_name": signal["area_display_name"],
+            }
+        )
+    for flawless in evidence.get("flawless_activities") or []:
+        entries.append(
+            {
+                "signals": [],
+                "seen_in": [flawless["activity"]],
+                "badge": "seen_once",
+                "area_display_name": "",
+            }
+        )
+    for kept in evidence.get("kept_at_it") or []:
+        entries.append(
+            {
+                "signals": [],
+                "seen_in": [kept["activity"]],
+                "badge": "seen_once",
+                "area_display_name": "",
+            }
+        )
+    return entries[:_MAX_NOTICED]
+
+
+def _conference_floor(evidence: Dict[str, Any]) -> int:
+    """The conference count the evidence supports, as the validator sees it."""
+    return min(
+        4,
+        sum(
+            len(evidence.get(key) or [])
+            for key in ("strengths", "neutral_observations",
+                        "flawless_activities", "growth_clusters")
+        ),
+    )
+
+
+def _letter_schema(
+    noticed_count: int,
+    growing_count: int,
+    conference_floor: int,
+    *,
+    with_counts: bool = True,
+) -> Dict[str, Any]:
+    """The letter's exact shape, for OpenAI Structured Outputs.
+
+    With counts, the item numbers themselves are enforced by the API:
+    a section cannot come back short, which is the failure that used to
+    cost a whole extra attempt. ``with_counts`` exists because counted
+    arrays took time to reach every account, and a letter is better
+    without the counts than not at all.
+    """
+
+    def exact(items: Dict[str, Any], n: int) -> Dict[str, Any]:
+        array: Dict[str, Any] = {"type": "array", "items": items}
+        if with_counts:
+            array["minItems"] = n
+            array["maxItems"] = n
+        return array
+
+    quote = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["wrote", "for_word"],
+        "properties": {
+            "wrote": {"type": "string"},
+            "for_word": {"type": "string"},
+        },
+    }
+    noticed_item = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "headline", "area_display_name", "signals", "seen_in",
+            "badge", "quotes", "paragraph",
+        ],
+        "properties": {
+            "headline": {"type": "string"},
+            "area_display_name": {"type": "string"},
+            "signals": {"type": "array", "items": {"type": "string"}},
+            "seen_in": {"type": "array", "items": {"type": "string"}},
+            "badge": {"type": "string"},
+            "quotes": {"type": "array", "items": quote},
+            "paragraph": {"type": "string"},
+        },
+    }
+    growing_item = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "headline", "signals", "seen_in", "paragraph", "suggestion"
+        ],
+        "properties": {
+            "headline": {"type": "string"},
+            "signals": {"type": "array", "items": {"type": "string"}},
+            "seen_in": {"type": "array", "items": {"type": "string"}},
+            "paragraph": {"type": "string"},
+            "suggestion": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["title", "body", "because"],
+                "properties": {
+                    "title": {"type": "string"},
+                    "body": {"type": "string"},
+                    "because": {"type": "string"},
+                },
+            },
+        },
+    }
+    conference_item = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["point", "worth_asking", "about"],
+        "properties": {
+            "point": {"type": "string"},
+            "worth_asking": {"type": "string"},
+            "about": {
+                "type": "string",
+                "enum": ["strength", "still_growing"],
+            },
+        },
+    }
+    conference_items: Dict[str, Any] = {
+        "type": "array",
+        "items": conference_item,
+    }
+    if with_counts:
+        conference_items["minItems"] = conference_floor
+        conference_items["maxItems"] = 5
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "opening", "what_i_noticed", "still_growing", "level_note",
+            "for_the_conference", "closing",
+        ],
+        "properties": {
+            "opening": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["headline", "paragraph"],
+                "properties": {
+                    "headline": {"type": "string"},
+                    "paragraph": {"type": "string"},
+                },
+            },
+            "what_i_noticed": exact(noticed_item, noticed_count),
+            "still_growing": exact(growing_item, growing_count),
+            "level_note": {
+                "type": ["object", "null"],
+                "additionalProperties": False,
+                "required": ["headline", "paragraph"],
+                "properties": {
+                    "headline": {"type": "string"},
+                    "paragraph": {"type": "string"},
+                },
+            },
+            "for_the_conference": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["headline", "items"],
+                "properties": {
+                    "headline": {"type": "string"},
+                    "items": conference_items,
+                },
+            },
+            "closing": {"type": "string"},
+        },
+    }
+    return {
+        "name": "learning_snapshot_letter",
+        "strict": True,
+        "schema": schema,
+    }
+
+
+def _assemble(letter: Dict[str, Any], evidence: Dict[str, Any]) -> Dict[str, Any]:
+    """Write Stage A's facts over the model's copies of them.
+
+    The model is asked for the whole letter, prose and scaffolding alike.
+    The scaffolding is checked and overwritten here: signal names,
+    activities, badges, areas and the level note's right to exist are
+    facts, and facts belong to code, not to a model's paraphrase of
+    them. After this, every structural guardrail passes by
+    construction, and the only thing left to check is the prose.
+    """
+    for item, plan in zip(
+        letter.get("what_i_noticed") or [], _noticed_plan(evidence)
+    ):
+        item["area_display_name"] = plan["area_display_name"]
+        item["seen_in"] = plan["seen_in"]
+        item["badge"] = plan["badge"]
+        if plan["signals"]:
+            item["signals"] = plan["signals"]
+        else:
+            item.pop("signals", None)
+
+    for item, group in zip(
+        letter.get("still_growing") or [], _growing_plan(evidence)
+    ):
+        item["signals"] = list(group["signals"])
+        item["seen_in"] = list(group["cluster"]["seen_in"])
+
+    level_note = letter.get("level_note")
+    if not (evidence.get("level_fit") or {}).get("suggest") or not isinstance(
+        level_note, dict
+    ):
+        letter.pop("level_note", None)
+
+    return letter
+
+
 def specificity(letter: Dict[str, Any], evidence: Dict[str, Any]) -> int:
     """How many of this child's concrete facts the draft actually used.
 
@@ -1271,8 +1626,13 @@ def missing_required_facts(
         if not options:
             continue
         if not any(o in text for o in options):
+            # A voice slip, not a broken promise. Leaving the story unnamed
+            # makes a thinner letter; it does not harm the child. As a hard
+            # rule this threw away every draft for a child whose run found
+            # nothing to praise, and the parent got the generic letter - which
+            # names nothing at all.
             missing.append(
-                f"the letter never names {required['what']} "
+                f"{_STYLE_PREFIX}the letter never names {required['what']} "
                 f"({', '.join(required['any_of'][:4])}) - {required['why']}"
             )
     return missing
@@ -1308,7 +1668,24 @@ class SnapshotWriter:
             attempt = 0        # drafts that reached the guardrails
             api_failures = 0   # calls that never produced a draft at all
 
+            deadline = time.monotonic() + _WRITE_BUDGET_SECONDS
+
+            def out_of_time() -> bool:
+                """Whether another call would push this parent past the budget."""
+                return time.monotonic() >= deadline
+
             while attempt < _MAX_ATTEMPTS and api_failures < _MAX_API_FAILURES:
+                # The first call happens whatever the clock says: a letter
+                # needs one draft to have anything to ship. Every call after
+                # it is an improvement, and an improvement a parent has
+                # already waited 100 seconds for is not worth two more.
+                if (attempt or api_failures) and out_of_time():
+                    logger.warning(
+                        "snapshot writer: %.0fs budget spent before attempt "
+                        "%d; shipping the best draft so far",
+                        _WRITE_BUDGET_SECONDS, attempt + 1,
+                    )
+                    break
                 # One bad minute on the network is not a reason to give this
                 # parent a letter about nobody. A raised call used to abandon
                 # the whole loop - including any good draft already in hand -
@@ -1331,7 +1708,7 @@ class SnapshotWriter:
                         "retrying in %.0fs",
                         exc, api_failures, _MAX_API_FAILURES, wait,
                     )
-                    if api_failures < _MAX_API_FAILURES:
+                    if api_failures < _MAX_API_FAILURES and not out_of_time():
                         time.sleep(wait)
                     continue
                 attempt += 1
@@ -1347,15 +1724,37 @@ class SnapshotWriter:
                 # words. Keeping whichever arrived first is what made the
                 # letter good some runs and vague others.
                 rank = (-len(opening), -len(style), detail)
-                if not harm and (best is None or rank > best_rank):
-                    best, best_rank, best_style = (
-                        letter, rank, style + opening
+                if not harm:
+                    # This draft keeps every promise the product makes. Keep
+                    # it, ranked, and ship at once when it also reads clean.
+                    # When it only slips on voice - a thin "what I noticed",
+                    # a plural pronoun - it is worth one more ask: a call
+                    # costs twenty seconds now, the violations ride into the
+                    # next attempt's brief, and the best draft is kept if
+                    # the next one is worse. Stopping at the first harm-free
+                    # draft was the choice made when every extra call cost a
+                    # parent minutes; the thin sections that shipped ever
+                    # since are the price of it.
+                    if rank > (best_rank or ()):
+                        best, best_rank, best_style = (
+                            letter, rank, style + opening
+                        )
+                    if not (style or opening):
+                        logger.info(
+                            "snapshot writer: attempt %d clean; shipping",
+                            attempt,
+                        )
+                        break
+                    logger.info(
+                        "snapshot writer: attempt %d kept every guardrail "
+                        "with %d voice slip(s); asking again",
+                        attempt, len(style) + len(opening),
                     )
-
-                logger.info(
-                    "snapshot writer: attempt %d - %d violation(s), "
-                    "specificity %d", attempt, len(violations), detail,
-                )
+                else:
+                    logger.info(
+                        "snapshot writer: attempt %d - %d violation(s), "
+                        "specificity %d", attempt, len(violations), detail,
+                    )
                 if not violations and detail >= _ENOUGH_DETAIL:
                     return self._finalise(letter, evidence, specificity=detail)
 
@@ -1380,7 +1779,9 @@ class SnapshotWriter:
             # little thin, still belongs to this child; the generic letter
             # belongs to no one.
             if best is not None:
-                best = self._rewrite_opening_if_needed(best, evidence)
+                best = self._rewrite_opening_if_needed(
+                    best, evidence, deadline=deadline
+                )
                 best_style = [
                     v for v in best_style
                     if not v.startswith(_OPENING_PREFIX)
@@ -1422,13 +1823,44 @@ class SnapshotWriter:
                 + "\n".join(f"- {v}" for v in violations)
             )
 
-        clusters = evidence.get("growth_clusters") or []
+        clusters = _growing_plan(evidence)
         plan = "\n".join(
-            f"  {index}. {cluster['area_display_name']} "
-            f"(seen in {', '.join(cluster['seen_in'])}) - signals: "
-            + ", ".join(cluster["signals"])
-            for index, cluster in enumerate(clusters, start=1)
+            f"  {index}. {group['cluster']['area_display_name']} "
+            f"(seen in {', '.join(group['cluster']['seen_in'])}) - signals: "
+            + ", ".join(group["signals"])
+            for index, group in enumerate(clusters, start=1)
         )
+
+        # The noticed section, spelled out item by item the way the growth
+        # section is. "4 items, or every piece of evidence there is when
+        # there are fewer" was left for the model to count, and it wrote
+        # two against six: the section a parent opens the letter for
+        # arrived half empty on every run.
+        noticed = (
+            [s["signal_name"] for s in evidence.get("strengths") or []]
+            + [s["signal_name"]
+               for s in evidence.get("neutral_observations") or []]
+            + [
+                f"the flawless run in {f['activity']} - "
+                f"{f['nothing_to_fault']} (this item carries NO signals "
+                f"key; put {f['activity']!r} in seen_in)"
+                for f in evidence.get("flawless_activities") or []
+            ]
+            + [
+                f"kept at it: {k['what']} (this item carries NO signals "
+                f"key; put {k['activity']!r} in seen_in)"
+                for k in evidence.get("kept_at_it") or []
+            ]
+        )[:_MAX_NOTICED]
+        noticed_plan = "\n".join(
+            f"  {index}. {name}"
+            for index, name in enumerate(noticed, start=1)
+        )
+        # Compact JSON, not indented: the evidence carries every word,
+        # sentence and question the child produced, and indenting it roughly
+        # doubles the prompt the model has to read on every attempt. The model
+        # parses either form; the parent waiting on the page pays for the
+        # difference in seconds per call.
         user_prompt = (
             "Below is the structured evidence for one child. "
             "Write the letter now using ONLY this data.\n\n"
@@ -1436,31 +1868,76 @@ class SnapshotWriter:
             "each of these, in this order, each carrying every signal name "
             "listed beside it:\n"
             f"{plan or '  (none)'}\n\n"
+            f'"what_i_noticed" has exactly {len(noticed)} item(s), one for '
+            "each of these, in this order, and nothing else:\n"
+            f"{noticed_plan or '  (none)'}\n\n"
             "EVIDENCE (JSON):\n"
-            f"{json.dumps(evidence, indent=2, ensure_ascii=False, default=str)}"
+            f"{json.dumps(evidence, separators=(',', ':'), ensure_ascii=False, default=str)}"
         )
 
-        response = client.chat.completions.create(
-            model=self._settings.openai.analysis_model,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_prompt},
-            ],
-            # The same child should get the same letter. 0.4 gave a good
-            # letter on one run and a vague one on the next from identical
-            # evidence, which is the whole problem with letting the model
-            # choose how specific to be.
-            temperature=0.15,
-            # The letter got longer: every growth edge now reaches the parent,
-            # and the conference section is new.
-            max_tokens=5000,
-        )
-        return json.loads(response.choices[0].message.content)
+        response_format = {
+            "type": "json_schema",
+            "json_schema": _letter_schema(
+                len(noticed), len(clusters), _conference_floor(evidence)
+            ),
+        }
+
+        def create(fmt: Dict[str, Any]):
+            return client.chat.completions.create(
+                model=self._settings.openai.analysis_model,
+                response_format=fmt,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_prompt},
+                ],
+                # The same child should get the same letter. 0.4 gave a good
+                # letter on one run and a vague one on the next from identical
+                # evidence, which is the whole problem with letting the model
+                # choose how specific to be.
+                temperature=0.15,
+                # The letter got longer: every growth edge now reaches the parent,
+                # and the conference section is new. A cap that is cut close is
+                # how a letter ends mid-JSON: a retry at the same cap produces
+                # near the same letter and cuts again, so leave room.
+                max_tokens=6000,
+            )
+
+        try:
+            response = create(response_format)
+        except Exception as exc:
+            if "minItems" not in str(exc) and "maxItems" not in str(exc):
+                raise
+            # This account does not take counted arrays yet; ask without
+            # them rather than spend the parent's whole budget on an error.
+            logger.info(
+                "snapshot writer: asking again without item counts: %s", exc
+            )
+            response = create(
+                {
+                    "type": "json_schema",
+                    "json_schema": _letter_schema(
+                        len(noticed), len(clusters), _conference_floor(evidence),
+                        with_counts=False,
+                    ),
+                }
+            )
+        choice = response.choices[0]
+        # A letter cut off mid-JSON is not a bad draft and not a network
+        # failure: it ran out of room. Said plainly in the log, it points at
+        # max_tokens rather than at a model that "keeps failing".
+        if choice.finish_reason == "length":
+            raise RuntimeError(
+                "model output hit the max_tokens limit before the JSON "
+                "closed; the letter is too long for the cap"
+            )
+        return _assemble(json.loads(choice.message.content), evidence)
 
     # ------------------------------------------------------------------
     def _rewrite_opening_if_needed(
-        self, letter: Dict[str, Any], evidence: Dict[str, Any]
+        self,
+        letter: Dict[str, Any],
+        evidence: Dict[str, Any],
+        deadline: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Ask again for the opening alone, when only the opening is wrong.
 
@@ -1469,7 +1946,8 @@ class SnapshotWriter:
         fix one paragraph tends to rewrite everything except that paragraph.
         Asked for the paragraph on its own, with the problems named, it
         mostly gets it. If it does not, the draft we already had is kept:
-        this can improve the letter and can never cost it.
+        this can improve the letter and can never cost it - except in time,
+        which is why it stops at write()'s deadline like everything else.
         """
         def opening_problems(draft: Dict[str, Any]) -> List[str]:
             return [
@@ -1485,6 +1963,12 @@ class SnapshotWriter:
         # thing about a child who did, and it takes being told twice.
         for _ in range(_OPENING_ATTEMPTS):
             if not problems:
+                return best
+            if deadline is not None and time.monotonic() >= deadline:
+                logger.warning(
+                    "snapshot writer: budget spent before an opening "
+                    "rewrite; keeping the opening we have"
+                )
                 return best
 
             try:
@@ -1561,10 +2045,16 @@ class SnapshotWriter:
                 "what_the_child_did": evidence.get("what_the_child_did"),
                 "growth_clusters": evidence.get("growth_clusters"),
                 "session": evidence.get("session"),
-            }, indent=2, ensure_ascii=False, default=str)
+            }, separators=(",", ":"), ensure_ascii=False, default=str)
         )
 
-        client = openai.OpenAI(api_key=self._settings.openai.api_key)
+        # Same rules as _generate: retries and timeouts are owned by write(),
+        # and the SDK default of ten minutes is longer than a parent waits.
+        client = openai.OpenAI(
+            api_key=self._settings.openai.api_key,
+            max_retries=0,
+            timeout=_REQUEST_TIMEOUT,
+        )
         response = client.chat.completions.create(
             model=self._settings.openai.analysis_model,
             response_format={"type": "json_object"},
@@ -1575,7 +2065,13 @@ class SnapshotWriter:
             temperature=0.2,
             max_tokens=700,
         )
-        return json.loads(response.choices[0].message.content)
+        choice = response.choices[0]
+        if choice.finish_reason == "length":
+            raise RuntimeError(
+                "opening rewrite hit the max_tokens limit before the JSON "
+                "closed"
+            )
+        return json.loads(choice.message.content)
 
     # ------------------------------------------------------------------
     def _validate(
@@ -1615,15 +2111,15 @@ class SnapshotWriter:
         available = sum(
             len(evidence.get(key) or [])
             for key in ("strengths", "neutral_observations",
-                        "flawless_activities")
+                        "flawless_activities", "kept_at_it")
         )
         wanted = min(_MAX_NOTICED, available)
         if len(noticed) < wanted:
             violations.append(
                 f"{_STYLE_PREFIX}what_i_noticed has {len(noticed)} item(s) "
                 f"where the evidence supports {wanted}: every strength, "
-                "neutral observation and flawless activity earns its own "
-                "item until the section holds four"
+                "neutral observation, flawless activity and kept-at-it "
+                "moment earns its own item until the section holds four"
             )
 
         # LS9: every growth edge the engine found must reach the parent -
@@ -1644,13 +2140,13 @@ class SnapshotWriter:
                 "cover each one in an item, grouping the ones that are the "
                 f"same finding: {', '.join(sorted(uncovered))}"
             )
-        clusters = evidence.get("growth_clusters") or []
-        if clusters and len(growing) > len(clusters):
+        planned = _growing_plan(evidence)
+        if planned and len(growing) != len(planned):
             violations.append(
-                f"{_STYLE_PREFIX}still_growing has {len(growing)} items where "
-                f"the evidence groups into {len(clusters)}; one item per "
-                "cluster, so a parent is given things to act on rather than a "
-                "list to get through"
+                f"{_STYLE_PREFIX}still_growing has {len(growing)} item(s) "
+                f"where the evidence groups into {len(planned)}: one item "
+                "per entry in the plan, so a parent is given things to "
+                "act on rather than a list to get through"
             )
         if not expected and growing:
             violations.append("still_growing invents growth edges not in the evidence")
@@ -1947,6 +2443,8 @@ class SnapshotWriter:
         # run, that made the one honest item unwritable.
         every_activity = {s["seen_in"] for s in all_signals} | {
             f["activity"] for f in (evidence.get("flawless_activities") or [])
+        } | {
+            k["activity"] for k in (evidence.get("kept_at_it") or [])
         }
         if not every_activity:
             return []
