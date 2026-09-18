@@ -244,6 +244,38 @@ def _compliant_opening(evidence) -> dict:
     }
 
 
+def _enough_noticed(evidence) -> list:
+    """As many observations as the evidence supports, up to four.
+
+    The section has a floor as well as a ceiling: a letter that leaves it
+    empty is one a parent opens to no cards at all. Skeleton letters have to
+    carry it or they fail for a reason that is not under test.
+    """
+    material = (evidence.get("strengths") or []) + (
+        evidence.get("neutral_observations") or []
+    )
+    flawless = evidence.get("flawless_activities") or []
+    wanted = min(4, len(material) + len(flawless))
+    items = [
+        {
+            "headline": "Pranav worked through this one.",
+            "signals": [signal["signal_name"]],
+            "seen_in": [signal["seen_in"]],
+            "paragraph": "x",
+        }
+        for signal in material[:wanted]
+    ]
+    for activity in flawless[: max(0, wanted - len(items))]:
+        items.append(
+            {
+                "headline": "Pranav went through this one cleanly.",
+                "seen_in": [activity["activity"]],
+                "paragraph": "x",
+            }
+        )
+    return items
+
+
 def _one_grouped_growth_item(evidence) -> list:
     """Every growth edge, covered by a single item.
 
@@ -262,10 +294,10 @@ def _one_grouped_growth_item(evidence) -> list:
 
 
 def _balanced_conference() -> dict:
-    """Three items a parent could take to a meeting.
+    """Four items a parent could take to a meeting.
 
     One thing to be glad about and one thing to raise: the section is checked
-    for both, because three pieces of good news is not a conversation.
+    for both, because only good news is not a conversation.
     """
     return {
         "items": [
@@ -275,6 +307,8 @@ def _balanced_conference() -> dict:
              "about": "still_growing"},
             {"point": "p3", "worth_asking": "Worth asking.",
              "about": "strength"},
+            {"point": "p4", "worth_asking": "Worth asking.",
+             "about": "still_growing"},
         ]
     }
 
@@ -1136,51 +1170,63 @@ class TestConferenceSection:
             "still_growing": [],
             "for_the_conference": {
                 "items": [
-                    {"point": "a", "worth_asking": "Worth asking about X."},
-                    {"point": "b", "worth_asking": "Worth asking about Y."},
+                    {"point": "a", "worth_asking": "Worth asking about X.",
+                     "about": "strength"},
+                    {"point": "b", "worth_asking": "Worth asking about Y.",
+                     "about": "strength"},
                     {"point": "c"},
+                    {"point": "d", "worth_asking": "Worth asking about Z.",
+                     "about": "still_growing"},
                 ]
             },
         }
         violations = SnapshotWriter()._validate(letter, evidence)
         assert any("no question for the parent to ask" in v for v in violations)
 
-    @pytest.mark.parametrize("count", [0, 1, 2, 4])
-    def test_a_section_that_is_not_three_items_is_rejected(self, evidence, count):
-        """The headline promises three. Zero used to slip through.
+    @pytest.mark.parametrize("count", [0, 1, 2, 3, 6])
+    def test_a_section_that_is_not_four_or_five_items_is_rejected(self, evidence, count):
+        """The headline promises four or five. Zero used to slip through.
 
         The count check was skipped when the list was empty, so a letter
-        could carry "Three things you could mention" with nothing under it.
+        could carry a headline with nothing under it.
+
+        This child's run found plenty, so the floor here is the full four.
+        A run that found less lowers it - see the thin-run tests - because a
+        floor the evidence cannot reach can only be met by inventing the
+        difference.
         """
         letter = {
             "opening": {"headline": "x", "paragraph": "y"},
             "what_i_noticed": [],
             "still_growing": [],
             "for_the_conference": {
-                "headline": "Three things you could mention",
+                "headline": "Things you could mention",
                 "items": [
-                    {"point": str(i), "worth_asking": "Worth asking."}
+                    {"point": str(i), "worth_asking": "Worth asking.",
+                     "about": "strength" if i % 2 == 0 else "still_growing"}
                     for i in range(count)
                 ],
             },
         }
         violations = SnapshotWriter()._validate(letter, evidence)
-        assert any("exactly 3 items" in v for v in violations), count
+        assert any("for_the_conference must hold" in v for v in violations), count
 
-    def test_exactly_three_is_accepted(self, evidence):
+    @pytest.mark.parametrize("count", [4, 5])
+    def test_four_or_five_items_is_accepted(self, evidence, count):
         letter = {
             "opening": {"headline": "x", "paragraph": "y"},
             "what_i_noticed": [],
             "still_growing": [],
             "for_the_conference": {
                 "items": [
-                    {"point": str(i), "worth_asking": "Worth asking."}
-                    for i in range(3)
+                    {"point": str(i), "worth_asking": "Worth asking.",
+                     "about": "strength" if i % 2 == 0 else "still_growing"}
+                    for i in range(count)
                 ]
             },
         }
         violations = SnapshotWriter()._validate(letter, evidence)
-        assert not any("exactly 3 items" in v for v in violations), violations
+        assert not any("4 or 5 items" in v for v in violations), violations
 
     def test_the_generic_fallback_headline_promises_no_number(self, evidence):
         """It carries no items, so it must not say "three"."""
@@ -1277,13 +1323,13 @@ class TestRepairRatherThanDiscard:
         assert "what_helped" not in letter
         assert "full_picture" not in letter
 
-    def test_a_fourth_conference_item_is_trimmed(self, evidence):
+    def test_a_sixth_conference_item_is_trimmed(self, evidence):
         from app.services.snapshot_writer import _repair
 
         letter = _repair(
-            {"for_the_conference": {"items": [{"point": str(i)} for i in range(6)]}}
+            {"for_the_conference": {"items": [{"point": str(i)} for i in range(7)]}}
         )
-        assert len(letter["for_the_conference"]["items"]) == 3
+        assert len(letter["for_the_conference"]["items"]) == 5
 
     def test_a_repaired_letter_then_passes_the_guardrail(self, evidence):
         from app.services.snapshot_writer import _repair
@@ -1420,7 +1466,7 @@ class TestVoiceSlipsNeverCostTheLetter:
         opening["paragraph"] = paragraph + " " + opening["paragraph"]
         return {
             "opening": opening,
-            "what_i_noticed": [],
+            "what_i_noticed": _enough_noticed(evidence),
             "still_growing": _one_grouped_growth_item(evidence),
             "for_the_conference": _balanced_conference(),
         }

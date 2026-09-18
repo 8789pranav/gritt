@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from app.domain.enums import TestType
@@ -64,10 +64,21 @@ def _load_area_config() -> Dict[str, Any]:
     return _AREA_CACHE
 
 
-def _parse_evidence(evidence: str) -> Dict[str, Any]:
-    """Turn ``"pattern_accuracy=1.0, pattern_items_count=3"`` into a dict."""
+def _parse_evidence(evidence: Any) -> Dict[str, Any]:
+    """Turn ``"pattern_accuracy=1.0, pattern_items_count=3"`` into a dict.
+
+    Not every tag stores its measurements as that string. Some carry them as
+    a mapping already, and one child's results brought the whole letter down
+    with an AttributeError on the split below - a 500, which is the one
+    outcome worse than a thin letter. A mapping is taken as it stands, and
+    anything else is read as no measurements rather than as a crash.
+    """
+    if isinstance(evidence, dict):
+        return dict(evidence)
+    if not isinstance(evidence, str):
+        return {}
     parsed: Dict[str, Any] = {}
-    for part in (evidence or "").split(","):
+    for part in evidence.split(","):
         if "=" not in part:
             continue
         name, _, raw = part.partition("=")
@@ -80,7 +91,7 @@ def _parse_evidence(evidence: str) -> Dict[str, Any]:
     return parsed
 
 
-def _questions_behind(evidence: str, answered_in_activity: int) -> int:
+def _questions_behind(evidence: Any, answered_in_activity: int) -> int:
     """How many questions produced this tag (LS4).
 
     Prefers the construct's own item count, falls back to how much of the
@@ -162,9 +173,27 @@ class SnapshotService:
             ("comprehension", TestType.COMPREHENSION.storage_key),
         ):
             try:
-                results[key] = self._scores.get_latest(
+                result = self._scores.get_latest(
                     uid, child_id, storage_key, grade
                 )
+                # A child is not always assessed at the grade their profile
+                # now says. Sadie's profile read Third while all four of her
+                # results were recorded at Second, and asking for Third
+                # returned nothing at all - no tags, no words, no letter to
+                # write. The work the child actually did is the better
+                # answer than an empty page, so take it whatever grade it
+                # was recorded under.
+                if result is None and grade:
+                    result = self._scores.get_latest(
+                        uid, child_id, storage_key, None
+                    )
+                    if result is not None:
+                        logger.info(
+                            "snapshot: no %s result at grade %s; using the "
+                            "latest at grade %s instead",
+                            key, grade, result.get("grade"),
+                        )
+                results[key] = result
             except Exception as exc:  # a failed fetch must not sink the letter
                 logger.warning("snapshot: could not fetch %s: %s", key, exc)
                 results[key] = None
@@ -722,9 +751,17 @@ class SnapshotService:
             if not raw:
                 continue
             try:
-                stamps.append(datetime.fromisoformat(str(raw).replace("Z", "+00:00")))
+                stamp = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
             except ValueError:
                 continue
+            # Results written before the timestamps carried a zone are still
+            # in the database, and Python refuses to subtract one of those
+            # from a zoned one. A child with an old result and a new one
+            # crashed the whole letter on the subtraction below. They were
+            # all written in UTC, so that is what the old ones are read as.
+            if stamp.tzinfo is None:
+                stamp = stamp.replace(tzinfo=timezone.utc)
+            stamps.append(stamp)
 
         if not stamps:
             return {

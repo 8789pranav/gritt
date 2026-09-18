@@ -17,3 +17,8 @@ venv/
 # than something to review in a diff.
 sample_letters/
 sample_letters_live/
+
+# Records pulled out of the live database before a manual repair. They are
+# one parent's child, by name, and they belong on the machine that made the
+# repair rather than in the history of the project.
+scripts/_backups/

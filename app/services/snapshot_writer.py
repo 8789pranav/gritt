@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional
 
 from app.core.config import get_settings
@@ -210,8 +211,8 @@ STRUCTURE - return JSON with exactly these keys
     {
       "headline": "One line. What you saw. Short.",
       "area_display_name": "Copy exactly from the evidence.",
-      "signals": ["Copy ONE name from allowed_signal_names. This is a single-signal item."],
-      "seen_in": ["Only activities listed in seen_in for this signal."],
+      "signals": ["Copy ONE name from allowed_signal_names. This is a single-signal item. OMIT this key entirely for an item about a flawless activity: there is no signal behind it, and borrowing a growth edge's name to fill the key is forbidden."],
+      "seen_in": ["Only activities listed in seen_in for this signal, or the flawless activity itself."],
       "badge": "seen_repeatedly or seen_once, copied from the evidence.",
       "quotes": [{"wrote": "stand", "for_word": "strand"}],
       "paragraph": "3-4 sentences. Quote actual words, sentences or questions."
@@ -249,10 +250,13 @@ STRUCTURE - return JSON with exactly these keys
 
 RULES
 
-- "what_i_noticed": at most 4 items. Build them from `strengths`,
+- "what_i_noticed": 4 items, or every piece of evidence there is when
+  there are fewer than 4. Build them from `strengths`,
   `neutral_observations`, and `flawless_activities`, one item per signal or
-  activity, not merged by area. Aim for 4 items if the evidence has 4. NEVER
-  put a growth edge here.
+  activity, not merged by area. Use ALL THREE lists: a neutral observation
+  and a flawless activity each earn an item exactly as a strength does, and
+  leaving one out short-changes the child. Never more than 4, never fewer
+  than the evidence supports, and NEVER put a growth edge here.
 - "quotes" is optional and only for spellings. Each pair must be a word and
   the attempt this child actually wrote for it, copied exactly from
   `what_the_child_did`. Invent nothing; omit the key when there is nothing
@@ -340,6 +344,29 @@ def _child_specific_rules(evidence: Dict[str, Any]) -> str:
             + ". Not \"In \" one, not \"during\" one, not \"as seen in\" one. "
             "The parent does not know what they are. Say what happened - the "
             "word, the puzzle, the sentence - and let it stand on its own."
+        )
+
+    # A run can find nothing to praise by name and still have plenty to
+    # say. One child came out of all four activities with a single flawless
+    # activity and a single growth edge, and every draft reached for the
+    # growth edge to fill "what I noticed" - which is the one thing that
+    # section may never hold. The model is told plainly what it has, so it
+    # stops looking for a strength that was never found.
+    if not evidence.get("strengths"):
+        flawless = evidence.get("flawless_activities") or []
+        neutral = evidence.get("neutral_observations") or []
+        allowed = [f"{f['activity']}: {f['nothing_to_fault']}" for f in flawless]
+        allowed += [n["signal_name"] for n in neutral]
+        lines.append(
+            "\nThis run found no strength to name. \"what_i_noticed\" is "
+            "built from these and NOTHING else:\n"
+            + ("\n".join(f"  - {a}" for a in allowed) or "  (nothing)")
+            + "\nA growth edge may never go there, however little else there "
+            "is - not in the prose and not in \"signals\". An item about a "
+            "flawless activity has NO \"signals\" key at all: omit it, and "
+            "put the activity in \"seen_in\". One honest item is a letter; a "
+            "growth edge dressed as praise is not. Say what went right in "
+            "plain words and leave the rest for \"still_growing\"."
         )
 
     span = session.get("span_phrase")
@@ -1060,6 +1087,20 @@ _REMOVED_KEYS = ("what_helped", "full_picture")
 #: broken so far.
 _MAX_ATTEMPTS = 3
 
+#: How many times a call that never came back may be retried. This budget is
+#: separate from _MAX_ATTEMPTS on purpose: a dropped connection is not a
+#: draft, and letting it spend one of the three drafting attempts is how a
+#: parent ended up with a letter written on a single try.
+_MAX_API_FAILURES = 3
+
+#: Seconds to wait before retrying a failed call. Short, and it backs off,
+#: because the common cause is a rate limit rather than an outage.
+_RETRY_BACKOFF = (1.0, 2.0, 4.0)
+
+#: A call that has not returned by now is not going to. The SDK default is
+#: ten minutes, which a parent waiting on a page does not have.
+_REQUEST_TIMEOUT = 90.0
+
 #: Concrete facts about this child a letter should carry before it is called
 #: finished. Below this it reads like a letter about any child, so the writer
 #: asks again rather than settling for the first draft that breaks no rule.
@@ -1264,11 +1305,36 @@ class SnapshotWriter:
             best_rank: tuple = ()
             best_style: List[str] = []
 
-            for attempt in range(_MAX_ATTEMPTS):
-                letter = _repair(
-                    self._generate(evidence, violations=seen or None), evidence
-                )
-                violations = self._validate(letter, evidence)
+            attempt = 0        # drafts that reached the guardrails
+            api_failures = 0   # calls that never produced a draft at all
+
+            while attempt < _MAX_ATTEMPTS and api_failures < _MAX_API_FAILURES:
+                # One bad minute on the network is not a reason to give this
+                # parent a letter about nobody. A raised call used to abandon
+                # the whole loop - including any good draft already in hand -
+                # and ship the generic letter, which is how a transient error
+                # became one parent's permanent snapshot. It is retried on its
+                # own budget, so three drafting attempts stay three.
+                try:
+                    letter = _repair(
+                        self._generate(evidence, violations=seen or None),
+                        evidence,
+                    )
+                    violations = self._validate(letter, evidence)
+                except Exception as exc:
+                    wait = _RETRY_BACKOFF[
+                        min(api_failures, len(_RETRY_BACKOFF) - 1)
+                    ]
+                    api_failures += 1
+                    logger.warning(
+                        "snapshot writer: call failed (%s) - %d of %d, "
+                        "retrying in %.0fs",
+                        exc, api_failures, _MAX_API_FAILURES, wait,
+                    )
+                    if api_failures < _MAX_API_FAILURES:
+                        time.sleep(wait)
+                    continue
+                attempt += 1
                 style = [v for v in violations if v.startswith(_STYLE_PREFIX)]
                 opening = [v for v in violations
                            if v.startswith(_OPENING_PREFIX)]
@@ -1288,14 +1354,14 @@ class SnapshotWriter:
 
                 logger.info(
                     "snapshot writer: attempt %d - %d violation(s), "
-                    "specificity %d", attempt + 1, len(violations), detail,
+                    "specificity %d", attempt, len(violations), detail,
                 )
                 if not violations and detail >= _ENOUGH_DETAIL:
                     return self._finalise(letter, evidence, specificity=detail)
 
                 if violations:
                     logger.warning(
-                        "snapshot writer: attempt %d broke %s", attempt + 1, violations
+                        "snapshot writer: attempt %d broke %s", attempt, violations
                     )
                 for violation in violations:
                     if violation not in seen:
@@ -1342,7 +1408,13 @@ class SnapshotWriter:
     ) -> Dict[str, Any]:
         import openai
 
-        client = openai.OpenAI(api_key=self._settings.openai.api_key)
+        # Retries are owned by write(), in one place and with one budget,
+        # so the SDK is told not to quietly add a second set underneath.
+        client = openai.OpenAI(
+            api_key=self._settings.openai.api_key,
+            max_retries=0,
+            timeout=_REQUEST_TIMEOUT,
+        )
         system = _SYSTEM_PROMPT + "\n\n" + _child_specific_rules(evidence)
         if violations:
             system += (
@@ -1535,6 +1607,25 @@ class SnapshotWriter:
         if len(noticed) > _MAX_NOTICED:
             violations.append(f"more than {_MAX_NOTICED} items in what_i_noticed")
 
+        # There was a ceiling here and no floor, so a letter could carry two
+        # items while a third observation sat unused in the evidence. What a
+        # parent is owed is everything that was actually seen, up to the
+        # four the section can hold - never a fourth that had to be invented
+        # to make the page look full.
+        available = sum(
+            len(evidence.get(key) or [])
+            for key in ("strengths", "neutral_observations",
+                        "flawless_activities")
+        )
+        wanted = min(_MAX_NOTICED, available)
+        if len(noticed) < wanted:
+            violations.append(
+                f"{_STYLE_PREFIX}what_i_noticed has {len(noticed)} item(s) "
+                f"where the evidence supports {wanted}: every strength, "
+                "neutral observation and flawless activity earns its own "
+                "item until the section holds four"
+            )
+
         # LS9: every growth edge the engine found must reach the parent -
         # but not necessarily in an item of its own. Four read-aloud sounds
         # are one thing for a parent to work on, so the check is that every
@@ -1573,11 +1664,29 @@ class SnapshotWriter:
         # old check was skipped on an empty list, which let a headline through
         # with nothing underneath it. The generic fallback never reaches here,
         # so it keeps its own headline.
-        if not 4 <= len(conference_items) <= 5:
+        #
+        # Four, unless the run did not find four things. One child came out
+        # of all four activities with a single flawless activity and a single
+        # growth edge - two things in total - and a flat floor of four made
+        # the letter impossible: every draft broke this rule, none was ever
+        # eligible, and the parent got the generic letter on every press, for
+        # ever. A floor the evidence cannot reach is not a standard, it is an
+        # outage, and the only way to meet it would be to invent the
+        # difference.
+        floor = min(
+            4,
+            sum(
+                len(evidence.get(key) or [])
+                for key in ("strengths", "neutral_observations",
+                            "flawless_activities", "growth_clusters")
+            ),
+        )
+        if not floor <= len(conference_items) <= 5:
             violations.append(
-                f"for_the_conference must hold 4 or 5 items, not "
+                f"for_the_conference must hold {floor} to 5 items, not "
                 f"{len(conference_items)}: this is the section the parent "
-                "takes to the conference, and the headline promises at least four"
+                f"takes to the conference, and the run found {floor} "
+                "thing(s) worth raising"
             )
         for item in conference_items:
             if not item.get("worth_asking"):
@@ -1832,7 +1941,13 @@ class SnapshotWriter:
             activities_for.setdefault(signal["signal_name"], set()).add(
                 signal["seen_in"]
             )
-        every_activity = {s["seen_in"] for s in all_signals}
+        # An activity with nothing to fault fires no tag, so it appears in
+        # none of the signal lists - and naming it read as naming an activity
+        # that never happened. For a child whose only good news is a clean
+        # run, that made the one honest item unwritable.
+        every_activity = {s["seen_in"] for s in all_signals} | {
+            f["activity"] for f in (evidence.get("flawless_activities") or [])
+        }
         if not every_activity:
             return []
 
