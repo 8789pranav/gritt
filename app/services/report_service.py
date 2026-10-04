@@ -168,6 +168,7 @@ class ReportService:
                 "name": child_data.get("name", ""),
                 "age": child_data.get("age", 0),
                 "grade": grade,
+                "gender": child_data.get("gender", "unspecified"),
             },
             "assessments": {},
             "all_strength_tags": [],

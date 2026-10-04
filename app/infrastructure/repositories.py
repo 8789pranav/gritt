@@ -250,3 +250,32 @@ class FeedbackRepository:
 
     def get_all(self) -> Dict[str, Dict[str, Any]]:
         return self._client.ref("parent_feedback").get() or {}
+
+
+class PromoCodeRepository:
+    """Single-use promo codes stored under ``promo_codes/{code}``.
+
+    Each code unlocks exactly one child without payment. A code is created
+    with ``status = "active"`` and moves to ``status = "used"`` the first
+    (and only) time a parent redeems it, recording who redeemed it and for
+    which child.
+    """
+
+    def __init__(self, client: Optional[FirebaseClient] = None) -> None:
+        self._client = client or get_firebase_client()
+
+    def create(self, code: str, data: Dict[str, Any]) -> None:
+        self._client.ref(f"promo_codes/{sanitize_key(code)}").set(
+            sanitize_data(data)
+        )
+
+    def get(self, code: str) -> Optional[Dict[str, Any]]:
+        return self._client.ref(f"promo_codes/{sanitize_key(code)}").get()
+
+    def update(self, code: str, fields: Dict[str, Any]) -> None:
+        self._client.ref(f"promo_codes/{sanitize_key(code)}").update(
+            sanitize_data(fields)
+        )
+
+    def get_all(self) -> Dict[str, Dict[str, Any]]:
+        return self._client.ref("promo_codes").get() or {}
