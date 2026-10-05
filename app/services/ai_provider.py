@@ -93,6 +93,23 @@ specialised assessment engines. Your job is to SYNTHESISE, not evaluate.
     difficulties (feature errors) and attention/guessing issues (unrelated
     attempts).
 
+11. **Match the child's gender in grammar and pronouns.** The child's gender
+    is provided in `child.gender` as one of `"male"`, `"female"`,
+    `"rather_not_say"`, or `"unspecified"`. Write the entire report so that
+    every pronoun, possessive adjective, and any gendered term agrees with
+    that gender:
+    - For `"male"` use he/him/his and "boy"/"son".
+    - For `"female"` use she/her/her and "girl"/"daughter".
+    - For `"rather_not_say"` the parent has explicitly chosen not to share
+      the child's gender. Use the child's first name (from `child.name`)
+      instead of any pronoun, and use "child" instead of "boy"/"girl"/
+      "son"/"daughter". Never guess or assume a gender. Reword sentences
+      to avoid pronouns where needed (e.g., "Alex showed strong pattern
+      recognition" rather than "He showed strong pattern recognition").
+    - For `"unspecified"` (or missing) follow the same rule as
+      `"rather_not_say"`: use the child's first name and "child".
+    Keep the rest of the language and tone unchanged.
+
 ## OUTPUT FORMAT
 
 You must return a JSON object with exactly this structure:
@@ -219,9 +236,23 @@ class AIProvider:
     @staticmethod
     def _build_user_prompt(context: Dict[str, Any]) -> str:
         """Build the user message with all assessment data as JSON."""
+        child = context.get("child", {}) if isinstance(context.get("child"), dict) else {}
+        gender = str(child.get("gender", "unspecified")).lower()
+        gender_hint = {
+            "male": "boy (use he/him/his)",
+            "female": "girl (use she/her/her)",
+            "rather_not_say": (
+                "rather not say — the parent chose not to share gender. "
+                "Use the child's first name instead of any pronoun and "
+                "\"child\" instead of boy/girl/son/daughter. Do not guess."
+            ),
+        }.get(gender, "gender unspecified (use the child's first name instead of pronouns)")
+
         return (
             "Below is the complete assessment data for a child. "
             "Generate a holistic progress report using ONLY this data.\n\n"
+            f"CHILD GENDER: {gender_hint}. Every pronoun and gendered word in "
+            "the report must agree with this gender.\n\n"
             "ASSESSMENT DATA (JSON):\n"
             f"{json.dumps(context, indent=2, ensure_ascii=False)}\n\n"
             "Generate the report now. Remember: only use data that appears above. "

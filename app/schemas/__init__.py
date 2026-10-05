@@ -42,6 +42,7 @@ class ChildCreate(BaseModel):
     name: str
     age: int
     grade: str
+    gender: Optional[str] = None
 
 
 class ChildDetails(BaseModel):
@@ -276,6 +277,24 @@ class PaymentStatusRequest(BaseModel):
     idToken: str
     payment_id: Optional[str] = None
     session_id: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Promo codes
+# ---------------------------------------------------------------------------
+class GeneratePromoCodesRequest(BaseModel):
+    idToken: str
+    count: int = 1
+
+
+class ListPromoCodesRequest(BaseModel):
+    idToken: str
+
+
+class RedeemPromoCodeRequest(BaseModel):
+    idToken: str
+    code: str
+    child_id: str
 
 
 # ---------------------------------------------------------------------------

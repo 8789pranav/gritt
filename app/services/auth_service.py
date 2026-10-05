@@ -23,6 +23,26 @@ from app.infrastructure.repositories import (
 
 VALID_GRADES = ["Kindergarten", "First", "Second", "Third"]
 
+VALID_GENDERS = {"male", "female", "rather_not_say"}
+
+
+def _normalize_gender(value: Optional[str]) -> str:
+    """Lowercase and validate the child's gender.
+
+    Returns ``"male"``, ``"female"`` or ``"rather_not_say"`` when a recognisable
+    value is supplied, and ``"unspecified"`` for anything missing/unknown so
+    downstream code (the AI report) always gets a concrete value to write
+    pronouns with. ``"rather_not_say"`` is the parent's explicit choice to
+    withhold gender — the AI then writes the report using the child's first
+    name instead of gendered pronouns.
+    """
+    if not value:
+        return "unspecified"
+    lowered = str(value).strip().lower()
+    if lowered in VALID_GENDERS:
+        return lowered
+    return "unspecified"
+
 
 class AuthService:
     """Handles registration, login, profile, and child management."""
@@ -116,7 +136,14 @@ class AuthService:
         raise ValidationError("Provided user details do not match stored data")
 
     # -- child management ---------------------------------------------------
-    def add_child(self, id_token: str, name: str, age: int, grade: str) -> Dict[str, Any]:
+    def add_child(
+        self,
+        id_token: str,
+        name: str,
+        age: int,
+        grade: str,
+        gender: Optional[str] = None,
+    ) -> Dict[str, Any]:
         decoded = verify_token(id_token)
         uid = decoded["uid"]
         if not name or age < 0 or grade not in VALID_GRADES:
@@ -127,6 +154,7 @@ class AuthService:
             "name": name,
             "age": age,
             "grade": grade,
+            "gender": _normalize_gender(gender),
             "payment_status": "unpaid",
             "created_at": self._utc_now(),
         }
@@ -134,6 +162,7 @@ class AuthService:
         return {
             "child_id": child_id,
             "payment_status": "unpaid",
+            "gender": child_data["gender"],
             "message": "Child added successfully",
         }
 
@@ -147,6 +176,7 @@ class AuthService:
                 "name": data.get("name", ""),
                 "age": data.get("age", 0),
                 "grade": data.get("grade", ""),
+                "gender": data.get("gender", "unspecified"),
                 "payment_status": data.get("payment_status", "unpaid"),
             }
             for child_id, data in children_data.items()
@@ -183,6 +213,7 @@ class AuthService:
                     "name": data.get("name", ""),
                     "age": data.get("age", 0),
                     "grade": data.get("grade", ""),
+                    "gender": data.get("gender", "unspecified"),
                     "scores": scores,
                 }
             )

@@ -46,7 +46,7 @@ async def get_user_details(user_details: UserDetails):
 @router.post("/add_child/")
 async def add_child(child: ChildCreate):
     svc = AuthService()
-    return svc.add_child(child.idToken, child.name, child.age, child.grade)
+    return svc.add_child(child.idToken, child.name, child.age, child.grade, child.gender)
 
 
 @router.post("/get_children/")
