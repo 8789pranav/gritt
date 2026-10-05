@@ -1,0 +1,372 @@
+{
+  "user_id": "test-uid",
+  "child_id": "child-1",
+  "grade": "Second",
+  "parent_summary": {
+    "overall_accuracy": 73,
+    "words_correct": 11,
+    "words_total": 15,
+    "sound_accuracy": 98,
+    "sound_accuracy_note": "Sound accuracy counts the sounds your child wrote down correctly. It is usually higher than word accuracy, because a word can be heard perfectly and still be spelled by a rule your child has not met yet.",
+    "phonics_score": 100,
+    "sight_word_score": 75,
+    "confidence": "Low",
+    "key_error_patterns": [
+      {
+        "pattern": "Spelling convention error",
+        "count": 3
+      }
+    ],
+    "strengths": [
+      "Beginning consonant",
+      "Ending consonant",
+      "Short vowel",
+      "Consonant digraph",
+      "Consonant blend",
+      "Long vowel"
+    ],
+    "focus_areas": [
+      "Spelling conventions"
+    ],
+    "recommendation": "Continue practising: Spelling conventions.",
+    "note": "Note: Placement is instructional and not a clinical diagnosis."
+  },
+  "dear_parent_tags": [
+    {
+      "tag": "blend_competent",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child handles consonant blends competently.",
+      "evidence": "blend_accuracy=1.0, blend_words_count=10"
+    },
+    {
+      "tag": "digraph_competent",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child handles consonant digraphs competently.",
+      "evidence": "digraph_accuracy=1.0, digraph_words_count=2"
+    },
+    {
+      "tag": "phonetic_strategy_strong",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child decodes words using solid phonetic knowledge across all positions.",
+      "evidence": "beginning_accuracy=1.0, final_accuracy=1.0, vowel_accuracy=1.0"
+    },
+    {
+      "tag": "vowel_accuracy_strong",
+      "confidence": "high",
+      "polarity": "strength",
+      "description": "Child demonstrates mastery of short and long vowel patterns.",
+      "evidence": "vowel_error_count=0, vowel_words_count=11"
+    },
+    {
+      "tag": "spelling_convention_emerging",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Child hears the sounds in words but does not yet know the spelling rules.",
+      "evidence": "convention_error_count=3"
+    }
+  ],
+  "per_word_tags": [
+    {
+      "item_id": "grade_2:quaint",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "consonant_blend_correct",
+        "long_vowel_correct"
+      ]
+    },
+    {
+      "item_id": "grade_2:clunk",
+      "answered": true,
+      "is_correct": false,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "short_vowel_correct",
+        "consonant_blend_correct",
+        "spelling_convention_error"
+      ]
+    },
+    {
+      "item_id": "grade_2:coast",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "consonant_blend_correct",
+        "long_vowel_correct"
+      ]
+    },
+    {
+      "item_id": "grade_2:standstill",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "short_vowel_correct",
+        "consonant_blend_correct"
+      ]
+    },
+    {
+      "item_id": "grade_2:climax",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "short_vowel_correct",
+        "consonant_blend_correct"
+      ]
+    },
+    {
+      "item_id": "grade_2:bombastic",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "short_vowel_correct",
+        "consonant_blend_correct"
+      ]
+    },
+    {
+      "item_id": "grade_2:strand",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "short_vowel_correct",
+        "consonant_blend_correct"
+      ]
+    },
+    {
+      "item_id": "grade_2:graph",
+      "answered": true,
+      "is_correct": false,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "short_vowel_correct",
+        "consonant_digraph_correct",
+        "consonant_blend_correct",
+        "spelling_convention_error"
+      ]
+    },
+    {
+      "item_id": "grade_2:hunted",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "short_vowel_correct",
+        "consonant_blend_correct",
+        "inflected_ending_correct"
+      ]
+    },
+    {
+      "item_id": "grade_2:phone",
+      "answered": true,
+      "is_correct": false,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "consonant_digraph_correct",
+        "long_vowel_correct",
+        "spelling_convention_error"
+      ]
+    },
+    {
+      "item_id": "grade_2:from",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "beginning_consonant_correct",
+        "ending_consonant_correct",
+        "short_vowel_correct",
+        "consonant_blend_correct"
+      ]
+    },
+    {
+      "item_id": "grade_2:does",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "sight_word_correct"
+      ]
+    },
+    {
+      "item_id": "grade_2:they",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "sight_word_correct"
+      ]
+    },
+    {
+      "item_id": "grade_2:said",
+      "answered": false,
+      "is_correct": null,
+      "tags": []
+    },
+    {
+      "item_id": "grade_2:what",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "sight_word_correct"
+      ]
+    }
+  ],
+  "teacher_admin_detail": {
+    "test_level": "Second",
+    "words": 15,
+    "correct": 11,
+    "instructional_level": "Second",
+    "table_data": [
+      {
+        "word": "quaint",
+        "attempt": "quaint",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      },
+      {
+        "word": "clunk",
+        "attempt": "clunck",
+        "correct": false,
+        "error_type": "Spelling convention",
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Incorrect"
+      },
+      {
+        "word": "coast",
+        "attempt": "coast",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      },
+      {
+        "word": "standstill",
+        "attempt": "standstill",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      },
+      {
+        "word": "climax",
+        "attempt": "climax",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      },
+      {
+        "word": "bombastic",
+        "attempt": "bombastic",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      },
+      {
+        "word": "strand",
+        "attempt": "strand",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      },
+      {
+        "word": "graph",
+        "attempt": "graff",
+        "correct": false,
+        "error_type": "Spelling convention",
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Incorrect"
+      },
+      {
+        "word": "hunted",
+        "attempt": "hunted",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      },
+      {
+        "word": "phone",
+        "attempt": "fone",
+        "correct": false,
+        "error_type": "Spelling convention",
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Incorrect"
+      },
+      {
+        "word": "from",
+        "attempt": "from",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      },
+      {
+        "word": "does",
+        "attempt": "does",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      },
+      {
+        "word": "they",
+        "attempt": "they",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      },
+      {
+        "word": "said",
+        "attempt": "",
+        "correct": false,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Not answered"
+      },
+      {
+        "word": "what",
+        "attempt": "what",
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "hints_used": 0,
+        "icon": "Correct"
+      }
+    ]
+  }
+}

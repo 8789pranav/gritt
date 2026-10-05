@@ -1725,36 +1725,21 @@ class SnapshotWriter:
                 # letter good some runs and vague others.
                 rank = (-len(opening), -len(style), detail)
                 if not harm:
-                    # This draft keeps every promise the product makes. Keep
-                    # it, ranked, and ship at once when it also reads clean.
-                    # When it only slips on voice - a thin "what I noticed",
-                    # a plural pronoun - it is worth one more ask: a call
-                    # costs twenty seconds now, the violations ride into the
-                    # next attempt's brief, and the best draft is kept if
-                    # the next one is worse. Stopping at the first harm-free
-                    # draft was the choice made when every extra call cost a
-                    # parent minutes; the thin sections that shipped ever
-                    # since are the price of it.
-                    if rank > (best_rank or ()):
-                        best, best_rank, best_style = (
-                            letter, rank, style + opening
-                        )
-                    if not (style or opening):
-                        logger.info(
-                            "snapshot writer: attempt %d clean; shipping",
-                            attempt,
-                        )
-                        break
+                    # Ship it. The item counts are enforced by the schema,
+                    # the signal names and activities are written by code,
+                    # and the one word that used to break every draft is
+                    # repaired: a harm-free draft IS the letter. Polishing
+                    # voice with another call cost the parent half a minute
+                    # and changed a phrase.
+                    best, best_rank, best_style = (
+                        letter, rank, style + opening
+                    )
                     logger.info(
                         "snapshot writer: attempt %d kept every guardrail "
-                        "with %d voice slip(s); asking again",
-                        attempt, len(style) + len(opening),
+                        "(%d voice slip(s), specificity %d); shipping",
+                        attempt, len(style) + len(opening), detail,
                     )
-                else:
-                    logger.info(
-                        "snapshot writer: attempt %d - %d violation(s), "
-                        "specificity %d", attempt, len(violations), detail,
-                    )
+                    break
                 if not violations and detail >= _ENOUGH_DETAIL:
                     return self._finalise(letter, evidence, specificity=detail)
 

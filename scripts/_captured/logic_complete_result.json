@@ -1,0 +1,765 @@
+{
+  "user_id": "test-uid",
+  "child_id": "child-1",
+  "grade": "Third",
+  "correct_answers": 12,
+  "total_items": 15,
+  "parent_summary": {
+    "overall_accuracy": 80.0,
+    "strengths": [
+      "Your child holds several pieces of information in mind at once and works through them.",
+      "Your child tries different strategies and adapts their approach when needed."
+    ],
+    "focus_areas": [
+      "Your child is starting to see how ideas connect. Comparing and sorting everyday objects together will help."
+    ],
+    "recommendation": "Your child worked through most of the puzzles well. Keep introducing multi-step puzzles to stretch their thinking further.",
+    "note": "Assessment is instructional and not a clinical diagnosis."
+  },
+  "dear_parent_tags": [
+    {
+      "tag": "reasoning_under_load",
+      "confidence": "medium",
+      "polarity": "strength",
+      "description": "Your child holds several pieces of information in mind at once and works through them.",
+      "evidence": "load_accuracy=1.0, load_items_count=3"
+    },
+    {
+      "tag": "flexible_strategy_use",
+      "confidence": "medium",
+      "polarity": "strength",
+      "description": "Your child tries different strategies and adapts their approach when needed.",
+      "evidence": "flexibility_accuracy=1.0, flexibility_items_count=3"
+    },
+    {
+      "tag": "relational_reasoning_emerging",
+      "confidence": "medium",
+      "polarity": "growth_edge",
+      "description": "Your child is starting to see how ideas connect. Comparing and sorting everyday objects together will help.",
+      "evidence": "relational_accuracy=0.6667, relational_items_count=3"
+    }
+  ],
+  "per_item_tags": [
+    {
+      "item_id": "logic_3_1",
+      "answered": false,
+      "is_correct": null,
+      "tags": [
+        "pattern_detection_strong_missed"
+      ]
+    },
+    {
+      "item_id": "logic_3_2",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "reasoning_under_load"
+      ]
+    },
+    {
+      "item_id": "logic_3_3",
+      "answered": true,
+      "is_correct": false,
+      "tags": [
+        "relational_reasoning_present_missed"
+      ]
+    },
+    {
+      "item_id": "logic_3_4",
+      "answered": false,
+      "is_correct": null,
+      "tags": [
+        "systematic_problem_solving_missed"
+      ]
+    },
+    {
+      "item_id": "logic_3_5",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "pattern_detection_strong"
+      ]
+    },
+    {
+      "item_id": "logic_3_6",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "systematic_problem_solving"
+      ]
+    },
+    {
+      "item_id": "logic_3_7",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "systematic_problem_solving"
+      ]
+    },
+    {
+      "item_id": "logic_3_8",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "flexible_strategy_use"
+      ]
+    },
+    {
+      "item_id": "logic_3_9",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "pattern_detection_strong"
+      ]
+    },
+    {
+      "item_id": "logic_3_10",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "relational_reasoning_present"
+      ]
+    },
+    {
+      "item_id": "logic_3_11",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "relational_reasoning_present"
+      ]
+    },
+    {
+      "item_id": "logic_3_12",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "reasoning_under_load"
+      ]
+    },
+    {
+      "item_id": "logic_3_13",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "reasoning_under_load"
+      ]
+    },
+    {
+      "item_id": "logic_3_14",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "flexible_strategy_use"
+      ]
+    },
+    {
+      "item_id": "logic_3_15",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "flexible_strategy_use"
+      ]
+    }
+  ],
+  "teacher_admin_detail": {
+    "test_level": "Third",
+    "questions": 15,
+    "correct": 12,
+    "table_data": [
+      {
+        "item_number": "3-1",
+        "question": "Look at this pattern: 2, 6, 18, 54, ___",
+        "item_type": "pattern",
+        "difficulty": "hard",
+        "selected_answer": "",
+        "correct_answer": "162",
+        "selected_index": null,
+        "correct_index": 2,
+        "correct": false,
+        "error_type": "Not answered",
+        "time": 0.0,
+        "icon": "Not answered"
+      },
+      {
+        "item_number": "3-2",
+        "question": "Maya is older than Kai.\nKai is older than Priya.\nPriya is older than Jude.\nWho is the second youngest?",
+        "item_type": "transitive reasoning",
+        "difficulty": "medium",
+        "selected_answer": "Priya",
+        "correct_answer": "Priya",
+        "selected_index": 2,
+        "correct_index": 2,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-3",
+        "question": "Every blooper is a floop.\nEvery floop is a zang.\nIs every blooper a zang?",
+        "item_type": "syllogism",
+        "difficulty": "hard",
+        "selected_answer": "No, never",
+        "correct_answer": "Yes, definitely",
+        "selected_index": 1,
+        "correct_index": 0,
+        "correct": false,
+        "error_type": "Relational question missed",
+        "time": 10.0,
+        "icon": "Incorrect"
+      },
+      {
+        "item_number": "3-4",
+        "question": "In a game, you earn a star for every 3 correct answers.\nYou lose a star for every 2 wrong answers.\nYou got 9 right and 4 wrong.\nHow many stars do you have?",
+        "item_type": "dual rule arithmetic",
+        "difficulty": "hard",
+        "selected_answer": "",
+        "correct_answer": "1",
+        "selected_index": null,
+        "correct_index": 0,
+        "correct": false,
+        "error_type": "Not answered",
+        "time": 0.0,
+        "icon": "Not answered"
+      },
+      {
+        "item_number": "3-5",
+        "question": "Each group follows a rule.\nWhich group breaks its own rule?",
+        "item_type": "meta categorization",
+        "difficulty": "medium",
+        "selected_answer": "Red, Blue, Banana (colours)",
+        "correct_answer": "Red, Blue, Banana (colours)",
+        "selected_index": 2,
+        "correct_index": 2,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-6",
+        "question": "You're trying to find a word in a dictionary.\nYou open to page 200 and see 'monkey.' Your word is 'planet.' What should you do?",
+        "item_type": "strategic search",
+        "difficulty": "hard",
+        "selected_answer": "Go forward a lot of pages",
+        "correct_answer": "Go forward a lot of pages",
+        "selected_index": 0,
+        "correct_index": 0,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-7",
+        "question": "A rule says: 'If it rains, bring an umbrella.\nIf it's cold, wear a jacket.' Today it's raining and cold.\nWhat do you do?",
+        "item_type": "dual condition",
+        "difficulty": "medium",
+        "selected_answer": "Bring an umbrella and wear a jacket",
+        "correct_answer": "Bring an umbrella and wear a jacket",
+        "selected_index": 2,
+        "correct_index": 2,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-8",
+        "question": "Aisha tried to solve a puzzle one way and got stuck.\n She tried a second way and also got stuck.\nHer friend says 'try combining both ways.' What should Aisha do?",
+        "item_type": "meta strategy",
+        "difficulty": "hard",
+        "selected_answer": "Use parts of both approaches together",
+        "correct_answer": "Use parts of both approaches together",
+        "selected_index": 2,
+        "correct_index": 2,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-9",
+        "question": "What number comes next? \n 4, 8, 12, 16, ___",
+        "item_type": "pattern",
+        "difficulty": "easy",
+        "selected_answer": "20",
+        "correct_answer": "20",
+        "selected_index": 1,
+        "correct_index": 1,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-10",
+        "question": "A page is to a book as a leaf is to a ___",
+        "item_type": "analogy",
+        "difficulty": "easy",
+        "selected_answer": "Tree",
+        "correct_answer": "Tree",
+        "selected_index": 0,
+        "correct_index": 0,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-11",
+        "question": "Which one does NOT belong? \n Sprint, Jog, Walk, Sleep",
+        "item_type": "odd one out",
+        "difficulty": "medium",
+        "selected_answer": "Sleep",
+        "correct_answer": "Sleep",
+        "selected_index": 3,
+        "correct_index": 3,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-12",
+        "question": "Maya has 4 stickers. She gives 1 to her friend. Then she gets 2 more. How many stickers does Maya have?",
+        "item_type": "two step",
+        "difficulty": "easy",
+        "selected_answer": "5",
+        "correct_answer": "5",
+        "selected_index": 2,
+        "correct_index": 2,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-13",
+        "question": "A game has this rule: red cards are worth 2 points and blue cards are worth 3 points. You have 3 red cards and 1 blue card. How many points do you have?",
+        "item_type": "multi step quantity",
+        "difficulty": "medium",
+        "selected_answer": "9",
+        "correct_answer": "9",
+        "selected_index": 3,
+        "correct_index": 3,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-14",
+        "question": "Your puzzle piece doesn't fit. What should you try?",
+        "item_type": "strategy",
+        "difficulty": "easy",
+        "selected_answer": "Turn it and try again",
+        "correct_answer": "Turn it and try again",
+        "selected_index": 1,
+        "correct_index": 1,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      },
+      {
+        "item_number": "3-15",
+        "question": "You're sorting blocks by colour, but two colours look very similar. What's the best thing to do?",
+        "item_type": "meta strategy",
+        "difficulty": "medium",
+        "selected_answer": "Sort by shape instead",
+        "correct_answer": "Sort by shape instead",
+        "selected_index": 1,
+        "correct_index": 1,
+        "correct": true,
+        "error_type": null,
+        "time": 10.0,
+        "icon": "Correct"
+      }
+    ]
+  },
+  "recommendation": "Your child worked through most of the puzzles well. Keep introducing multi-step puzzles to stretch their thinking further.",
+  "signals": {
+    "pattern_score": 2,
+    "pattern_hard_count": 0,
+    "relational_hard_count": 1,
+    "systematic_hard_count": 1,
+    "flexibility_hard_count": 1,
+    "load_hard_count": 0,
+    "relational_score": 2,
+    "systematic_score": 2,
+    "flexibility_score": 3,
+    "load_success_count": 3,
+    "load_fails": 0,
+    "pattern_accuracy": 1.0,
+    "pattern_items_count": 2,
+    "relational_accuracy": 0.6667,
+    "relational_items_count": 3,
+    "systematic_accuracy": 1.0,
+    "systematic_items_count": 2,
+    "flexibility_accuracy": 1.0,
+    "flexibility_items_count": 3,
+    "load_accuracy": 1.0,
+    "load_items_count": 3,
+    "slow_and_correct_count": 0,
+    "multiple_attempts_count": 0,
+    "fast_and_wrong_count": 0,
+    "self_corrected_to_right_count": 0,
+    "total_items": 15,
+    "correct_answers": 12,
+    "overall_accuracy": 80.0
+  },
+  "scored_items": [
+    {
+      "item_id": "logic_3_1",
+      "label": "3-1",
+      "is_correct": false,
+      "points": 0.0,
+      "max_points": 1.0,
+      "status": "Not Attempted",
+      "detail": {
+        "item_type": "pattern",
+        "difficulty": "hard",
+        "primary_tag": "pattern_detection_strong",
+        "question_text": "Look at this pattern: 2, 6, 18, 54, ___",
+        "correct_answer_index": 2,
+        "correct_answer": "162",
+        "tags": [
+          "pattern_detection_strong_missed"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_2",
+      "label": "3-2",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "transitive_reasoning",
+        "difficulty": "medium",
+        "primary_tag": "reasoning_under_load",
+        "question_text": "Maya is older than Kai.\nKai is older than Priya.\nPriya is older than Jude.\nWho is the second youngest?",
+        "selected_answer_index": 2,
+        "selected_answer": "Priya",
+        "correct_answer_index": 2,
+        "correct_answer": "Priya",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "reasoning_under_load"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_3",
+      "label": "3-3",
+      "is_correct": false,
+      "points": 0.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "syllogism",
+        "difficulty": "hard",
+        "primary_tag": "relational_reasoning_present",
+        "question_text": "Every blooper is a floop.\nEvery floop is a zang.\nIs every blooper a zang?",
+        "selected_answer_index": 1,
+        "selected_answer": "No, never",
+        "correct_answer_index": 0,
+        "correct_answer": "Yes, definitely",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "relational_reasoning_present_missed"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_4",
+      "label": "3-4",
+      "is_correct": false,
+      "points": 0.0,
+      "max_points": 1.0,
+      "status": "Not Attempted",
+      "detail": {
+        "item_type": "dual_rule_arithmetic",
+        "difficulty": "hard",
+        "primary_tag": "systematic_problem_solving",
+        "question_text": "In a game, you earn a star for every 3 correct answers.\nYou lose a star for every 2 wrong answers.\nYou got 9 right and 4 wrong.\nHow many stars do you have?",
+        "correct_answer_index": 0,
+        "correct_answer": "1",
+        "tags": [
+          "systematic_problem_solving_missed"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_5",
+      "label": "3-5",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "meta_categorization",
+        "difficulty": "medium",
+        "primary_tag": "pattern_detection_strong",
+        "question_text": "Each group follows a rule.\nWhich group breaks its own rule?",
+        "selected_answer_index": 2,
+        "selected_answer": "Red, Blue, Banana (colours)",
+        "correct_answer_index": 2,
+        "correct_answer": "Red, Blue, Banana (colours)",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "pattern_detection_strong"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_6",
+      "label": "3-6",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "strategic_search",
+        "difficulty": "hard",
+        "primary_tag": "systematic_problem_solving",
+        "question_text": "You're trying to find a word in a dictionary.\nYou open to page 200 and see 'monkey.' Your word is 'planet.' What should you do?",
+        "selected_answer_index": 0,
+        "selected_answer": "Go forward a lot of pages",
+        "correct_answer_index": 0,
+        "correct_answer": "Go forward a lot of pages",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "systematic_problem_solving"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_7",
+      "label": "3-7",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "dual_condition",
+        "difficulty": "medium",
+        "primary_tag": "systematic_problem_solving",
+        "question_text": "A rule says: 'If it rains, bring an umbrella.\nIf it's cold, wear a jacket.' Today it's raining and cold.\nWhat do you do?",
+        "selected_answer_index": 2,
+        "selected_answer": "Bring an umbrella and wear a jacket",
+        "correct_answer_index": 2,
+        "correct_answer": "Bring an umbrella and wear a jacket",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "systematic_problem_solving"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_8",
+      "label": "3-8",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "meta_strategy",
+        "difficulty": "hard",
+        "primary_tag": "flexible_strategy_use",
+        "question_text": "Aisha tried to solve a puzzle one way and got stuck.\n She tried a second way and also got stuck.\nHer friend says 'try combining both ways.' What should Aisha do?",
+        "selected_answer_index": 2,
+        "selected_answer": "Use parts of both approaches together",
+        "correct_answer_index": 2,
+        "correct_answer": "Use parts of both approaches together",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "flexible_strategy_use"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_9",
+      "label": "3-9",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "pattern",
+        "difficulty": "easy",
+        "primary_tag": "pattern_detection_strong",
+        "question_text": "What number comes next? \n 4, 8, 12, 16, ___",
+        "selected_answer_index": 1,
+        "selected_answer": "20",
+        "correct_answer_index": 1,
+        "correct_answer": "20",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "pattern_detection_strong"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_10",
+      "label": "3-10",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "analogy",
+        "difficulty": "easy",
+        "primary_tag": "relational_reasoning_present",
+        "question_text": "A page is to a book as a leaf is to a ___",
+        "selected_answer_index": 0,
+        "selected_answer": "Tree",
+        "correct_answer_index": 0,
+        "correct_answer": "Tree",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "relational_reasoning_present"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_11",
+      "label": "3-11",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "odd_one_out",
+        "difficulty": "medium",
+        "primary_tag": "relational_reasoning_present",
+        "question_text": "Which one does NOT belong? \n Sprint, Jog, Walk, Sleep",
+        "selected_answer_index": 3,
+        "selected_answer": "Sleep",
+        "correct_answer_index": 3,
+        "correct_answer": "Sleep",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "relational_reasoning_present"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_12",
+      "label": "3-12",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "two_step",
+        "difficulty": "easy",
+        "primary_tag": "reasoning_under_load",
+        "question_text": "Maya has 4 stickers. She gives 1 to her friend. Then she gets 2 more. How many stickers does Maya have?",
+        "selected_answer_index": 2,
+        "selected_answer": "5",
+        "correct_answer_index": 2,
+        "correct_answer": "5",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "reasoning_under_load"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_13",
+      "label": "3-13",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "multi_step_quantity",
+        "difficulty": "medium",
+        "primary_tag": "reasoning_under_load",
+        "question_text": "A game has this rule: red cards are worth 2 points and blue cards are worth 3 points. You have 3 red cards and 1 blue card. How many points do you have?",
+        "selected_answer_index": 3,
+        "selected_answer": "9",
+        "correct_answer_index": 3,
+        "correct_answer": "9",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "reasoning_under_load"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_14",
+      "label": "3-14",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "strategy",
+        "difficulty": "easy",
+        "primary_tag": "flexible_strategy_use",
+        "question_text": "Your puzzle piece doesn't fit. What should you try?",
+        "selected_answer_index": 1,
+        "selected_answer": "Turn it and try again",
+        "correct_answer_index": 1,
+        "correct_answer": "Turn it and try again",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "flexible_strategy_use"
+        ]
+      }
+    },
+    {
+      "item_id": "logic_3_15",
+      "label": "3-15",
+      "is_correct": true,
+      "points": 1.0,
+      "max_points": 1.0,
+      "status": "Answered",
+      "detail": {
+        "item_type": "meta_strategy",
+        "difficulty": "medium",
+        "primary_tag": "flexible_strategy_use",
+        "question_text": "You're sorting blocks by colour, but two colours look very similar. What's the best thing to do?",
+        "selected_answer_index": 1,
+        "selected_answer": "Sort by shape instead",
+        "correct_answer_index": 1,
+        "correct_answer": "Sort by shape instead",
+        "response_time_seconds": 10.0,
+        "attempts": 1,
+        "self_corrected": false,
+        "tags": [
+          "flexible_strategy_use"
+        ]
+      }
+    }
+  ],
+  "timestamp": "2026-09-16T12:18:09.021066+00:00"
+}

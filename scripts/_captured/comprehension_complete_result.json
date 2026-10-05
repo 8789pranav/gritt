@@ -1,0 +1,525 @@
+{
+  "user_id": "test-uid",
+  "child_id": "child-1",
+  "grade": "Second",
+  "test_timestamp": "2026-09-16T12:18:13.576138+00:00",
+  "parent_summary": {
+    "strengths": [
+      "Your child is working on these skills and making progress."
+    ],
+    "focus_areas": [
+      "Your child is still developing the ability to work out what a story implies. Practice with 'why' and 'how' questions will help.",
+      "Your child is still building the habit of holding on to what a story actually said. Re-reading a page and asking who, what and where will help.",
+      "Your child is still developing the ability to work out word meanings from context. Talking about new words while reading will help."
+    ],
+    "recommendation": "Your child is building their understanding of stories. Re-reading a story together and talking about what happened will help them grow.",
+    "note": "Assessment is instructional and not a clinical diagnosis."
+  },
+  "story_breakdown": [
+    {
+      "story_id": "s_story1",
+      "story_title": "The Treasure Map",
+      "correct": 4,
+      "total": 7,
+      "questions": [
+        {
+          "question_id": "s1_q1",
+          "question": "Where did Sophie find the treasure map?",
+          "question_type": "literal",
+          "selected_index": 3,
+          "selected_answer": "In the garden",
+          "correct_index": 2,
+          "correct_answer": "In the attic",
+          "is_correct": false,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s1_q2",
+          "question": "What was the X marked next to?",
+          "question_type": "literal",
+          "selected_index": 3,
+          "selected_answer": "The tomato plants",
+          "correct_index": 3,
+          "correct_answer": "The tomato plants",
+          "is_correct": true,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s1_q3",
+          "question": "What was inside the metal box?",
+          "question_type": "literal",
+          "selected_index": 0,
+          "selected_answer": "Old coins, marbles, a locket, and a letter",
+          "correct_index": 0,
+          "correct_answer": "Old coins, marbles, a locket, and a letter",
+          "is_correct": true,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s1_q4",
+          "question": "According to the story, what was the real treasure?",
+          "question_type": "literal",
+          "selected_index": 0,
+          "selected_answer": "The metal box",
+          "correct_index": 3,
+          "correct_answer": "The memories and stories",
+          "is_correct": false,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s1_q5",
+          "question": "Why do you think Sophie's grandmother created the treasure map years ago?",
+          "question_type": "inferential",
+          "selected_index": 1,
+          "selected_answer": "To share her childhood memories with Sophie someday",
+          "correct_index": 1,
+          "correct_answer": "To share her childhood memories with Sophie someday",
+          "is_correct": true,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s1_q6",
+          "question": "In the story, what does 'rust' mean when Sophie found a metal box covered in rust?",
+          "question_type": "vocabulary",
+          "selected_index": 1,
+          "selected_answer": "A reddish-brown coating that forms on old metal",
+          "correct_index": 1,
+          "correct_answer": "A reddish-brown coating that forms on old metal",
+          "is_correct": true,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s1_q7",
+          "question": "Why do you think Sophie's grandmother kept the treasure map instead of throwing it away?",
+          "question_type": "inferential",
+          "selected_index": 2,
+          "selected_answer": "Because it was worth a lot of money",
+          "correct_index": 1,
+          "correct_answer": "Because it held memories of her childhood and she wanted to share them someday",
+          "is_correct": false,
+          "answered": true,
+          "response_time_seconds": 5.0
+        }
+      ],
+      "percentage": 57.1
+    },
+    {
+      "story_id": "s_story2",
+      "story_title": "The Science Fair Project",
+      "correct": 4,
+      "total": 6,
+      "questions": [
+        {
+          "question_id": "s2_q1",
+          "question": "How much time did Marcus have to prepare?",
+          "question_type": "literal",
+          "selected_index": 1,
+          "selected_answer": "One week",
+          "correct_index": 0,
+          "correct_answer": "Two weeks",
+          "is_correct": false,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s2_q2",
+          "question": "What materials did Marcus use to make the volcano erupt?",
+          "question_type": "literal",
+          "selected_index": 1,
+          "selected_answer": "Baking soda and vinegar",
+          "correct_index": 1,
+          "correct_answer": "Baking soda and vinegar",
+          "is_correct": true,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s2_q3",
+          "question": "What place did Marcus win at the science fair?",
+          "question_type": "literal",
+          "selected_index": 2,
+          "selected_answer": "Second place",
+          "correct_index": 2,
+          "correct_answer": "Second place",
+          "is_correct": true,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s2_q4",
+          "question": "In the story, what does 'magma' mean when Marcus learned about magma deep inside the Earth?",
+          "question_type": "vocabulary",
+          "selected_index": 1,
+          "selected_answer": "Cold water under the ground",
+          "correct_index": 0,
+          "correct_answer": "Hot liquid rock inside a volcano",
+          "is_correct": false,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s2_q5",
+          "question": "What does Marcus's science fair project tell us about him?",
+          "question_type": "inferential",
+          "selected_index": 1,
+          "selected_answer": "He is curious and works hard to learn new things",
+          "correct_index": 1,
+          "correct_answer": "He is curious and works hard to learn new things",
+          "is_correct": true,
+          "answered": true,
+          "response_time_seconds": 5.0
+        },
+        {
+          "question_id": "s2_q6",
+          "question": "In the story, what does 'erupt' mean when Marcus made a volcano that would actually erupt?",
+          "question_type": "vocabulary",
+          "selected_index": 1,
+          "selected_answer": "To burst out or explode",
+          "correct_index": 1,
+          "correct_answer": "To burst out or explode",
+          "is_correct": true,
+          "answered": true,
+          "response_time_seconds": 5.0
+        }
+      ],
+      "percentage": 66.7
+    }
+  ],
+  "dear_parent_tags": [
+    {
+      "tag": "inferential_comprehension_emerging",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Your child is still developing the ability to work out what a story implies. Practice with 'why' and 'how' questions will help.",
+      "evidence": "inferential_accuracy=0.6667, inferential_attempted=3"
+    },
+    {
+      "tag": "literal_comprehension_emerging",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Your child is still building the habit of holding on to what a story actually said. Re-reading a page and asking who, what and where will help.",
+      "evidence": "literal_accuracy=0.5714, literal_attempted=7"
+    },
+    {
+      "tag": "vocabulary_in_context_emerging",
+      "confidence": "high",
+      "polarity": "growth_edge",
+      "description": "Your child is still developing the ability to work out word meanings from context. Talking about new words while reading will help.",
+      "evidence": "vocabulary_accuracy=0.6667, vocabulary_attempted=3"
+    }
+  ],
+  "per_question_tags": [
+    {
+      "item_id": "s1_q1",
+      "answered": true,
+      "is_correct": false,
+      "tags": [
+        "literal",
+        "literal_error"
+      ]
+    },
+    {
+      "item_id": "s1_q2",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "literal",
+        "literal_correct"
+      ]
+    },
+    {
+      "item_id": "s1_q3",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "literal",
+        "literal_correct"
+      ]
+    },
+    {
+      "item_id": "s1_q4",
+      "answered": true,
+      "is_correct": false,
+      "tags": [
+        "literal",
+        "literal_error"
+      ]
+    },
+    {
+      "item_id": "s1_q5",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "inferential",
+        "inferential_correct"
+      ]
+    },
+    {
+      "item_id": "s1_q6",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "vocabulary",
+        "vocabulary_correct"
+      ]
+    },
+    {
+      "item_id": "s1_q7",
+      "answered": true,
+      "is_correct": false,
+      "tags": [
+        "inferential",
+        "inferential_error"
+      ]
+    },
+    {
+      "item_id": "s2_q1",
+      "answered": true,
+      "is_correct": false,
+      "tags": [
+        "literal",
+        "literal_error"
+      ]
+    },
+    {
+      "item_id": "s2_q2",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "literal",
+        "literal_correct"
+      ]
+    },
+    {
+      "item_id": "s2_q3",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "literal",
+        "literal_correct"
+      ]
+    },
+    {
+      "item_id": "s2_q4",
+      "answered": true,
+      "is_correct": false,
+      "tags": [
+        "vocabulary",
+        "vocabulary_error"
+      ]
+    },
+    {
+      "item_id": "s2_q5",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "inferential",
+        "inferential_correct"
+      ]
+    },
+    {
+      "item_id": "s2_q6",
+      "answered": true,
+      "is_correct": true,
+      "tags": [
+        "vocabulary",
+        "vocabulary_correct"
+      ]
+    }
+  ],
+  "teacher_admin_detail": {
+    "test_level": "Second",
+    "questions": 13,
+    "correct": 8,
+    "table_data": [
+      {
+        "question": "Where did Sophie find the treasure map?",
+        "story_id": "s_story1",
+        "story_title": "The Treasure Map",
+        "question_type": "literal",
+        "selected_answer": "In the garden",
+        "correct_answer": "In the attic",
+        "selected_index": 3,
+        "correct_index": 2,
+        "correct": false,
+        "error_type": "literal error",
+        "time": 5.0,
+        "icon": "Incorrect"
+      },
+      {
+        "question": "What was the X marked next to?",
+        "story_id": "s_story1",
+        "story_title": "The Treasure Map",
+        "question_type": "literal",
+        "selected_answer": "The tomato plants",
+        "correct_answer": "The tomato plants",
+        "selected_index": 3,
+        "correct_index": 3,
+        "correct": true,
+        "error_type": null,
+        "time": 5.0,
+        "icon": "Correct"
+      },
+      {
+        "question": "What was inside the metal box?",
+        "story_id": "s_story1",
+        "story_title": "The Treasure Map",
+        "question_type": "literal",
+        "selected_answer": "Old coins, marbles, a locket, and a letter",
+        "correct_answer": "Old coins, marbles, a locket, and a letter",
+        "selected_index": 0,
+        "correct_index": 0,
+        "correct": true,
+        "error_type": null,
+        "time": 5.0,
+        "icon": "Correct"
+      },
+      {
+        "question": "According to the story, what was the real treasure?",
+        "story_id": "s_story1",
+        "story_title": "The Treasure Map",
+        "question_type": "literal",
+        "selected_answer": "The metal box",
+        "correct_answer": "The memories and stories",
+        "selected_index": 0,
+        "correct_index": 3,
+        "correct": false,
+        "error_type": "literal error",
+        "time": 5.0,
+        "icon": "Incorrect"
+      },
+      {
+        "question": "Why do you think Sophie's grandmother created the treasure map years ago?",
+        "story_id": "s_story1",
+        "story_title": "The Treasure Map",
+        "question_type": "inferential",
+        "selected_answer": "To share her childhood memories with Sophie someday",
+        "correct_answer": "To share her childhood memories with Sophie someday",
+        "selected_index": 1,
+        "correct_index": 1,
+        "correct": true,
+        "error_type": null,
+        "time": 5.0,
+        "icon": "Correct"
+      },
+      {
+        "question": "In the story, what does 'rust' mean when Sophie found a metal box covered in rust?",
+        "story_id": "s_story1",
+        "story_title": "The Treasure Map",
+        "question_type": "vocabulary",
+        "selected_answer": "A reddish-brown coating that forms on old metal",
+        "correct_answer": "A reddish-brown coating that forms on old metal",
+        "selected_index": 1,
+        "correct_index": 1,
+        "correct": true,
+        "error_type": null,
+        "time": 5.0,
+        "icon": "Correct"
+      },
+      {
+        "question": "Why do you think Sophie's grandmother kept the treasure map instead of throwing it away?",
+        "story_id": "s_story1",
+        "story_title": "The Treasure Map",
+        "question_type": "inferential",
+        "selected_answer": "Because it was worth a lot of money",
+        "correct_answer": "Because it held memories of her childhood and she wanted to share them someday",
+        "selected_index": 2,
+        "correct_index": 1,
+        "correct": false,
+        "error_type": "inferential error",
+        "time": 5.0,
+        "icon": "Incorrect"
+      },
+      {
+        "question": "How much time did Marcus have to prepare?",
+        "story_id": "s_story2",
+        "story_title": "The Science Fair Project",
+        "question_type": "literal",
+        "selected_answer": "One week",
+        "correct_answer": "Two weeks",
+        "selected_index": 1,
+        "correct_index": 0,
+        "correct": false,
+        "error_type": "literal error",
+        "time": 5.0,
+        "icon": "Incorrect"
+      },
+      {
+        "question": "What materials did Marcus use to make the volcano erupt?",
+        "story_id": "s_story2",
+        "story_title": "The Science Fair Project",
+        "question_type": "literal",
+        "selected_answer": "Baking soda and vinegar",
+        "correct_answer": "Baking soda and vinegar",
+        "selected_index": 1,
+        "correct_index": 1,
+        "correct": true,
+        "error_type": null,
+        "time": 5.0,
+        "icon": "Correct"
+      },
+      {
+        "question": "What place did Marcus win at the science fair?",
+        "story_id": "s_story2",
+        "story_title": "The Science Fair Project",
+        "question_type": "literal",
+        "selected_answer": "Second place",
+        "correct_answer": "Second place",
+        "selected_index": 2,
+        "correct_index": 2,
+        "correct": true,
+        "error_type": null,
+        "time": 5.0,
+        "icon": "Correct"
+      },
+      {
+        "question": "In the story, what does 'magma' mean when Marcus learned about magma deep inside the Earth?",
+        "story_id": "s_story2",
+        "story_title": "The Science Fair Project",
+        "question_type": "vocabulary",
+        "selected_answer": "Cold water under the ground",
+        "correct_answer": "Hot liquid rock inside a volcano",
+        "selected_index": 1,
+        "correct_index": 0,
+        "correct": false,
+        "error_type": "vocabulary error",
+        "time": 5.0,
+        "icon": "Incorrect"
+      },
+      {
+        "question": "What does Marcus's science fair project tell us about him?",
+        "story_id": "s_story2",
+        "story_title": "The Science Fair Project",
+        "question_type": "inferential",
+        "selected_answer": "He is curious and works hard to learn new things",
+        "correct_answer": "He is curious and works hard to learn new things",
+        "selected_index": 1,
+        "correct_index": 1,
+        "correct": true,
+        "error_type": null,
+        "time": 5.0,
+        "icon": "Correct"
+      },
+      {
+        "question": "In the story, what does 'erupt' mean when Marcus made a volcano that would actually erupt?",
+        "story_id": "s_story2",
+        "story_title": "The Science Fair Project",
+        "question_type": "vocabulary",
+        "selected_answer": "To burst out or explode",
+        "correct_answer": "To burst out or explode",
+        "selected_index": 1,
+        "correct_index": 1,
+        "correct": true,
+        "error_type": null,
+        "time": 5.0,
+        "icon": "Correct"
+      }
+    ]
+  }
+}

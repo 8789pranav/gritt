@@ -153,60 +153,39 @@ class TestATransientErrorDoesNotCostTheLetter:
         assert letter["meta"]["llm_generated"] is True
 
 
-class TestAVoiceSlipIsWorthOneMoreAsk:
-    """A harm-free draft with voice slips used to ship as it stood.
+class TestAHarmFreeDraftIsTheLetter:
+    """The item counts are enforced by the schema and the facts are
+    assembled by code, so a draft that breaks no hard rule ships at once.
 
-    Two runs for two different children each carried a "what_i_noticed"
-    with two items against an evidence-supported three or four, and the
-    parent opened the letter to half a page. A call now costs seconds, so
-    the writer asks again and keeps the better draft either way.
+    Voice-polish retries used to cost the parent half a minute per call
+    and changed a phrase; the thin sections that prompted them can no
+    longer happen, because the API itself rejects a short section.
     """
 
-    def test_a_thin_section_is_asked_again(self, writer_stubs):
+    def test_voice_slips_do_not_cost_a_second_call(self, writer_stubs):
         with patch.object(
             SnapshotWriter, "_validate",
-            side_effect=[
-                ["voice - what_i_noticed has 2 item(s) where the "
-                 "evidence supports 4"],
-                [],
-            ],
+            return_value=["voice - the opening names nowhere this child "
+                          "is still working"],
+        ), patch.object(
+            SnapshotWriter, "_generate", side_effect=[_draft()],
+        ) as generate:
+            letter = SnapshotWriter().write(_evidence())
+
+        assert generate.call_count == 1
+        assert letter["meta"]["llm_generated"] is True
+
+    def test_a_hard_rule_is_still_worth_a_second_call(self, writer_stubs):
+        """Only a broken promise retries; the second draft then ships."""
+        with patch.object(
+            SnapshotWriter, "_validate",
+            side_effect=[["forbidden counting: '15 of 15'"], []],
         ), patch.object(
             SnapshotWriter, "_generate", side_effect=[_draft(), _draft()],
         ) as generate:
             letter = SnapshotWriter().write(_evidence())
 
         assert generate.call_count == 2
-        assert letter["meta"]["llm_generated"] is True
-
-    def test_a_clean_draft_still_ships_at_once(self, writer_stubs):
-        with patch.object(
-            SnapshotWriter, "_generate", side_effect=[_draft()],
-        ) as generate:
-            SnapshotWriter().write(_evidence())
-
-        assert generate.call_count == 1
-
-    def test_a_worse_retry_does_not_displace_the_letter_in_hand(
-        self, writer_stubs
-    ):
-        """The second attempt breaks a hard rule; the first still ships."""
-        thin = _draft()
-        with patch.object(
-            SnapshotWriter, "_validate",
-            side_effect=[
-                ["voice - the opening names nowhere this child is "
-                 "still working"],
-                ["forbidden counting: '15 of 15'"],
-                ["forbidden counting: '15 of 15'"],
-            ],
-        ), patch.object(
-            SnapshotWriter, "_generate",
-            side_effect=[thin, _draft(), _draft()],
-        ) as generate:
-            letter = SnapshotWriter().write(_evidence())
-
-        assert generate.call_count == 3
-        assert letter is not None
         assert letter["meta"]["llm_generated"] is True
 
 

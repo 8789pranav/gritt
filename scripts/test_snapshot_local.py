@@ -181,6 +181,20 @@ def main() -> int:
     opening = letter.get("opening") or {}
     print(f"\nheadline: {opening.get('headline', '')}")
     print(f"paragraph: {opening.get('paragraph', '')[:300]}")
+
+    noticed = letter.get("what_i_noticed") or []
+    print(f"\nwhat_i_noticed ({len(noticed)} item(s)):")
+    for item in noticed:
+        detail = ", ".join(item.get("signals") or []) or " · ".join(
+            item.get("seen_in") or []
+        )
+        print(f"  - {item.get('headline', '')}  [{detail}]")
+
+    growing = letter.get("still_growing") or []
+    print(f"still_growing ({len(growing)} item(s)):")
+    for item in growing:
+        print(f"  - {item.get('headline', '')}  [{', '.join(item.get('signals') or [])}]")
+
     print(f"\nclosing: {letter.get('closing', '')}")
     return 0
 
